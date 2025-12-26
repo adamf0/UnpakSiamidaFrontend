@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Popover } from "@headlessui/react";
 import { Bell, User, Menu, Calendar } from "lucide-react";
 import { mappedText } from "@/Common/Utils";
+import { useSidebar } from "@/Providers/SidebarProvider";
 
 const Navbar = ({
   userName,
@@ -13,6 +14,8 @@ const Navbar = ({
   onChangeLevelClick,
   renderChangeLevelModal,
 }) => {
+  const { isSidebarOpen, toggleSidebar, isCollapsed } = useSidebar();
+
   const [notifications] = useState([
     { id: 1, message: "Notifikasi 1" },
     { id: 2, message: "Notifikasi 2" },
@@ -20,16 +23,17 @@ const Navbar = ({
 
   return (
     <>
-      <nav className="bg-white border-b p-4 flex justify-between items-center">
+      <nav className="bg-purple-400 border-b p-4 flex justify-between items-center">
         {/* LEFT */}
         <div className="flex items-center gap-3">
-          <button className="lg:hidden">
-            <Menu size={20} />
+          <button onClick={()=>toggleSidebar()} className="lg:hidden">
+            <Menu className="hover:text-white" size={20} />
           </button>
-          <button className="hidden lg:flex">
-            <Menu size={20} />
+          <button onClick={()=>toggleSidebar()} className="hidden lg:flex">
+            <Menu className="hover:text-white" size={20} />
           </button>
 
+          {activeYear &&
           <Popover className="relative">
             <Popover.Button className="flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm hover:bg-gray-100">
               <Calendar size={16} />
@@ -80,6 +84,7 @@ const Navbar = ({
               </ul>
             </Popover.Panel>
           </Popover>
+          }
         </div>
 
         {/* RIGHT */}
@@ -87,13 +92,13 @@ const Navbar = ({
           <Popover className="relative">
             <Popover.Button
                 className={`p-2 rounded-full hover:bg-gray-100
-                ${notifications.length ? "border-2 border-red-500" : ""}
+                ${notifications.length ? "border-2 border-black" : ""}
                 `}
             >
                 <Bell size={18} />
             </Popover.Button>
 
-            <Popover.Panel className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg p-4 z-50">
+            <Popover.Panel className="z-50 absolute right-0 mt-2 w-64 bg-[#f6f6f6] shadow-lg rounded-lg p-4 z-50">
                 <h3 className="font-semibold mb-2">Notifications</h3>
 
                 {notifications.length === 0 ? (
@@ -116,7 +121,7 @@ const Navbar = ({
               <span className="hidden lg:inline text-sm">{userName}</span>
             </Popover.Button>
 
-            <Popover.Panel className="absolute right-0 mt-2 w-62 bg-white border rounded-md shadow-lg p-4">
+            <Popover.Panel className="z-50 absolute right-0 mt-2 w-62 bg-[#f6f6f6] border rounded-md shadow-lg p-4">
                 <div className="border-b pb-2 mb-2">
                     <div className="text-sm font-medium">{userName}</div>
                     <div className="flex justify-between text-xs text-gray-500">

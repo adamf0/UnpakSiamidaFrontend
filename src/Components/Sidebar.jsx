@@ -11,7 +11,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
 
-const Sidebar = ({ isOpen, toggleSidebar, isCollapsed }) => {
+const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) => {
   const location = useLocation();
   const currentPath = location.pathname;
 
@@ -71,14 +71,16 @@ const Sidebar = ({ isOpen, toggleSidebar, isCollapsed }) => {
       {/* SIDEBAR */}
       <aside
         className={`
-          fixed top-0 left-0 z-50
-          h-screen bg-[#F3F4F6] border-r
+          fixed top-0 left-0 z-50 h-screen
+          bg-[#F3F4F6] border-r
           transition-all duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
-          ${isCollapsed ? "w-20" : "w-64"}
+          w-64
+          ${isCollapsed ? "lg:w-20" : "lg:w-64"}
         `}
       >
+
         {/* HEADER / LOGO */}
         <div className="h-16 flex items-center justify-center border-b">
           <span
@@ -100,7 +102,7 @@ const Sidebar = ({ isOpen, toggleSidebar, isCollapsed }) => {
                 <li key={item.path}>
                   <Link
                     to={item.path}
-                    onClick={toggleSidebar}
+                    onClick={closeSidebarOnMobile}
                     className={`
                       flex items-center gap-3
                       p-3 rounded-lg transition-all
