@@ -37,6 +37,8 @@ const RemoteTable = forwardRef(function RemoteTable(
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
 
+  const [draftFilters, setDraftFilters] = useState({});
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({});
   const [loading, setLoading] = useState(false);
@@ -198,6 +200,30 @@ const RemoteTable = forwardRef(function RemoteTable(
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
+  const isEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const nextFilters = {};
+
+      Object.entries(draftFilters).forEach(([key, { op, value }]) => {
+        if (op && value && value.trim() !== "") {
+          nextFilters[key] = { op, value: value.trim() };
+        }
+      });
+
+      setFilters(prev => {
+        if (isEqual(prev, nextFilters)) return prev; // ⛔ STOP
+        return nextFilters;
+      });
+
+      setPage(p => (p === 1 ? p : 1));
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [draftFilters]);
+
+
   /* =========================
      RENDER
   ========================== */
@@ -208,10 +234,18 @@ const RemoteTable = forwardRef(function RemoteTable(
         <div className="flex-1">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onBlur={(e) => {
+                setSearch(searchInput);
+                setPage(1);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setSearch(searchInput);
+                setPage(1);
+                e.currentTarget.blur();
+              }
             }}
             placeholder="Cari data..."
             className="w-full pl-10 pr-3 py-2 border rounded-lg text-sm"
@@ -225,8 +259,8 @@ const RemoteTable = forwardRef(function RemoteTable(
       <div className="overflow-x-auto">
         <table className="w-full ">
           <colgroup>
-            {listcolumns.map(() => (
-              <col key={uuidv4()} />
+            {listcolumns.map((c) => (
+              <col key={c.key.label} />
             ))}
             <col style={{ width: "60px" }} />
           </colgroup>
@@ -234,23 +268,35 @@ const RemoteTable = forwardRef(function RemoteTable(
           <thead className="bg-gray-100">
             <tr>
               {listcolumns.map((c) => (
-                <th key={uuidv4()} className="px-4 py-2 text-sm text-left">
+                <th key={c.id} className="px-4 py-2 text-sm text-left">
                   <div className="font-medium mb-1">{c.label}</div>
 
                   {c.searchable && (
                     <div className="flex h-9 border rounded-md overflow-hidden bg-white">
                       <select
                         className="px-2 text-xs bg-gray-50 border-r shrink-0"
-                        value={filters[c.key]?.op || allowedOps[0]}
-                        onChange={(e) =>
-                          setFilters((f) => ({
-                            ...f,
+                        value={draftFilters[c.key]?.op ?? allowedOps[0]}
+                        onChange={(e) => {
+                          const op = e.target.value;
+
+                          setDraftFilters((prev) => ({
+                            ...prev,
                             [c.key]: {
-                              ...(f[c.key] || {}),
-                              op: e.target.value,
+                              ...prev[c.key],
+                              op,
                             },
-                          }))
-                        }
+                          }));
+                        }}
+                        // value={filters[c.key]?.op || allowedOps[0]}
+                        // onChange={(e) =>
+                        //   setFilters((f) => ({
+                        //     ...f,
+                        //     [c.key]: {
+                        //       ...(f[c.key] || {}),
+                        //       op: e.target.value,
+                        //     },
+                        //   }))
+                        // }
                       >
                         {(c.allowedOps || allowedOps).map((op) => (
                           <option key={op} value={op}>
@@ -262,17 +308,29 @@ const RemoteTable = forwardRef(function RemoteTable(
                       <input
                         className="flex-1 px-2 text-xs outline-none"
                         placeholder="filter…"
-                        value={filters[c.key]?.value || ""}
-                        onChange={(e) => { 
-                          setFilters((f) => ({
-                            ...f,
+                        // value={filters[c.key]?.value || ""}
+                        value={draftFilters[c.key]?.value ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+
+                          setDraftFilters((prev) => ({
+                            ...prev,
                             [c.key]: {
-                              op: f[c.key]?.op || "like",
-                              value: e.target.value,
+                              op: prev[c.key]?.op ?? "like",
+                              value,
                             },
                           }));
-                          setPage(1);
                         }}
+                        // onChange={(e) => { 
+                        //   setFilters((f) => ({
+                        //     ...f,
+                        //     [c.key]: {
+                        //       op: f[c.key]?.op || "like",
+                        //       value: e.target.value,
+                        //     },
+                        //   }));
+                        //   setPage(1);
+                        // }}
                       />
                     </div>
                   )}
