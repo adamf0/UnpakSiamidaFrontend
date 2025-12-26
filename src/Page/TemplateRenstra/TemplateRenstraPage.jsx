@@ -119,7 +119,7 @@ const TemplateRenstraPage = () => {
             adapter={templateRenstraAdapter}
             listcolumns={[
               { key: "Tahun", label: "Tahun", searchable: true, allowedOps:["eq", "neq", "in"]},
-              { key: "Standar", label: "Standar Renstra", searchable: false},
+              { key: "StandarRenstra", label: "Standar Renstra", searchable: false},
               { key: "Indikator", label: "Indikator", searchable: true},
               { key: "Targets", label: "Target", renderKey: (row) => {
                 if (!Array.isArray(row.Targets)) return "-";
@@ -321,7 +321,7 @@ export const templateRenstraAdapter = (rows = []) => {
         Indikator: r.Indikator,
         IndikatorRenstraUuid: r.IndikatorRenstraUuid,
         Tahun: r.Tahun,
-        StandarRenstra: "",
+        StandarRenstra: r.StandarRenstra,
         Targets: [],
       };
     }

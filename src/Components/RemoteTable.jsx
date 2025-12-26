@@ -213,7 +213,7 @@ const RemoteTable = forwardRef(function RemoteTable(
       });
 
       setFilters(prev => {
-        if (isEqual(prev, nextFilters)) return prev; // ⛔ STOP
+        if (isEqual(prev, nextFilters)) return prev; 
         return nextFilters;
       });
 
@@ -259,8 +259,8 @@ const RemoteTable = forwardRef(function RemoteTable(
       <div className="overflow-x-auto">
         <table className="w-full ">
           <colgroup>
-            {listcolumns.map((c) => (
-              <col key={c.key.label} />
+            {listcolumns.map(() => (
+              <col key={uuidv4()} />
             ))}
             <col style={{ width: "60px" }} />
           </colgroup>
@@ -268,7 +268,7 @@ const RemoteTable = forwardRef(function RemoteTable(
           <thead className="bg-gray-100">
             <tr>
               {listcolumns.map((c) => (
-                <th key={c.id} className="px-4 py-2 text-sm text-left">
+                <th key={c.label} className="px-4 py-2 text-sm text-left">
                   <div className="font-medium mb-1">{c.label}</div>
 
                   {c.searchable && (
