@@ -13,6 +13,7 @@ import TemplateRenstraPage from "./Page/TemplateRenstra/TemplateRenstraPage";
 import TemplateDokumenTambahanPage from "./Page/TemplateDokumenTambahan/TemplateDokumenTambahanPage";
 import TemplateDokumenTambahanFormPage from "./Page/TemplateDokumenTambahan/TemplateDokumenTambahanFormPage";
 import TemplateRenstraFormPage from "./Page/TemplateRenstra/TemplateRenstraFormPage";
+import PreviewTemplatePage from "./Page/PreviewTemplate/PreviewTemplateDokumenTambahanPage";
 
 export default function App() {
   return (
@@ -30,10 +31,12 @@ export default function App() {
                   <Route path="/jenis_file_audit" element={<JenisFilePage />} />
 
                   <Route path="/template_renstra" element={<TemplateRenstraPage />} />
+                  <Route path="/template_renstra/preview" element={<PreviewTemplatePage type="renstra" />} />
                   <Route path="/template_renstra/new" element={<TemplateRenstraFormPage />} />
                   <Route path="/template_renstra/:tahun/:uuidIndikator" element={<TemplateRenstraFormPage />} />
 
                   <Route path="/template_dokumen_tambahan" element={<TemplateDokumenTambahanPage />} />
+                  <Route path="/template_dokumen_tambahan/preview" element={<PreviewTemplatePage type="dokumen_tambahan" />} />
                   <Route path="/template_dokumen_tambahan/new" element={<TemplateDokumenTambahanFormPage />} />
                   <Route path="/template_dokumen_tambahan/:tahun/:uuidJenisFile" element={<TemplateDokumenTambahanFormPage />} />
                   {/* <Route element={<AccessControlRoute checkAccess={(auth) => (auth.isAdminAccess() || auth.isCompanyAccess())} />}>

@@ -5,6 +5,7 @@ import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useContent } from "@/Providers/ContentProvider";
+import { BsPlus } from "react-icons/bs";
 
 const IndikatorRenstraPage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -87,7 +88,7 @@ const IndikatorRenstraPage = () => {
               <button 
                 className="px-3 py-2 bg-purple-600 text-white rounded-lg" 
                 onClick={()=>openNew()}>
-                +
+                <BsPlus/>
               </button>
             }
             listcolumns={[

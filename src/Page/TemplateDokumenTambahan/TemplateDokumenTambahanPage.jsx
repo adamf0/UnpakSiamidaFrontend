@@ -3,6 +3,7 @@ import Navbar from "@/Components/Navbar";
 import RemoteTable from "@/Components/RemoteTable";
 import { useContent } from "@/Providers/ContentProvider";
 import React, { useRef, useState, useEffect } from "react";
+import { BsEye, BsPlus } from "react-icons/bs";
 import { useNavigate } from "react-router-dom";
 
 // const cn = (...classes) => classes.filter(Boolean).join(" ");
@@ -58,7 +59,7 @@ const TemplateDokumenTambahanPage = () => {
         )}
       />
       <div className="p-3 bg-white">
-        <h2 className="text-lg font-semibold mb-4">Template Renstra</h2>
+        <h2 className="text-lg font-semibold mb-4">Template Dokumen Tambahan</h2>
 
         <div className="border rounded mt-3">
           <RemoteTable
@@ -66,11 +67,18 @@ const TemplateDokumenTambahanPage = () => {
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
             adapter={templateDokumenTambahanAdapter}
             renderAddAction={
+              <>
               <button 
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg" 
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg" 
                 onClick={()=>navigate("/template_dokumen_tambahan/new")}>
-                +
+                <BsPlus/>
               </button>
+              <button 
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg" 
+                onClick={()=>navigate("/template_dokumen_tambahan/preview")}>
+                <BsEye/>
+              </button>
+              </>
             }
             listcolumns={[
               { key: "Tahun", label: "Tahun", searchable: true, allowedOps:["eq", "neq", "in"]},

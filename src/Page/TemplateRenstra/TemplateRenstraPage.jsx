@@ -2,14 +2,14 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import Navbar from "@/Components/Navbar";
 import RemoteTable from "@/Components/RemoteTable";
 import { useContent } from "@/Providers/ContentProvider";
-import React, { useRef, useState, useEffect } from "react";
+import React, { useState } from "react";
+import { BsEye, BsPlus } from "react-icons/bs";
 import { useNavigate } from "react-router-dom";
 
 // const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const TemplateRenstraPage = () => {
   const navigate = useNavigate();
-  const [_, setOpenAction] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTitle, setDrawerTitle] = useState("");
   const [drawerTargets, setDrawerTargets] = useState([]);
@@ -110,11 +110,18 @@ const TemplateRenstraPage = () => {
             endpoint="http://localhost:3000/templaterenstras"
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
             renderAddAction={
+              <>
               <button 
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg" 
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg" 
                 onClick={()=>navigate("/template_renstra/new")}>
-                +
+                <BsPlus/>
               </button>
+              <button 
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg" 
+                onClick={()=>navigate("/template_renstra/preview")}>
+                <BsEye/>
+              </button>
+              </>
             }
             adapter={templateRenstraAdapter}
             listcolumns={[

@@ -24,7 +24,7 @@ export default function ConfirmDeleteDialog({
             <div className="flex justify-end gap-2">
               <button
                 onClick={onClose}
-                className="px-3 py-2 text-red-600"
+                className="px-3 py-2 text-black"
               >
                 Batal
               </button>

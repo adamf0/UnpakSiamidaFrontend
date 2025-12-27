@@ -5,19 +5,21 @@ import SearchSelect from "@/Components/SearchSelect";
 import TextInput from "@/Components/TextInput";
 import RadioButton from "@/Components/RadioButton";
 import { PencilIcon } from "lucide-react";
-import { isEmpty, isValidationError, normalizeValidationMessage } from "@/Common/Utils";
+import { delay, isEmpty, isValidationError, normalizeValidationMessage } from "@/Common/Utils";
 import get from "lodash.get";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import ErrorSection from "@/Components/ErrorSection";
 import Shimmer from "@/Components/Shimmer";
 import ShimmerTable from "@/Components/ShimmerTable";
 import RowStatusAction from "@/Components/RowStatusAction";
 import RowClearAction from "@/Components/RowClearAction";
-import { delay } from "framer-motion";
 import { useErrorModal } from "@/Components/ErrorModal/useErrorModal";
 import ErrorModal from "@/Components/ErrorModal/ErrorModal";
 import AutoFillModalFill from "@/Components/ModalAutoFill/AutoFillModal";
 import { useAutoFillModalFill } from "@/Components/ModalAutoFill/useAutoFillModal";
+import { useContent } from "@/Providers/ContentProvider";
+import Navbar from "@/Components/Navbar";
+import ChangeLevelModal from "@/Components/ChangeLevelModal";
 
 const TemplateRenstraFormPage = () => {
   const navigate = useNavigate();
@@ -26,6 +28,13 @@ const TemplateRenstraFormPage = () => {
   const mode = !isEmpty(tahun) && !isEmpty(uuidIndikator)? "edit":"add";
   const { modal, openModal, closeModal } = useErrorModal();
   const { modalFill, openModalFill, closeModalFill, activeGroupFill } = useAutoFillModalFill();
+
+  const {
+        level,
+        setLevel,
+        openChangeLevel,
+        setOpenChangeLevel,
+  } = useContent();
 
   const {
     register,
@@ -167,19 +176,37 @@ const TemplateRenstraFormPage = () => {
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+
                 buffer += decoder.decode(value, { stream: true });
                 let index;
+                
                 while ((index = buffer.indexOf("\n\n")) !== -1) {
                 const event = buffer.slice(0, index).trim();
                 buffer = buffer.slice(index + 2);
+                
                 if (!event.startsWith("data:")) continue;
                 const payload = event.replace(/^data:\s*/, "");
+                
                 if (!payload || payload === "start" || payload === "done") continue;
+                
                 try {
                     const parsed = JSON.parse(payload);
+                    if(isEmpty(parsed.UUID) || parsed.UUID=="00000000-0000-0000-0000-000000000000"){
+                      continue;
+                    }
+
+                    let label = "";
+                    if(parsed.Type=="prodi"){
+                      label=`${parsed.Nama} - ${parsed.Jenjang} (prodi)`;
+                    } else if(parsed.Type=="fakultas"){
+                      label=`${parsed.Nama} (fakultas)`;
+                    } else{
+                      label=`${parsed.Nama} (unit)`;
+                    }
+                    
                     result.push({
                     id: parsed.UUID,
-                    nama: parsed.Indikator,
+                    nama: label,
                     ...parsed,
                     });
                 } catch {}
@@ -389,69 +416,106 @@ const TemplateRenstraFormPage = () => {
 
   return (
     <>
-      {
-        error.fakultas || error.indikator || error.template? 
-        <ErrorSection/> : 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-4 bg-white w-full">
-            <h2 className="text-lg font-semibold mb-4">Tambah Template Renstra</h2>
-
-            <div className="mb-6 p-6 space-y-4 border rounded-lg w-full">
-            <TextInput
-                type="number"
-                label="Tahun Renstra"
-                required
-                error={errors.tahun?.message}
-                {...register("tahun", { required: "Tahun wajib diisi" })}
+      <Navbar
+          userName="John Doe"
+          userLevel={level}
+          years={[]}
+          activeYear={null}
+          positionYear={null}
+          onPositionChange={()=>{}}
+          onChangeLevelClick={() => setOpenChangeLevel(true)}
+          renderChangeLevelModal={() => (
+            <ChangeLevelModal
+              open={openChangeLevel}
+              onClose={() => setOpenChangeLevel(false)}
+              levels={[]}
+              currentLevel={level}
+              onSubmit={(val) => {
+                setLevel(val);
+                setOpenChangeLevel(false);
+              }}
             />
+          )}
+      />
 
-            {loading.indikator ? (
-                    <>
-                        <label className="block text-sm font-medium mb-1">Nama Indikator Renstra <span className="text-red-500">*</span></label>
-                        <Shimmer rows={1} />
-                    </>
-                ) : (
-                    <SearchSelect
-                        label="Nama Indikator Renstra"
-                        required
-                        options={indikatorOptions}
-                        placeholder={
-                        !isEmpty(watch("tahun"))
-                            ? "Cari indikator renstra"
-                            : "Pilih dulu tahun renstra"
-                        }
-                        value={watch("indikator_renstra")}
-                        error={errors.indikator_renstra?.message}
-                        onChange={(item) => setValue("indikator_renstra", item, { shouldValidate: true })}
-                    />
-            )}
-            </div>
+      <div className="p-4 bg-white w-full">
+        <div className="mb-4 flex flex-col gap-4">
+          <nav className="flex-1 text-sm text-gray-500 mb-1" aria-label="Breadcrumb">
+            <ol className="list-none p-0 inline-flex">
+              <li className="flex items-center">
+                <Link to="/template_renstra" className="hover:underline">Template Renstra</Link>
+                <span className="mx-2">/</span>
+              </li>
+              <li className="flex items-center text-gray-700 font-medium">
+                Form {mode=="edit"? "Edit":"Add"}
+              </li>
+            </ol>
+          </nav>
 
-            {loading.fakultas || loading.template ? (
-              <ShimmerTable />
-            ) : (
-              groupDatas.map((gd) => (
-                <GroupDataTable
-                  key={gd.Type + gd.Jenjang}
-                  gd={gd}
-                  watch={watch}
-                  register={register}
-                  setValue={setValue}
-                  markRowActive={markRowActive}
-                  errors={errors}
-                  openModalFill={openModalFill}
-                  addToast={addToast}
-                  openModal={openModal}
-                />
-              ))
-            )}
+          <h2 className="flex-1 text-lg font-semibold">Form {mode=="edit"? "Edit":"Add"}</h2>
+        </div>
+        {
+          error.fakultas || error.indikator || error.template? 
+          <ErrorSection/> : 
+          <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="mb-6 p-6 space-y-4 border rounded-lg w-full">
+              <TextInput
+                  type="number"
+                  label="Tahun Renstra"
+                  required
+                  error={errors.tahun?.message}
+                  {...register("tahun", { required: "Tahun wajib diisi" })}
+              />
 
-            <SubmitButtonWithLoading
-              groupDatas={groupDatas}
-              watch={watch}
-              loading={loading}
-            />
-        </form>
-      }
+              {loading.indikator ? (
+                      <>
+                          <label className="block text-sm font-medium mb-1">Nama Indikator Renstra <span className="text-red-500">*</span></label>
+                          <Shimmer rows={1} />
+                      </>
+                  ) : (
+                      <SearchSelect
+                          label="Nama Indikator Renstra"
+                          required
+                          options={indikatorOptions}
+                          placeholder={
+                          !isEmpty(watch("tahun"))
+                              ? "Cari indikator renstra"
+                              : "Pilih dulu tahun renstra"
+                          }
+                          value={watch("indikator_renstra")}
+                          error={errors.indikator_renstra?.message}
+                          onChange={(item) => setValue("indikator_renstra", item, { shouldValidate: true })}
+                      />
+              )}
+              </div>
+
+              {loading.fakultas || loading.template ? (
+                <ShimmerTable />
+              ) : (
+                groupDatas.map((gd) => (
+                  <GroupDataTable
+                    key={gd.Type + gd.Jenjang}
+                    gd={gd}
+                    watch={watch}
+                    register={register}
+                    setValue={setValue}
+                    markRowActive={markRowActive}
+                    errors={errors}
+                    openModalFill={openModalFill}
+                    addToast={addToast}
+                    openModal={openModal}
+                  />
+                ))
+              )}
+
+              <SubmitButtonWithLoading
+                groupDatas={groupDatas}
+                watch={watch}
+                loading={loading}
+              />
+          </form>
+        }
+      </div>
 
       <AutoFillModalFill
         modalFill={modalFill}

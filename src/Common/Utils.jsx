@@ -104,4 +104,4 @@ export const normalizeValidationMessage = (messageObj) => {
     .join("\n");
 };
 
-// const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+export const delay = (ms) => new Promise(res => setTimeout(res, ms));

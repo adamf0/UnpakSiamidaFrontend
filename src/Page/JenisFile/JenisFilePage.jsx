@@ -6,6 +6,7 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
+import { BsPlus } from "react-icons/bs";
 
 // const cn = (...classes) => classes.filter(Boolean).join(" ");
 
@@ -88,7 +89,7 @@ const JenisFilePage = () => {
               <button 
                 className="px-3 py-2 bg-purple-600 text-white rounded-lg" 
                 onClick={()=>openNew()}>
-                +
+                <BsPlus/>
               </button>
             }
             listcolumns={[

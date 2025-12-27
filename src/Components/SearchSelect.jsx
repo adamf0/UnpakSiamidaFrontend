@@ -39,7 +39,7 @@ const SearchSelect = ({
     const q = query.toLowerCase();
     setFiltered(
       options.filter((o) =>
-        o.nama.toLowerCase().includes(q)
+        o.nama?.toLowerCase().includes(q)
       )
     );
   }, [query, open, options]);

@@ -19,15 +19,18 @@ const RemoteTable = forwardRef(function RemoteTable(
   {
     endpoint,
     listcolumns = [],
+    listdata = null, //manul data
     mode = "paging", // paging | sse | ndjson
     renderAction,
     renderAddAction,
     allowedOps = ["like", "eq", "neq", "in"],
     adapter,
     onError,
+    disableGlobalSearch=true,
   },
   ref
 ) {
+  const isManual = Array.isArray(listdata);
   const isStreaming = mode === "sse" || mode === "ndjson";
   const [error, setError] = useState(null);
   const [rows, setRows] = useState([]);        // data yg dirender
@@ -48,6 +51,19 @@ const RemoteTable = forwardRef(function RemoteTable(
   const abortRef = useRef(null);
   const actionRef = useRef(null);
 
+  useEffect(() => {
+    if (!isManual) return;
+
+    let data = [...(listdata || [])];
+
+    setTotal(data.length);
+
+    const start = (page - 1) * limit;
+    const end = start + limit;
+
+    setRows(data.slice(start, end));
+  }, [listdata, page, limit, isManual]);
+  
   const applyAdapter = (data) =>
     typeof adapter === "function" ? adapter(data) : data;
 
@@ -55,6 +71,17 @@ const RemoteTable = forwardRef(function RemoteTable(
      FETCH DATA (REUSABLE)
   ========================== */
   const loadData = async () => {
+    if (isManual) {
+      let data = [...listdata];
+      setTotal(data.length);
+
+      const start = (page - 1) * limit;
+      const end = start + limit;
+      setRows(data.slice(start, end));
+      setLoading(false);
+      return;
+    }
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -88,7 +115,7 @@ const RemoteTable = forwardRef(function RemoteTable(
       /* ===== SERVER PAGING ===== */
       if (mode === "paging") {
         const json = await res.json();
-        setRows(applyAdapter(json.data || []));
+        setRows(applyAdapter(json.data || json || []));
         setTotal(json.total || 0);
         return;
       }
@@ -174,6 +201,7 @@ const RemoteTable = forwardRef(function RemoteTable(
     filters,
     limit,
     isStreaming ? null : page,
+    isManual,
   ]);
 
   /* =========================
@@ -231,26 +259,29 @@ const RemoteTable = forwardRef(function RemoteTable(
     <div className="p-6 bg-white">
       {/* SEARCH */}
       <div className="flex justify-start gap-2 relative mb-4">
-        <div className="flex-1">
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onBlur={(e) => {
-                setSearch(searchInput);
-                setPage(1);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setSearch(searchInput);
-                setPage(1);
-                e.currentTarget.blur();
-              }
-            }}
-            placeholder="Cari data..."
-            className="w-full pl-10 pr-3 py-2 border rounded-lg text-sm"
-          />
-        </div>
+        {
+        disableGlobalSearch &&
+          <div className="flex-1">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onBlur={(e) => {
+                  setSearch(searchInput);
+                  setPage(1);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setSearch(searchInput);
+                  setPage(1);
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder="Cari data..."
+              className="w-full pl-10 pr-3 py-2 border rounded-lg text-sm"
+            />
+          </div>
+        }
         {renderAddAction}
       </div>
 
@@ -358,15 +389,18 @@ const RemoteTable = forwardRef(function RemoteTable(
                     </td>
                   ))}
                   <td className="px-4 py-3 text-right relative">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setOpenAction({ row: r, rect });
-                      }}
-                    >
-                      <FiMoreVertical />
-                    </button>
+                    {
+                      typeof adapter === "function" &&
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setOpenAction({ row: r, rect });
+                        }}
+                      >
+                        <FiMoreVertical />
+                      </button>
+                    }
 
                     {openAction &&
                       createPortal(

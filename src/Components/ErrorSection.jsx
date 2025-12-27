@@ -49,9 +49,7 @@ export default function ErrorSection() {
   };
 
   return (
-    <div className="p-4 bg-white w-full h-screen">
-      <h2 className="text-lg font-semibold mb-4">Tambah Template Renstra</h2>
-
+    <div className="bg-white w-full h-screen">
       <div className="w-full">
         <div className="h-screen flex items-center justify-center p-6 border rounded-lg bg-white shadow-sm">
           <div className="flex flex-col items-center text-center gap-3">
