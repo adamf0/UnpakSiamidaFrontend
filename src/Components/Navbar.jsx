@@ -3,18 +3,23 @@ import { Popover } from "@headlessui/react";
 import { Bell, User, Menu, Calendar } from "lucide-react";
 import { mappedText } from "@/Common/Utils";
 import { useSidebar } from "@/Providers/SidebarProvider";
+import { useAuth } from "@/Providers/AuthProvider";
+import { useContent } from "@/Providers/ContentProvider";
 
 const Navbar = ({
-  userName,
-  userLevel,
-  activeYear,
-  positionYear,
-  years,
-  onPositionChange,
-  onChangeLevelClick,
   renderChangeLevelModal,
 }) => {
   const { isSidebarOpen, toggleSidebar, isCollapsed } = useSidebar();
+  const {user} = useAuth();
+  const {
+      serverYears,
+      activeYear,
+      positionYear,
+      setPositionYear,
+      level,
+      listLevel,
+      setOpenChangeLevel,
+    } = useContent();
 
   const [notifications] = useState([
     { id: 1, message: "Notifikasi 1" },
@@ -52,7 +57,7 @@ const Navbar = ({
 
             <Popover.Panel className="absolute left-0 mt-2 w-44 bg-white border rounded-md shadow-lg">
               <ul className="text-sm">
-                {years.map((item) => {
+                {(serverYears??[]).map((item) => {
                   const year = item.Tahun;
                   const isActive = item.Status === "active";
                   const isPosition = year === positionYear;
@@ -60,7 +65,7 @@ const Navbar = ({
                   return (
                     <li
                       key={year}
-                      onClick={() => onPositionChange(year)}
+                      onClick={() => setPositionYear(year)}
                       className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center
                         ${isPosition ? "bg-gray-100 font-medium" : ""}
                       `}
@@ -118,20 +123,23 @@ const Navbar = ({
           <Popover className="relative">
             <Popover.Button className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100">
               <User size={18} />
-              <span className="hidden lg:inline text-sm">{userName}</span>
+              <span className="hidden lg:inline text-sm">{user?.name ?? "-"}</span>
             </Popover.Button>
 
             <Popover.Panel className="z-50 absolute right-0 mt-2 w-62 bg-[#f6f6f6] border rounded-md shadow-lg p-4">
                 <div className="border-b pb-2 mb-2">
-                    <div className="text-sm font-medium">{userName}</div>
+                    <div className="text-sm font-medium">{user?.name ?? "-"}</div>
                     <div className="flex justify-between text-xs text-gray-500">
-                    <span>{mappedText(userLevel)}</span>
-                    <button
-                        onClick={onChangeLevelClick}
-                        className="text-blue-500 hover:underline"
-                    >
-                        Change Level
-                    </button>
+                    <span>{mappedText(level)}</span>
+                    {
+                      listLevel.length>0 && 
+                      <button
+                          onClick={()=>setOpenChangeLevel(true)}
+                          className="text-blue-500 hover:underline"
+                      >
+                          Change Level
+                      </button>
+                    }
                     </div>
                 </div>
 

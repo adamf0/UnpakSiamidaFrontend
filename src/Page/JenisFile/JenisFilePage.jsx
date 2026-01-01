@@ -31,28 +31,26 @@ const JenisFilePage = () => {
   };
 
   const deleteData = async () => {
-    const res = await fetch(`http://localhost:3000/jenisfile/${selectedRow.UUID}`, {
-      method: "DELETE",
-    });
+    const res = await fetch(
+      `http://localhost:3000/jenisfile/${selectedRow.UUID}`,
+      {
+        method: "DELETE",
+      }
+    );
     const data = await res.json();
-    console.log(data)
-    
-    if (res.ok){
+    console.log(data);
+
+    if (res.ok) {
       addToast("success", "Data berhasil dihapus");
-    } else{
+    } else {
       addToast("error", data?.message || "Data tidak ditemukan");
     }
 
     setConfirmDelete(false);
     tableRef.current?.reload?.({ resetPage: true });
-  }
+  };
 
-  const {
-    level,
-    setLevel,
-    openChangeLevel,
-    setOpenChangeLevel,
-  } = useContent();
+  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   return (
     <>
@@ -62,7 +60,7 @@ const JenisFilePage = () => {
         years={[]}
         activeYear={null}
         positionYear={null}
-        onPositionChange={()=>{}}
+        onPositionChange={() => {}}
         onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
@@ -86,18 +84,19 @@ const JenisFilePage = () => {
             endpoint="http://localhost:3000/jenisfiles"
             mode="paging"
             renderAddAction={
-              <button 
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg" 
-                onClick={()=>openNew()}>
-                <BsPlus/>
+              <button
+                className="px-3 py-2 bg-purple-600 text-white rounded-lg"
+                onClick={() => openNew()}
+              >
+                <BsPlus />
               </button>
             }
             listcolumns={[
-              { key: "Nama", label: "Jenis File", searchable: true},
+              { key: "Nama", label: "Jenis File", searchable: true },
             ]}
             renderAction={({ row, close }) => (
               <>
-              <button
+                <button
                   className="block w-full px-3 py-2 text-sm hover:bg-gray-100"
                   onClick={() => {
                     console.log("edit", row);
@@ -122,7 +121,6 @@ const JenisFilePage = () => {
               </>
             )}
           />
-
         </div>
 
         <JenisFileFormModal
@@ -138,7 +136,6 @@ const JenisFilePage = () => {
           onClose={() => setConfirmDelete(false)}
           onConfirm={async () => deleteData()}
         />
-
       </div>
     </>
   );

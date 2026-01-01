@@ -9,16 +9,16 @@ const DashboardPage = () => {
 
 const DashboardContent = () => {
   const {
-    serverYears,
-    activeYear,
-    positionYear,
-    setPositionYear,
-    changeYear,
+    // serverYears,
+    // activeYear,
+    // positionYear,
+    // setPositionYear,
+    // changeYear,
 
     level,
     setLevel,
     listLevel,
-    changeLevel,
+    // changeLevel,
 
     openChangeLevel,
     setOpenChangeLevel,
@@ -27,13 +27,13 @@ const DashboardContent = () => {
   return (
     <>
       <Navbar
-        userName="John Doe"
-        userLevel={level}
-        years={serverYears}
-        activeYear={activeYear}
-        positionYear={positionYear}
-        onPositionChange={setPositionYear}
-        onChangeLevelClick={() => setOpenChangeLevel(true)}
+        // userName="John Doe"
+        // userLevel={level}
+        // years={serverYears}
+        // activeYear={activeYear}
+        // positionYear={positionYear}
+        // onPositionChange={setPositionYear}
+        // onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
             open={openChangeLevel}

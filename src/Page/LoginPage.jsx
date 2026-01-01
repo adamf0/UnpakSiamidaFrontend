@@ -28,18 +28,14 @@ function LoginContent() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
   const [loading, setLoading] = useState(false);
-  // const [errorMessage, setErrorMessage] = useState("");
 
-  // ✅ React Hook Form setup
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm({ mode: "onTouched" });
 
-  // ✅ Preload images sebelum tampil halaman
   useEffect(() => {
     const preloadImages = async () => {
       await Promise.all(
@@ -58,7 +54,6 @@ function LoginContent() {
     preloadImages();
   }, []);
 
-  // ✅ Auto slide
   useEffect(() => {
     if (!isLoaded) return;
     const interval = setInterval(() => {
@@ -68,47 +63,36 @@ function LoginContent() {
   }, [isLoaded]);
 
   const onSubmit = async (data) => {
-    setLoading(true);
-    // setErrorMessage("");
-    try {
-      // const info = await getInformation();
-      // console.log(info);
-      // addToast("success", JSON.stringify(info));
+    const dataForm = new FormData();
+    dataForm.append("username",data.username);
+    dataForm.append("password",data.password);
 
-      const res = await axios.post("https://staging-backend.rbac.asj-shipagency.co.id/api/v1/login", data); 
+    setLoading(true);
+
+    try {
+      const res = await axios.post("http://localhost:1000/login", dataForm); 
       const body = res.data;
       console.log(body);
 
       if (body.error) {
         addToast("error", body.error);
         // setErrorMessage(body.error);
-      } else if (body.data && body.data.auth) {
-        const auth = body.data.auth;
-        const user = {
-          full_name: body.data.full_name,
-          email: body.data.email,
-          company: body.data.company,
-          expires_at: import.meta.env.VITE_SOURCE=="fake"? new Date(Date.now() + 2 * 60 * 1000):body.data.auth.expires_at,
-          admin_access: body.data.has_admin_access_status? 1:0, 
-          company_access: body.data.has_company_access_status? 1:0,
-          user_access: body.data.has_user_access_status? 1:0,
-        };
-
-        // sessionStorage.setItem("info", JSON.stringify(info));
-        sessionStorage.setItem("token", auth.token);
-        sessionStorage.setItem("user", JSON.stringify(user));
-        setToken(auth.token);
-        setUser(user);
+      } else {
+        sessionStorage.setItem("token", body.access_token);
+        sessionStorage.setItem("refresh", body.refresh_token);
 
         navigate("/dashboard");
       }
     } catch (err) {
       console.error(err);
-      addToast("error", "ada masalah pada aplikasi");
+      const data = err.response.data;
 
-      // const msg =
-      //   err.response?.data?.message || "Gagal login, periksa email dan password.";
-      // setErrorMessage("ada masalah pada aplikasi");
+      if (typeof data === "object" && data !== null) {
+        addToast("error", data.message);
+      }
+      else {
+        addToast("error", "ada masalah pada aplikasi");
+      }
     } finally {
       setLoading(false);
     }
@@ -132,40 +116,33 @@ function LoginContent() {
           </h1>
 
           <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
-            {/* Email */}
             <div>
               <label
-                htmlFor="email"
+                htmlFor="username"
                 className="block text-sm font-medium text-gray-600 mb-2"
               >
-                Email
+                Username
               </label>
               <input
-                id="email"
-                type="email"
-                placeholder="Masukkan email"
+                type="text"
+                placeholder="Masukkan username"
                 className={
                   `w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${errors.email
                       ? "border-red-500 focus:ring-red-500"
                       : "border-gray-300 focus:ring-blue-500"}`
                 }
                 // value="admin_rbac@yopmail.com"
-                {...register("email", {
-                  required: "email harus diisi",
-                  pattern: {
-                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                    message: "Format email tidak valid",
-                  },
+                {...register("username", {
+                  required: "username harus diisi",
                 })}
               />
-              {errors.email && (
+              {errors.username && (
                 <p className="text-red-500 text-sm mt-1">
-                  {errors.email.message}
+                  {errors.username.message}
                 </p>
               )}
             </div>
 
-            {/* Password */}
             <div>
               <div className="flex justify-between mb-2">
                 <label
@@ -174,13 +151,6 @@ function LoginContent() {
                 >
                   Password
                 </label>
-                {/* <button
-                  type="button"
-                  className="text-sm font-medium text-blue-600 hover:underline"
-                  onClick={() => alert("Link forgot password")}
-                >
-                  Forgot Password?
-                </button> */}
               </div>
               <div className="relative">
                 <input
@@ -194,10 +164,6 @@ function LoginContent() {
                   }
                   {...register("password", {
                     required: "Password harus diisi",
-                    minLength: {
-                      value: 6,
-                      message: "Password minimal 6 karakter",
-                    },
                   })}
                 />
                 <button
@@ -250,7 +216,6 @@ function LoginContent() {
               )}
             </div>
 
-            {/* Button */}
             <button
               type="submit"
               disabled={loading}
@@ -260,8 +225,7 @@ function LoginContent() {
             </button>
           </form>
 
-          {/* Ask Admin */}
-          <div className="mt-4 text-sm text-center">
+          {/* <div className="mt-4 text-sm text-center">
             <p className="text-gray-500">
               Don't have an account?{" "}
               <button
@@ -272,7 +236,7 @@ function LoginContent() {
                 Ask Admin
               </button>
             </p>
-          </div>
+          </div> */}
         </div>
       </div>
 

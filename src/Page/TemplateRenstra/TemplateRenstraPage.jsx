@@ -13,7 +13,7 @@ const TemplateRenstraPage = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTitle, setDrawerTitle] = useState("");
   const [drawerTargets, setDrawerTargets] = useState([]);
-  const [drawerMode, setDrawerMode] = useState("detail"); 
+  const [drawerMode, setDrawerMode] = useState("detail");
 
   const formatKategori = (kategori) => {
     if (!kategori) return "unit";
@@ -39,15 +39,11 @@ const TemplateRenstraPage = () => {
   };
 
   const openTargetDrawer = (row, kategoriLabel) => {
-    const [level, scope] = kategoriLabel
-      .replace(")", "")
-      .split(" ("); // => ["s1", "prodi"]
+    const [level, scope] = kategoriLabel.replace(")", "").split(" ("); // => ["s1", "prodi"]
 
     const kategoriKey = `${scope}#${level}`; // prodi#s1
 
-    const filtered = row.Targets.filter(
-      (t) => t.Kategori === kategoriKey
-    );
+    const filtered = row.Targets.filter((t) => t.Kategori === kategoriKey);
 
     setDrawerTitle(`${kategoriLabel} – ${row.Indikator}`);
     setDrawerTargets(filtered);
@@ -55,9 +51,7 @@ const TemplateRenstraPage = () => {
   };
 
   const openFakultasDrawer = (row, fakultasUnit) => {
-    const filtered = row.Targets.filter(
-      (t) => t.FakultasUnit === fakultasUnit
-    );
+    const filtered = row.Targets.filter((t) => t.FakultasUnit === fakultasUnit);
 
     setDrawerTitle(`${fakultasUnit} - ${row.Indikator}`);
     setDrawerTargets(filtered);
@@ -72,12 +66,7 @@ const TemplateRenstraPage = () => {
     setDrawerOpen(true);
   };
 
-  const {
-    level,
-    setLevel,
-    openChangeLevel,
-    setOpenChangeLevel,
-  } = useContent();
+  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   return (
     <>
@@ -87,7 +76,7 @@ const TemplateRenstraPage = () => {
         years={[]}
         activeYear={null}
         positionYear={null}
-        onPositionChange={()=>{}}
+        onPositionChange={() => {}}
         onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
@@ -103,7 +92,9 @@ const TemplateRenstraPage = () => {
         )}
       />
       <div className="p-3 bg-white">
-        <h2 className="text-lg font-semibold mb-4">Template Dokumen Tambahan</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          Template Dokumen Tambahan
+        </h2>
 
         <div className="border rounded mt-3">
           <RemoteTable
@@ -111,56 +102,75 @@ const TemplateRenstraPage = () => {
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
             renderAddAction={
               <>
-              <button 
-                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg" 
-                onClick={()=>navigate("/template_renstra/new")}>
-                <BsPlus/>
-              </button>
-              <button 
-                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg" 
-                onClick={()=>navigate("/template_renstra/preview")}>
-                <BsEye/>
-              </button>
+                <button
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg"
+                  onClick={() => navigate("/template_renstra/new")}
+                >
+                  <BsPlus />
+                </button>
+                <button
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg"
+                  onClick={() => navigate("/template_renstra/preview")}
+                >
+                  <BsEye />
+                </button>
               </>
             }
             adapter={templateRenstraAdapter}
             listcolumns={[
-              { key: "Tahun", label: "Tahun", searchable: true, allowedOps:["eq", "neq", "in"]},
-              { key: "StandarRenstra", label: "Standar Renstra", searchable: false},
-              { key: "Indikator", label: "Indikator", searchable: true},
-              { key: "Targets", label: "Target", renderKey: (row) => {
-                if (!Array.isArray(row.Targets)) return "-";
+              {
+                key: "Tahun",
+                label: "Tahun",
+                searchable: true,
+                allowedOps: ["eq", "neq", "in"],
+              },
+              {
+                key: "StandarRenstra",
+                label: "Standar Renstra",
+                searchable: false,
+              },
+              { key: "Indikator", label: "Indikator", searchable: true },
+              {
+                key: "Targets",
+                label: "Target",
+                renderKey: (row) => {
+                  if (!Array.isArray(row.Targets)) return "-";
 
-                const labels = new Map();
+                  const labels = new Map();
 
-                row.Targets.forEach((t) => {
-                  const label = formatKategori(t.Kategori);
-                  const key = kategoriKey(t.Kategori);
+                  row.Targets.forEach((t) => {
+                    const label = formatKategori(t.Kategori);
+                    const key = kategoriKey(t.Kategori);
 
-                  labels.set(key, label);
-                });
+                    labels.set(key, label);
+                  });
 
-                return (
-                  <div className="flex flex-wrap gap-1">
-                    {[...labels.values()].map((label) => (
-                      <span
-                        key={label}
-                        onClick={() => openTargetDrawer(row, label)}
-                        className="px-2 py-0.5 text-xs rounded-full
+                  return (
+                    <div className="flex flex-wrap gap-1">
+                      {[...labels.values()].map((label) => (
+                        <span
+                          key={label}
+                          onClick={() => openTargetDrawer(row, label)}
+                          className="px-2 py-0.5 text-xs rounded-full
                                   bg-blue-100 text-blue-700
                                   whitespace-nowrap"
-                      >
-                        {label}
-                      </span>
-                    ))}
-                  </div>
-                );
-              }, searchable: false},
-              { key: "Targets", label: "Tags", renderKey: (row) => {
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                },
+                searchable: false,
+              },
+              {
+                key: "Targets",
+                label: "Tags",
+                renderKey: (row) => {
                   if (!Array.isArray(row.Targets)) return "-";
 
                   const unique = new Map();
-                  row.Targets.forEach(t => {
+                  row.Targets.forEach((t) => {
                     if (t.FakultasUnit) {
                       unique.set(t.FakultasUnit, t.FakultasUnit);
                     }
@@ -196,7 +206,9 @@ const TemplateRenstraPage = () => {
                       )}
                     </div>
                   );
-                }, searchable: false},
+                },
+                searchable: false,
+              },
             ]}
             renderAction={({ row, close }) => (
               <>
@@ -222,7 +234,6 @@ const TemplateRenstraPage = () => {
               </>
             )}
           />
-
         </div>
 
         {drawerOpen && (
@@ -252,23 +263,28 @@ const TemplateRenstraPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...new Set(drawerTargets.map(t => t.FakultasUnit))].map(fu => (
-                      <tr key={fu} className="border-b">
-                        <td className="p-2">
-                          <button
-                            onClick={() =>
-                              openFakultasDrawer(
-                                { Targets: drawerTargets, Indikator: drawerTitle },
-                                fu
-                              )
-                            }
-                            className="w-full text-left hover:text-blue-500"
-                          >
-                            {fu}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {[...new Set(drawerTargets.map((t) => t.FakultasUnit))].map(
+                      (fu) => (
+                        <tr key={fu} className="border-b">
+                          <td className="p-2">
+                            <button
+                              onClick={() =>
+                                openFakultasDrawer(
+                                  {
+                                    Targets: drawerTargets,
+                                    Indikator: drawerTitle,
+                                  },
+                                  fu
+                                )
+                              }
+                              className="w-full text-left hover:text-blue-500"
+                            >
+                              {fu}
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    )}
                   </tbody>
                 </table>
               )}
@@ -280,35 +296,27 @@ const TemplateRenstraPage = () => {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="font-medium">Fakultas</div>
                       <div>{t.FakultasUnit}</div>
-
                       <div className="font-medium">Kategori</div>
                       <div>{formatKategori(t.Kategori)}</div>
-
                       <div className="font-medium">Klasifikasi</div>
                       <div>{t.Klasifikasi}</div>
-
                       <div className="font-medium">Satuan</div>
                       <div>{t.Satuan}</div>
-
-                      <div className="font-medium">Target</div> {/*[pr] belum masukkan operator*/}
+                      <div className="font-medium">Target</div>{" "}
+                      {/*[pr] belum masukkan operator*/}
                       <div>{t.Target}</div>
-
                       <div className="font-medium">Target Min</div>
                       <div>{t.TargetMin ?? "-"}</div>
-
                       <div className="font-medium">Target Max</div>
                       <div>{t.TargetMax ?? "-"}</div>
-
                       <div className="font-medium">Tugas</div>
                       <div>{t.Tugas}</div>
-
                     </div>
                   </div>
                 ))}
             </div>
           </div>
         )}
-
       </div>
     </>
   );

@@ -17,39 +17,48 @@ export default function IndikatorRenstraFormModal({
   const [indikatorOptions, setIndikatorOptions] = useState([]);
 
   const {
-      register,
-      handleSubmit,
-      formState: { errors },
-      reset,
-      setValue,
-      watch,
-    } = useForm({
-      defaultValues: {
-        standar_renstra: null,
-        indikator: "",
-        parent: null,
-        tahun: "",
-        tipe_target: "",
-        operator: null,
-      },
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    setValue,
+    watch,
+  } = useForm({
+    defaultValues: {
+      standar_renstra: null,
+      indikator: "",
+      parent: null,
+      tahun: "",
+      tipe_target: "",
+      operator: null,
+    },
   });
 
   useEffect(() => {
     if (mode === "edit" && data) {
-      const standarSelected = standarOptions.find(item => item.id == data.UuidStandar)
-      const indiaktorSelected = indikatorOptions.find(item => item.id == data.UuidParent)
+      const standarSelected = standarOptions.find(
+        (item) => item.id == data.UuidStandar
+      );
+      const indiaktorSelected = indikatorOptions.find(
+        (item) => item.id == data.UuidParent
+      );
 
-      console.log(standarSelected, indiaktorSelected, data.UuidStandar, data.UuidParent)
-      reset({ 
+      console.log(
+        standarSelected,
+        indiaktorSelected,
+        data.UuidStandar,
+        data.UuidParent
+      );
+      reset({
         standar_renstra: standarSelected,
         indikator: data.Indikator,
         parent: indiaktorSelected,
         tahun: data.Tahun,
         tipe_target: data.TipeTarget,
-        operator: data.Operator, 
+        operator: data.Operator,
       });
     } else {
-      reset({ 
+      reset({
         standar_renstra: null,
         indikator: "",
         parent: null,
@@ -59,166 +68,164 @@ export default function IndikatorRenstraFormModal({
       });
     }
   }, [mode, data]);
-  
-    const fetchDetail = async () => {
-        const res = await fetch(
-          `http://localhost:3000/indikatorrenstra/${uuid}`
-        );
-        const data = await res.json();
-        console.log(data)
-        
-        if (!res.ok) {
-          addToast("error", data?.message || "Data tidak ditemukan");
+
+  const fetchDetail = async () => {
+    const res = await fetch(`http://localhost:3000/indikatorrenstra/${uuid}`);
+    const data = await res.json();
+    console.log(data);
+
+    if (!res.ok) {
+      addToast("error", data?.message || "Data tidak ditemukan");
+    }
+
+    const standarObj =
+      standarOptions.find((o) => o.UUID === data?.StandarRenstraUuid) ?? null;
+
+    const indikatorObj =
+      indikatorOptions.find((o) => o.UUID === data?.ParentUuid) ?? null;
+
+    reset({
+      standar_renstra: standarObj,
+      indikator: data.Indikator,
+      parent: indikatorObj,
+      tahun: data.Tahun,
+      tipe_target: data.TipeTarget,
+      operator: data.Operator,
+    });
+  };
+
+  const fetchStandarRenstraOptions = async () => {
+    try {
+      const res = await fetch(
+        "http://localhost:3000/standarrenstras?mode=sse",
+        {
+          headers: {
+            Accept: "text/event-stream",
+          },
         }
-  
-        const standarObj =
-          standarOptions.find(o => o.UUID === data?.StandarRenstraUuid) ?? null;
-  
-        const indikatorObj =
-          indikatorOptions.find(o => o.UUID === data?.ParentUuid) ?? null;
-  
-        reset({
-          standar_renstra: standarObj,
-          indikator: data.Indikator,
-          parent: indikatorObj,
-          tahun: data.Tahun,
-          tipe_target: data.TipeTarget,
-          operator: data.Operator,
-        });
-    };
-  
-    const fetchStandarRenstraOptions = async () => {
-      try {
-        const res = await fetch(
-          "http://localhost:3000/standarrenstras?mode=sse",
-          {
-            headers: {
-              Accept: "text/event-stream",
-            },
-          }
-        );
-  
-        if (!res.body) {
-          throw new Error("SSE not supported");
-        }
-  
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-  
-        let buffer = "";
-        const result = [];
-  
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-  
-          buffer += decoder.decode(value, { stream: true });
-  
-          let index;
-          while ((index = buffer.indexOf("\n\n")) !== -1) {
-            const event = buffer.slice(0, index).trim();
-            buffer = buffer.slice(index + 2);
-  
-            if (!event.startsWith("data:")) continue;
-  
-            const payload = event.replace(/^data:\s*/, "");
-  
-            if (!payload || payload === "start" || payload === "done") continue;
-  
-            try {
-              const parsed = JSON.parse(payload);
-  
-              result.push({
-                id: parsed.UUID,
-                nama: parsed.Nama,
-                ...parsed,
-              });
-            } catch (err) {
-              console.error("JSON parse error:", payload);
-            }
-          }
-        }
-  
-        setStandarOptions(result);
-      } catch (err) {
-        console.error("Fetch standar renstra gagal:", err);
+      );
+
+      if (!res.body) {
+        throw new Error("SSE not supported");
       }
-    };
-  
-    const fetchIndikatorRenstraOptions = async (tahun) => {
-      try {
-        const res = await fetch(
-          `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${tahun}`,
-          {
-            headers: {
-              Accept: "text/event-stream",
-            },
-          }
-        );
-  
-        if (!res.body) {
-          throw new Error("SSE not supported");
-        }
-  
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-  
-        let buffer = "";
-        const result = [];
-  
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-  
-          buffer += decoder.decode(value, { stream: true });
-  
-          let index;
-          while ((index = buffer.indexOf("\n\n")) !== -1) {
-            const event = buffer.slice(0, index).trim();
-            buffer = buffer.slice(index + 2);
-  
-            if (!event.startsWith("data:")) continue;
-  
-            const payload = event.replace(/^data:\s*/, "");
-  
-            if (!payload || payload === "start" || payload === "done") continue;
-  
-            try {
-              const parsed = JSON.parse(payload);
-  
-              result.push({
-                id: parsed.UUID,
-                nama: `${parsed.Indikator} (${parsed.Tahun})`,
-                ...parsed,
-              });
-            } catch (err) {
-              console.error("JSON parse error:", payload);
-            }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      let buffer = "";
+      const result = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let index;
+        while ((index = buffer.indexOf("\n\n")) !== -1) {
+          const event = buffer.slice(0, index).trim();
+          buffer = buffer.slice(index + 2);
+
+          if (!event.startsWith("data:")) continue;
+
+          const payload = event.replace(/^data:\s*/, "");
+
+          if (!payload || payload === "start" || payload === "done") continue;
+
+          try {
+            const parsed = JSON.parse(payload);
+
+            result.push({
+              id: parsed.UUID,
+              nama: parsed.Nama,
+              ...parsed,
+            });
+          } catch (err) {
+            console.error("JSON parse error:", payload);
           }
         }
-  
-        setIndikatorOptions(result);
-      } catch (err) {
-        console.error("Fetch Indikator renstra gagal:", err);
       }
-    };
-  
-    useEffect(() => {
-      fetchStandarRenstraOptions();
-    }, []);
-  
-    useEffect(() => {
-      fetchIndikatorRenstraOptions(watch("tahun"));
-    }, [watch("tahun")]);
-  
-    useEffect(() => {
-      if (mode === "new") return;
-      if (!data.uuid) return;
-      // if (standarOptions.length === 0) return;
-      // if (indikatorOptions.length === 0) return;
-  
-      fetchDetail();
-    }, [mode, data, standarOptions, indikatorOptions]);
+
+      setStandarOptions(result);
+    } catch (err) {
+      console.error("Fetch standar renstra gagal:", err);
+    }
+  };
+
+  const fetchIndikatorRenstraOptions = async (tahun) => {
+    try {
+      const res = await fetch(
+        `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${tahun}`,
+        {
+          headers: {
+            Accept: "text/event-stream",
+          },
+        }
+      );
+
+      if (!res.body) {
+        throw new Error("SSE not supported");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      let buffer = "";
+      const result = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let index;
+        while ((index = buffer.indexOf("\n\n")) !== -1) {
+          const event = buffer.slice(0, index).trim();
+          buffer = buffer.slice(index + 2);
+
+          if (!event.startsWith("data:")) continue;
+
+          const payload = event.replace(/^data:\s*/, "");
+
+          if (!payload || payload === "start" || payload === "done") continue;
+
+          try {
+            const parsed = JSON.parse(payload);
+
+            result.push({
+              id: parsed.UUID,
+              nama: `${parsed.Indikator} (${parsed.Tahun})`,
+              ...parsed,
+            });
+          } catch (err) {
+            console.error("JSON parse error:", payload);
+          }
+        }
+      }
+
+      setIndikatorOptions(result);
+    } catch (err) {
+      console.error("Fetch Indikator renstra gagal:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchStandarRenstraOptions();
+  }, []);
+
+  useEffect(() => {
+    fetchIndikatorRenstraOptions(watch("tahun"));
+  }, [watch("tahun")]);
+
+  useEffect(() => {
+    if (mode === "new") return;
+    if (!data.uuid) return;
+    // if (standarOptions.length === 0) return;
+    // if (indikatorOptions.length === 0) return;
+
+    fetchDetail();
+  }, [mode, data, standarOptions, indikatorOptions]);
 
   const onSubmit = async (form) => {
     console.log("SUBMIT:", form);
@@ -324,20 +331,22 @@ export default function IndikatorRenstraFormModal({
                   min="0"
                   required
                   error={errors.tahun?.message}
-                  {...register("tahun", { required: "Tahun wajib diisi", })}
+                  {...register("tahun", { required: "Tahun wajib diisi" })}
                 />
 
                 <TextInput
                   label="Tipe Target"
                   required
                   error={errors.tipe_target?.message}
-                  {...register("tipe_target", { required: "Tipe Target wajib diisi", })}
+                  {...register("tipe_target", {
+                    required: "Tipe Target wajib diisi",
+                  })}
                 />
 
                 <TextInput
                   label="Operator"
                   error={errors.operator?.message}
-                  {...register("operator", { required: false, })}
+                  {...register("operator", { required: false })}
                 />
 
                 <SearchSelect
@@ -345,9 +354,11 @@ export default function IndikatorRenstraFormModal({
                   options={indikatorOptions}
                   placeholder="Cari indikator renstra"
                   value={watch("parent")}
-                  onChange={(item) => setValue("parent", item, {
+                  onChange={(item) =>
+                    setValue("parent", item, {
                       shouldValidate: true,
-                    })}
+                    })
+                  }
                 />
 
                 <div className="flex justify-end gap-3">

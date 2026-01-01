@@ -1,32 +1,45 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useAuth } from "./AuthProvider";
 
 const ContentContext = createContext(null);
 
-/* ===== MOCK SERVER ===== */
-const serverYears = [
-  { Tahun: "2027", Status: "no-active" },
-  { Tahun: "2026", Status: "no-active" },
-  { Tahun: "2025", Status: "active" },
-  { Tahun: "2024", Status: "no-active" },
-];
-
-const serverMode = [
-  { Tahun: "2026", val: "auditor1" },
-  { Tahun: "2025", val: "auditee" },
-  { Tahun: "2024", val: "auditor2" },
-];
-
-const isUUID = (v) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+// const isUUID = (v) =>
+//   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 
 export const ContentProvider = ({ children }) => {
+  const {user, getValidToken} = useAuth();
+  const [serverYears, setServerYears] = useState([]);
+  const [positionYear, setPositionYear] = useState(null);
+
   /* ================= YEAR ================= */
   const activeYear = useMemo(
-    () => serverYears.find((y) => y.Status === "active")?.Tahun,
-    []
+    () => serverYears.find((y) => y.Status === "active")?.Tahun ?? null,
+    [serverYears]
   );
 
-  const [positionYear, setPositionYear] = useState(activeYear);
+  useEffect(() => {
+    const fetchYears = async () => {
+      try {
+        const token = await getValidToken();
+
+        const res = await fetch("http://localhost:3000/tahunrenstras?mode=all", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
+
+        if (!res.ok) throw new Error("Gagal mengambil tahun");
+
+        const data = await res.json();
+        setServerYears(data);
+      } catch (err) {
+        console.error("Fetch tahunrenstras error:", err);
+      }
+    };
+
+    fetchYears();
+  }, [getValidToken]);
 
   /* ================= LEVEL ================= */
   const [level, setLevel] = useState(null);
@@ -37,19 +50,19 @@ export const ContentProvider = ({ children }) => {
 
   /* ================= EFFECT ================= */
   useEffect(() => {
-    const sessionUser = sessionStorage.getItem("user");
+    if(!user) return;
 
     // === ADMIN ===
-    if (!sessionUser || !isUUID(sessionUser)) {
-      setLevel("admin");
-      setListLevel(["admin"]);
+    if (user?.level=="admin" || user?.level=="fakultas") {
+      setLevel(user.level);
+      setListLevel([user.level]);
       return;
     }
 
     // === ROLE BASED ON YEAR ===
-    const modes = serverMode
-      .filter((m) => String(m.Tahun) === String(positionYear))
-      .map((m) => m.val);
+    const modes = (user?.extra_role ?? [])
+      .filter((m) => String(m.tahun) === String(positionYear))
+      .map((m) => m.role);
 
     if (modes.length === 0) {
       setLevel("user");
@@ -58,7 +71,14 @@ export const ContentProvider = ({ children }) => {
       setLevel(modes[0]);
       setListLevel(modes);
     }
-  }, [positionYear]);
+  }, [positionYear, user]);
+
+  useEffect(()=>{
+    console.log(activeYear)
+    if(!activeYear) return;
+
+    setPositionYear(activeYear);
+  },[activeYear]);
 
   /* ================= ACTIONS ================= */
   const changeYear = (year) => {

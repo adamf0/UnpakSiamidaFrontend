@@ -27,29 +27,27 @@ const IndikatorRenstraPage = () => {
   };
 
   const deleteData = async () => {
-    const res = await fetch(`http://localhost:3000/standarrenstra/${selectedRow.Uuid}`, {
-      method: "DELETE",
-    });
+    const res = await fetch(
+      `http://localhost:3000/standarrenstra/${selectedRow.Uuid}`,
+      {
+        method: "DELETE",
+      }
+    );
     const data = await res.json();
-    console.log(data)
-    
-    if (res.ok){
+    console.log(data);
+
+    if (res.ok) {
       addToast("success", "Data berhasil dihapus");
-    } else{
+    } else {
       addToast("error", data?.message || "Data tidak ditemukan");
     }
 
     setConfirmDelete(false);
     tableRef.current?.reload?.({ resetPage: true });
-  }
+  };
 
-  const {
-      level,
-      setLevel,
-      openChangeLevel,
-      setOpenChangeLevel,
-  } = useContent();
-  
+  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+
   return (
     <>
       <Navbar
@@ -58,7 +56,7 @@ const IndikatorRenstraPage = () => {
         years={[]}
         activeYear={null}
         positionYear={null}
-        onPositionChange={()=>{}}
+        onPositionChange={() => {}}
         onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
@@ -78,27 +76,32 @@ const IndikatorRenstraPage = () => {
 
         <div className="border rounded mt-3">
           <RemoteTable
-          ref={tableRef}
+            ref={tableRef}
             endpoint="http://localhost:3000/indikatorrenstras"
             mode="sse"
             onError={(err) => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              <button 
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg" 
-                onClick={()=>openNew()}>
-                <BsPlus/>
+              <button
+                className="px-3 py-2 bg-purple-600 text-white rounded-lg"
+                onClick={() => openNew()}
+              >
+                <BsPlus />
               </button>
             }
             listcolumns={[
-              { key: "Tahun", label: "Tahun", searchable: true},
-              { key: "Standar", label: "Standar Standar", searchable: true},
-              { key: "Indikator", label: "Indikator Standar", searchable: true},
+              { key: "Tahun", label: "Tahun", searchable: true },
+              { key: "Standar", label: "Standar Standar", searchable: true },
+              {
+                key: "Indikator",
+                label: "Indikator Standar",
+                searchable: true,
+              },
             ]}
             renderAction={({ row, close }) => (
               <>
-              <button
+                <button
                   className="block w-full px-3 py-2 text-sm hover:bg-gray-100"
                   onClick={() => {
                     console.log("edit", row);
@@ -123,7 +126,6 @@ const IndikatorRenstraPage = () => {
               </>
             )}
           />
-
         </div>
 
         <IndikatorRenstraFormModal

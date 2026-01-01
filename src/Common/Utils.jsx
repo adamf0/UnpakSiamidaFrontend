@@ -96,12 +96,24 @@ export function cn(...inputs) {
 }
 
 export const isValidationError = (code) => typeof code === "string" && code.endsWith(".Validation");
+
 export const normalizeValidationMessage = (messageObj) => {
   if (!messageObj || typeof messageObj !== "object") return "Validasi gagal";
 
   return Object.entries(messageObj)
     .map(([field, msg]) => `${field} : ${msg}`)
     .join("\n");
+};
+
+export const isOverlap = (aStart, aEnd, bStart, bEnd) => {
+  if (!aStart || !aEnd || !bStart || !bEnd) return false;
+
+  const s1 = new Date(aStart);
+  const e1 = new Date(aEnd);
+  const s2 = new Date(bStart);
+  const e2 = new Date(bEnd);
+
+  return s1 <= e2 && s2 <= e1;
 };
 
 export const delay = (ms) => new Promise(res => setTimeout(res, ms));

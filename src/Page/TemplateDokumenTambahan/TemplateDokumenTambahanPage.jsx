@@ -2,11 +2,9 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import Navbar from "@/Components/Navbar";
 import RemoteTable from "@/Components/RemoteTable";
 import { useContent } from "@/Providers/ContentProvider";
-import React, { useRef, useState, useEffect } from "react";
+import React, { useState } from "react";
 import { BsEye, BsPlus } from "react-icons/bs";
 import { useNavigate } from "react-router-dom";
-
-// const cn = (...classes) => classes.filter(Boolean).join(" ");
 
 const TemplateDokumenTambahanPage = () => {
   const navigate = useNavigate();
@@ -14,13 +12,10 @@ const TemplateDokumenTambahanPage = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTitle, setDrawerTitle] = useState("");
   const [drawerTargets, setDrawerTargets] = useState([]);
-  const [drawerMode, setDrawerMode] = useState("detail"); 
-
+  const [drawerMode, setDrawerMode] = useState("detail");
 
   const openTagsDrawer = (row, label) => {
-    const filtered = row.Targets.filter(
-      (t) => t.Kategori === label
-    );
+    const filtered = row.Targets.filter((t) => t.Kategori === label);
 
     setDrawerTitle(`${label} - ${row.Pertanyaan} (${row.Tahun})`);
     setDrawerTargets(filtered);
@@ -28,12 +23,7 @@ const TemplateDokumenTambahanPage = () => {
     setDrawerOpen(true);
   };
 
-  const {
-    level,
-    setLevel,
-    openChangeLevel,
-    setOpenChangeLevel,
-  } = useContent();
+  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   return (
     <>
@@ -43,7 +33,7 @@ const TemplateDokumenTambahanPage = () => {
         years={[]}
         activeYear={null}
         positionYear={null}
-        onPositionChange={()=>{}}
+        onPositionChange={() => {}}
         onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
@@ -59,7 +49,9 @@ const TemplateDokumenTambahanPage = () => {
         )}
       />
       <div className="p-3 bg-white">
-        <h2 className="text-lg font-semibold mb-4">Template Dokumen Tambahan</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          Template Dokumen Tambahan
+        </h2>
 
         <div className="border rounded mt-3">
           <RemoteTable
@@ -68,34 +60,54 @@ const TemplateDokumenTambahanPage = () => {
             adapter={templateDokumenTambahanAdapter}
             renderAddAction={
               <>
-              <button 
-                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg" 
-                onClick={()=>navigate("/template_dokumen_tambahan/new")}>
-                <BsPlus/>
-              </button>
-              <button 
-                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg" 
-                onClick={()=>navigate("/template_dokumen_tambahan/preview")}>
-                <BsEye/>
-              </button>
+                <button
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg"
+                  onClick={() => navigate("/template_dokumen_tambahan/new")}
+                >
+                  <BsPlus />
+                </button>
+                <button
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg"
+                  onClick={() => navigate("/template_dokumen_tambahan/preview")}
+                >
+                  <BsEye />
+                </button>
               </>
             }
             listcolumns={[
-              { key: "Tahun", label: "Tahun", searchable: true, allowedOps:["eq", "neq", "in"]},
-              { key: "JenisFile", label: "Jenis File", searchable: true, allowedOps:["like", "eq", "neq"]},
-              { key: "Pertanyaan", label: "Pertanyaan", searchable: true, allowedOps:["like"]},
-              { key: "Targets", label: "Targets", renderKey: (row) => {
+              {
+                key: "Tahun",
+                label: "Tahun",
+                searchable: true,
+                allowedOps: ["eq", "neq", "in"],
+              },
+              {
+                key: "JenisFile",
+                label: "Jenis File",
+                searchable: true,
+                allowedOps: ["like", "eq", "neq"],
+              },
+              {
+                key: "Pertanyaan",
+                label: "Pertanyaan",
+                searchable: true,
+                allowedOps: ["like"],
+              },
+              {
+                key: "Targets",
+                label: "Targets",
+                renderKey: (row) => {
                   if (!Array.isArray(row.Targets)) return "-";
 
                   const unique = new Map();
-                  row.Targets.forEach(t => {
+                  row.Targets.forEach((t) => {
                     if (t.Kategori) {
                       unique.set(t.Kategori, t.Kategori);
                     }
                   });
 
                   const all = [...unique.values()];
-                  
+
                   return (
                     <div className="flex flex-wrap gap-1">
                       {all.map((label) => (
@@ -111,7 +123,9 @@ const TemplateDokumenTambahanPage = () => {
                       ))}
                     </div>
                   );
-                }, searchable: false},
+                },
+                searchable: false,
+              },
             ]}
             renderAction={({ row, close }) => (
               <>
@@ -119,7 +133,9 @@ const TemplateDokumenTambahanPage = () => {
                   className="block w-full px-3 py-2 text-sm hover:bg-gray-100"
                   onClick={() => {
                     console.log("edit", row);
-                    navigate(`/template_dokumen_tambahan/${row.Tahun}/${row.JenisFileUuid}`)
+                    navigate(
+                      `/template_dokumen_tambahan/${row.Tahun}/${row.JenisFileUuid}`
+                    );
                     close();
                   }}
                 >
@@ -138,7 +154,6 @@ const TemplateDokumenTambahanPage = () => {
               </>
             )}
           />
-
         </div>
 
         {drawerOpen && (
@@ -172,14 +187,12 @@ const TemplateDokumenTambahanPage = () => {
 
                       <div className="font-medium">Tugas</div>
                       <div>{t.Tugas}</div>
-
                     </div>
                   </div>
                 ))}
             </div>
           </div>
         )}
-
       </div>
     </>
   );
@@ -207,7 +220,7 @@ export const templateDokumenTambahanAdapter = (rows = []) => {
     map[key].Targets.push({
       ID: r.ID,
       UUID: r.UUID,
-      Kategori: r.FakultasProdiUnit?.replaceAll("#all",""),
+      Kategori: r.FakultasProdiUnit?.replaceAll("#all", ""),
       Klasifikasi: r.Klasifikasi,
       Satuan: r.Satuan,
       Tugas: r.Tugas,

@@ -9,7 +9,7 @@ import { useContent } from "@/Providers/ContentProvider";
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
-const PreviewTemplatePage = ({type="renstra"}) => {
+const PreviewTemplatePage = ({ type = "renstra" }) => {
   const [loading, setLoading] = useState(false);
   const [_, setErr] = useState(null);
 
@@ -20,60 +20,61 @@ const PreviewTemplatePage = ({type="renstra"}) => {
   const [tableData, setTableData] = useState([]);
   const [tableLoading, setTableLoading] = useState(false);
 
-  const {
-    level,
-    setLevel,
-    openChangeLevel,
-    setOpenChangeLevel,
-  } = useContent();
+  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   const fetchFakultasUnit = async () => {
     setLoading(true);
     setErr(null);
-  
-    setTimeout(async ()=>{
+
+    setTimeout(async () => {
       try {
-        const res = await fetch("http://localhost:3000/fakultasunits?mode=sse", {
-          headers: { Accept: "text/event-stream" },
-        });
+        const res = await fetch(
+          "http://localhost:3000/fakultasunits?mode=sse",
+          {
+            headers: { Accept: "text/event-stream" },
+          }
+        );
         if (!res.body) throw new Error("SSE not supported");
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
         const result = [];
-  
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
           let index;
-          
+
           while ((index = buffer.indexOf("\n\n")) !== -1) {
             const event = buffer.slice(0, index).trim();
             buffer = buffer.slice(index + 2);
             if (!event.startsWith("data:")) continue;
-            
+
             const payload = event.replace(/^data:\s*/, "");
             if (!payload || payload === "start" || payload === "done") continue;
-            
+
             try {
               const parsed = JSON.parse(payload);
-              if(isEmpty(parsed.UUID) || parsed.UUID=="00000000-0000-0000-0000-000000000000"){
+              if (
+                isEmpty(parsed.UUID) ||
+                parsed.UUID == "00000000-0000-0000-0000-000000000000"
+              ) {
                 continue;
               }
 
               let label = "";
-              if(parsed.Type=="prodi"){
-                label=`${parsed.Nama} - ${parsed.Jenjang} (prodi)`;
-              } else if(parsed.Type=="fakultas"){
-                label=`${parsed.Nama} (fakultas)`;
-              } else{
-                label=`${parsed.Nama} (unit)`;
+              if (parsed.Type == "prodi") {
+                label = `${parsed.Nama} - ${parsed.Jenjang} (prodi)`;
+              } else if (parsed.Type == "fakultas") {
+                label = `${parsed.Nama} (fakultas)`;
+              } else {
+                label = `${parsed.Nama} (unit)`;
               }
               result.push({
-              id: parsed.UUID,
-              nama: label,
-              ...parsed,
+                id: parsed.UUID,
+                nama: label,
+                ...parsed,
               });
             } catch {}
           }
@@ -85,7 +86,7 @@ const PreviewTemplatePage = ({type="renstra"}) => {
       } finally {
         setLoading(false);
       }
-    },3000);
+    }, 3000);
   };
 
   const fetchPreviewData = async (tahun, fakultasUUID) => {
@@ -115,14 +116,14 @@ const PreviewTemplatePage = ({type="renstra"}) => {
       fakultasUnit.UUID !== "00000000-0000-0000-0000-000000000000"
     ) {
       fetchPreviewData(tahun, fakultasUnit.UUID);
-    } else{
+    } else {
       setTableData([]);
     }
   };
 
-  useEffect(()=>{
+  useEffect(() => {
     fetchFakultasUnit();
-  },[]);
+  }, []);
 
   return (
     <>
@@ -132,7 +133,7 @@ const PreviewTemplatePage = ({type="renstra"}) => {
         years={[]}
         activeYear={null}
         positionYear={null}
-        onPositionChange={()=>{}}
+        onPositionChange={() => {}}
         onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
@@ -149,10 +150,20 @@ const PreviewTemplatePage = ({type="renstra"}) => {
       />
       <div className="p-3 bg-white">
         <div className="mb-4 flex flex-col gap-4">
-          <nav className="flex-1 text-sm text-gray-500 mb-1" aria-label="Breadcrumb">
+          <nav
+            className="flex-1 text-sm text-gray-500 mb-1"
+            aria-label="Breadcrumb"
+          >
             <ol className="list-none p-0 inline-flex">
               <li className="flex items-center">
-                <Link to="/template_dokumen_tambahan" className="hover:underline">{type=="renstra"? "Template Renstra":"Template Dokumen Tambahan"}</Link>
+                <Link
+                  to="/template_dokumen_tambahan"
+                  className="hover:underline"
+                >
+                  {type == "renstra"
+                    ? "Template Renstra"
+                    : "Template Dokumen Tambahan"}
+                </Link>
                 <span className="mx-2">/</span>
               </li>
               <li className="flex items-center text-gray-700 font-medium">
@@ -163,7 +174,6 @@ const PreviewTemplatePage = ({type="renstra"}) => {
 
           <h2 className="flex-1 text-lg font-semibold">Preview</h2>
         </div>
-
 
         <div className="border rounded mt-3">
           <div className="flex flex-col gap-2 p-6">
@@ -181,19 +191,18 @@ const PreviewTemplatePage = ({type="renstra"}) => {
 
             {loading ? (
               <>
-                  <label className="block text-sm font-medium mb-1">Target</label>
-                  <Shimmer rows={1} />
+                <label className="block text-sm font-medium mb-1">Target</label>
+                <Shimmer rows={1} />
               </>
-              ) : (
-                <SearchSelect
-                    label="Target"
-                    options={fakultasUnitsOptions}
-                    placeholder="Pilih target"
-                    value={fakultasUnit}
-                    onChange={(item) => setFakultasUnit(item)}
-                />
-              )
-            }
+            ) : (
+              <SearchSelect
+                label="Target"
+                options={fakultasUnitsOptions}
+                placeholder="Pilih target"
+                value={fakultasUnit}
+                onChange={(item) => setFakultasUnit(item)}
+              />
+            )}
             <button
               className="p-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-300
                         text-sm text-white rounded flex items-center justify-center gap-2"
@@ -202,7 +211,6 @@ const PreviewTemplatePage = ({type="renstra"}) => {
             >
               {tableLoading ? "Loading..." : "Filter"}
             </button>
-
           </div>
 
           <RemoteTable
@@ -210,23 +218,29 @@ const PreviewTemplatePage = ({type="renstra"}) => {
             disableGlobalSearch={false}
             renderAddAction={[]}
             listcolumns={[
-              { 
-                key: "Indikator", 
-                label: "Indikator", 
+              {
+                key: "Indikator",
+                label: "Indikator",
                 renderKey: (row) => {
-                  return row.IsPertanyaan=="1"? 
-                  <>
-                    {row.Indikator}
-                    <div className="px-2 py-1 w-[fit-content] text-[.6rem] bg-green-600 text-white rounded-full">Pertanyaan</div>
-                  </>:
-                  <>
-                  {row.Indikator}
-                  <div className="px-2 py-1 w-[fit-content] text-[.6rem] bg-green-600 text-white rounded-full">Bukan Pertanyaan</div>
-                  </>
+                  return row.IsPertanyaan == "1" ? (
+                    <>
+                      {row.Indikator}
+                      <div className="px-2 py-1 w-[fit-content] text-[.6rem] bg-green-600 text-white rounded-full">
+                        Pertanyaan
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {row.Indikator}
+                      <div className="px-2 py-1 w-[fit-content] text-[.6rem] bg-green-600 text-white rounded-full">
+                        Bukan Pertanyaan
+                      </div>
+                    </>
+                  );
                 },
-                searchable: false
-              }, 
-              { key: "Klasifikasi", label: "Klasifikasi", searchable: false},
+                searchable: false,
+              },
+              { key: "Klasifikasi", label: "Klasifikasi", searchable: false },
               {
                 key: "Target",
                 label: "Target",
@@ -235,21 +249,18 @@ const PreviewTemplatePage = ({type="renstra"}) => {
                     return row.Target;
                   }
 
-                  if (
-                    (isEmpty(row.Target_min)) ||
-                    (!isEmpty(row.Target_max))
-                  ) {
-                    return `${row.Target_min ?? "-"} - ${row.Target_max ?? "-"}`;
+                  if (isEmpty(row.Target_min) || !isEmpty(row.Target_max)) {
+                    return `${row.Target_min ?? "-"} - ${
+                      row.Target_max ?? "-"
+                    }`;
                   }
                 },
-                searchable: false
+                searchable: false,
               },
             ]}
             renderAction={({ row, close }) => {}}
           />
-
         </div>
-
       </div>
     </>
   );
