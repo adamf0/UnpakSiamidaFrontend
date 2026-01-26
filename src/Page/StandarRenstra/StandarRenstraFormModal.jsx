@@ -3,6 +3,7 @@ import { Fragment, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
+import { useAuth } from "@/Providers/AuthProvider";
 
 export default function StandarRenstraFormModal({
   open,
@@ -12,6 +13,7 @@ export default function StandarRenstraFormModal({
   onSuccess,
 }) {
   const { addToast } = useToast();
+  const {getValidToken} = useAuth()
 
   const {
     register,
@@ -40,6 +42,9 @@ export default function StandarRenstraFormModal({
         {
           method: mode === "edit" ? "PUT" : "POST",
           body: fd,
+          headers: {
+            Authorization: `Bearer ${getValidToken()}`
+          }
         }
       );
 

@@ -35,6 +35,15 @@ export function isValidDateTime(dateString) {
 
 export const isEmpty = (str) => !str || str.trim().length === 0 || str === undefined || str===null;
 
+export const isNumeric = (val) => {
+  if (val === null || val === undefined) return false;
+  if (typeof val === "number") return !Number.isNaN(val);
+  if (typeof val === "string" && val.trim() !== "") {
+    return !Number.isNaN(Number(val));
+  }
+  return false;
+};
+
 export function buildHeaders(old, token, isjson = true) {
     let latitude = old.lat;
     let longitude = old.lng;

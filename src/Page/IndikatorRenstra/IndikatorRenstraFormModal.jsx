@@ -1,9 +1,11 @@
 import { Dialog, Transition } from "@headlessui/react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
 import SearchSelect from "@/Components/SearchSelect";
+import { useAuth } from "@/Providers/AuthProvider";
+import { isEmpty } from "@/Common/Utils";
 
 export default function IndikatorRenstraFormModal({
   open,
@@ -15,6 +17,7 @@ export default function IndikatorRenstraFormModal({
   const { addToast } = useToast();
   const [standarOptions, setStandarOptions] = useState([]);
   const [indikatorOptions, setIndikatorOptions] = useState([]);
+  const {getValidToken} = useAuth()
 
   const {
     register,
@@ -70,7 +73,13 @@ export default function IndikatorRenstraFormModal({
   }, [mode, data]);
 
   const fetchDetail = async () => {
-    const res = await fetch(`http://localhost:3000/indikatorrenstra/${uuid}`);
+    if(isEmpty(getValidToken())) return;
+
+    const res = await fetch(`http://localhost:3000/indikatorrenstra/${uuid}`, {
+      headers: {
+        Authorization: `Bearer ${getValidToken()}`
+      }
+    });
     const data = await res.json();
     console.log(data);
 
@@ -95,12 +104,15 @@ export default function IndikatorRenstraFormModal({
   };
 
   const fetchStandarRenstraOptions = async () => {
+    if(isEmpty(getValidToken())) return;
+
     try {
       const res = await fetch(
         "http://localhost:3000/standarrenstras?mode=sse",
         {
           headers: {
             Accept: "text/event-stream",
+            Authorization: `Bearer ${getValidToken()}`
           },
         }
       );
@@ -153,12 +165,15 @@ export default function IndikatorRenstraFormModal({
   };
 
   const fetchIndikatorRenstraOptions = async (tahun) => {
+    if(isEmpty(getValidToken())) return;
+    
     try {
       const res = await fetch(
         `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${tahun}`,
         {
           headers: {
             Accept: "text/event-stream",
+            Authorization: `Bearer ${getValidToken()}`
           },
         }
       );
@@ -214,9 +229,16 @@ export default function IndikatorRenstraFormModal({
     fetchStandarRenstraOptions();
   }, []);
 
+  const tahun = watch("tahun");
+
   useEffect(() => {
-    fetchIndikatorRenstraOptions(watch("tahun"));
-  }, [watch("tahun")]);
+    if (!tahun) {
+      setIndikatorOptions([]);
+      return;
+    }
+
+    fetchIndikatorRenstraOptions(tahun);
+  }, [tahun]);
 
   useEffect(() => {
     if (mode === "new") return;
@@ -245,6 +267,9 @@ export default function IndikatorRenstraFormModal({
         {
           method: mode === "edit" ? "PUT" : "POST",
           body: fd,
+          headers: {
+            Authorization: `Bearer ${getValidToken()}`
+          }
         }
       );
 
@@ -343,7 +368,7 @@ export default function IndikatorRenstraFormModal({
                   })}
                 />
 
-                <TextInput
+                <TextInput //[pr] ini seharusnya select option
                   label="Operator"
                   error={errors.operator?.message}
                   {...register("operator", { required: false })}

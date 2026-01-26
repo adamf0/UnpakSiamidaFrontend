@@ -7,8 +7,8 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useContent } from "@/Providers/ContentProvider";
 import { BsPlus } from "react-icons/bs";
 import { useNavigate } from "react-router-dom";
-
-// const cn = (...classes) => classes.filter(Boolean).join(" ");
+import { useAuth } from "@/Providers/AuthProvider";
+import { isEmpty } from "@/Common/Utils";
 
 const ScheduleAuditPage = () => {
   const navigate = useNavigate();
@@ -16,10 +16,16 @@ const ScheduleAuditPage = () => {
   const tableRef = useRef(null);
   const [selectedRow, setSelectedRow] = useState(null);
   const { addToast } = useToast();
+  const {getValidToken} = useAuth()
 
   const deleteData = async () => {
+    if(isEmpty(getValidToken)) return;
+
     const res = await fetch(`http://localhost:3000/renstra/${selectedRow.UUID}`, {
       method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${getValidToken()}`
+      }
     });
     const data = await res.json();
     console.log(data)
@@ -36,6 +42,7 @@ const ScheduleAuditPage = () => {
 
   const {
     level,
+    listLevel,
     setLevel,
     openChangeLevel,
     setOpenChangeLevel,
@@ -44,18 +51,11 @@ const ScheduleAuditPage = () => {
   return (
     <>
       <Navbar
-        userName="John Doe"
-        userLevel={level}
-        years={[]}
-        activeYear={null}
-        positionYear={null}
-        onPositionChange={()=>{}}
-        onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
             open={openChangeLevel}
             onClose={() => setOpenChangeLevel(false)}
-            levels={[]}
+            levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
               setLevel(val);
@@ -72,6 +72,7 @@ const ScheduleAuditPage = () => {
             ref={tableRef}
             endpoint="http://localhost:3000/renstras"
             mode="sse"
+            token={getValidToken()}
             adapter={ScheduleAuditAdapter}
             onError={(err) => {
               console.error("TABLE ERROR:", err);
@@ -156,7 +157,7 @@ const ScheduleAuditPage = () => {
                   className="block w-full px-3 py-2 text-sm hover:bg-gray-100"
                   onClick={() => {
                     console.log("edit", row);
-                    navigate(`/schedule_audit/edit/${row.uuid}`)
+                    navigate(`/schedule_audit/edit/${row.UUID}`)
                     close();
                   }}
                 >

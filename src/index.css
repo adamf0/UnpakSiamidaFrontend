@@ -19,6 +19,19 @@
   100% { transform: translateX(250%); }
 }
 
+.ck-content ol {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+}
+
+.ck-content ul {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+}
+
+.title-banner{
+  font-size: clamp(.9rem, .9rem + 2vmax, 1.8rem);
+}
 
 .animate-shimmer-red {
   background: linear-gradient(90deg, rgba(255,80,80,0.2) 0%, rgba(255,0,0,0.6) 50%, rgba(255,80,80,0.2) 100%);

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./AuthProvider";
+import { isEmpty } from "@/Common/Utils";
 
 const ContentContext = createContext(null);
 
@@ -9,37 +10,40 @@ const ContentContext = createContext(null);
 export const ContentProvider = ({ children }) => {
   const {user, getValidToken} = useAuth();
   const [serverYears, setServerYears] = useState([]);
-  const [positionYear, setPositionYear] = useState(null);
+  const [positionYear, setPositionYear] = useState(() => {
+    return sessionStorage.getItem("positionYear");
+  });
 
   /* ================= YEAR ================= */
   const activeYear = useMemo(
-    () => serverYears.find((y) => y.Status === "active")?.Tahun ?? null,
+    () => sessionStorage.getItem("positionYear") ?? serverYears.find((y) => y.Status === "active")?.Tahun ?? null,
     [serverYears]
   );
 
+  const fetchYears = async () => {
+    try {
+      const token = await getValidToken();
+      if (isEmpty(token)) return;
+
+      const res = await fetch("http://localhost:3000/tahunrenstras?mode=all", {
+        headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        },
+      });
+
+      if (!res.ok) throw new Error("Gagal mengambil tahun");
+
+      const data = await res.json();
+      setServerYears(data);
+    } catch (err) {
+      console.error("Fetch tahunrenstras error:", err);
+    }
+  };
+
   useEffect(() => {
-    const fetchYears = async () => {
-      try {
-        const token = await getValidToken();
-
-        const res = await fetch("http://localhost:3000/tahunrenstras?mode=all", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        });
-
-        if (!res.ok) throw new Error("Gagal mengambil tahun");
-
-        const data = await res.json();
-        setServerYears(data);
-      } catch (err) {
-        console.error("Fetch tahunrenstras error:", err);
-      }
-    };
-
     fetchYears();
-  }, [getValidToken]);
+  }, []);
 
   /* ================= LEVEL ================= */
   const [level, setLevel] = useState(null);
@@ -73,16 +77,22 @@ export const ContentProvider = ({ children }) => {
     }
   }, [positionYear, user]);
 
-  useEffect(()=>{
-    console.log(activeYear)
-    if(!activeYear) return;
+  useEffect(() => {
+    if (activeYear && !positionYear) {
+      setPositionYear(String(activeYear));
+    }
+  }, [activeYear, positionYear]);
 
-    setPositionYear(activeYear);
-  },[activeYear]);
+  useEffect(() => { //jika sudah di set saat refresh gunakan defaulnya pakai sesionstorage bukan dari active year
+    if (positionYear) {
+      sessionStorage.setItem("positionYear", positionYear);
+    }
+  }, [positionYear]);
 
   /* ================= ACTIONS ================= */
   const changeYear = (year) => {
     setPositionYear(year);
+    sessionStorage.setItem("positionYear", String(year));
   };
 
   const changeLevel = (val) => {

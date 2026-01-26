@@ -34,7 +34,7 @@ const ChangeLevelModal = ({
           <div className="mt-6 flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 rounded"
+              className="px-4 py-2 bg-purple-500 text-sm text-white rounded"
             >
               Cancel
             </button>

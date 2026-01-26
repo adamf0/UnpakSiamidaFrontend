@@ -17,8 +17,10 @@ import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import TextInput from "@/Components/TextInput";
 import DateRangeInput from "@/Components/DateRangeInput";
+import { useAuth } from "@/Providers/AuthProvider";
 
 const ScheduleAuditFormPage = () => {
+  const {getValidToken} = useAuth()
   const navigate = useNavigate();
   const { uuidSchedule } = useParams();
   const { addToast } = useToast();
@@ -57,7 +59,7 @@ const ScheduleAuditFormPage = () => {
     return val.split("T")[0];
   };
 
-  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   const {
     register,
@@ -66,7 +68,6 @@ const ScheduleAuditFormPage = () => {
     getValues,
     watch,
     reset,
-    control,
     trigger,
     formState: { errors },
   } = useForm({
@@ -127,6 +128,8 @@ const ScheduleAuditFormPage = () => {
   };
 
   const fetchData = async (uuid) => {
+    if(isEmpty(getValidToken())) return;
+
     setLoad("detail", true);
     setErr("detail", null);
 
@@ -134,7 +137,11 @@ const ScheduleAuditFormPage = () => {
       try {
         const res = await fetch(
           `http://localhost:3000/renstra/${uuid}`,
-          {}
+          {
+            headers: {
+              Authorization: `Bearer ${getValidToken()}`
+            }
+          }
         );
         const result = await res.json();
         if(!res.ok){
@@ -152,6 +159,8 @@ const ScheduleAuditFormPage = () => {
   };
 
   const fetchTargets = async () => {
+    if(isEmpty(getValidToken())) return;
+
     setLoad("target", true);
     setErr("target", null);
 
@@ -160,7 +169,10 @@ const ScheduleAuditFormPage = () => {
         const res = await fetch(
           "http://localhost:3000/fakultasunits?mode=sse",
           {
-            headers: { Accept: "text/event-stream" },
+            headers: { 
+              Accept: "text/event-stream", 
+              Authorization: `Bearer ${getValidToken()}` 
+            },
           }
         );
         if (!res.body) throw new Error("SSE not supported");
@@ -221,13 +233,18 @@ const ScheduleAuditFormPage = () => {
   };
 
   const fetchUser = async () => {
+    if(isEmpty(getValidToken())) return;
+
     setLoad("user", true);
     setErr("user", null);
 
     setTimeout(async () => {
       try {
         const res = await fetch("http://localhost:3000/users?mode=sse", {
-          headers: { Accept: "text/event-stream" },
+          headers: { 
+            Accept: "text/event-stream",
+            Authorization: `Bearer ${getValidToken()}` 
+          },
         });
         if (!res.body) throw new Error("SSE not supported");
         const reader = res.body.getReader();
@@ -346,18 +363,11 @@ const ScheduleAuditFormPage = () => {
   return (
     <>
       <Navbar
-        userName="John Doe"
-        userLevel={level}
-        years={[]}
-        activeYear={null}
-        positionYear={null}
-        onPositionChange={() => {}}
-        onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
             open={openChangeLevel}
             onClose={() => setOpenChangeLevel(false)}
-            levels={[]}
+            levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
               setLevel(val);

@@ -1,6 +1,7 @@
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import Navbar from "@/Components/Navbar";
 import RemoteTable from "@/Components/RemoteTable";
+import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import React, { useState } from "react";
 import { BsEye, BsPlus } from "react-icons/bs";
@@ -13,6 +14,7 @@ const TemplateDokumenTambahanPage = () => {
   const [drawerTitle, setDrawerTitle] = useState("");
   const [drawerTargets, setDrawerTargets] = useState([]);
   const [drawerMode, setDrawerMode] = useState("detail");
+  const {getValidToken} = useAuth()
 
   const openTagsDrawer = (row, label) => {
     const filtered = row.Targets.filter((t) => t.Kategori === label);
@@ -23,23 +25,16 @@ const TemplateDokumenTambahanPage = () => {
     setDrawerOpen(true);
   };
 
-  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   return (
     <>
       <Navbar
-        userName="John Doe"
-        userLevel={level}
-        years={[]}
-        activeYear={null}
-        positionYear={null}
-        onPositionChange={() => {}}
-        onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
             open={openChangeLevel}
             onClose={() => setOpenChangeLevel(false)}
-            levels={[]}
+            levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
               setLevel(val);
@@ -58,6 +53,7 @@ const TemplateDokumenTambahanPage = () => {
             endpoint="http://localhost:3000/templatedokumentambahans"
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
             adapter={templateDokumenTambahanAdapter}
+            token={getValidToken()}
             renderAddAction={
               <>
                 <button

@@ -16,47 +16,58 @@ import TemplateRenstraFormPage from "./Page/TemplateRenstra/TemplateRenstraFormP
 import PreviewTemplatePage from "./Page/PreviewTemplate/PreviewTemplateDokumenTambahanPage";
 import ScheduleAuditPage from "./Page/ScheduleAudit/ScheduleAuditPage";
 import ScheduleAuditFormPage from "./Page/ScheduleAudit/ScheduleAuditFormPage";
+import AuditPage from "./Page/Audit/AuditPage";
+import { ContentProvider } from "./Providers/ContentProvider";
+import KtsPage from "./Page/Kts/KtsPage";
+import AuditRenstraEditPage from "./Page/Audit/AuditRenstraEditPage";
+import AuditTambahanEditPage from "./Page/Audit/AuditTambahanEditPage";
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <ToastProvider>
         <SidebarProvider>
-          <Router>
-            <AuthProvider>
-              <Routes>
-                <Route path="/" element={<LoginPage />} />
-                <Route element={<ProtectedRoute />}>
-                  <Route element={<PanelLayout />}>
-                    <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/standar_renstra" element={<StandarRenstraPage />} />
-                    <Route path="/indikator_renstra" element={<IndikatorRenstraPage />} />
-                    <Route path="/jenis_file_audit" element={<JenisFilePage />} />
+          <ContentProvider>
+            <Router>
+                <Routes>
+                  <Route path="/" element={<LoginPage />} />
+                  <Route element={<ProtectedRoute />}>
+                    <Route element={<PanelLayout />}>
+                      <Route path="/dashboard" element={<DashboardPage />} />
+                      <Route path="/standar_renstra" element={<StandarRenstraPage />} />
+                      <Route path="/indikator_renstra" element={<IndikatorRenstraPage />} />
+                      <Route path="/jenis_file_audit" element={<JenisFilePage />} />
 
-                    <Route path="/template_renstra" element={<TemplateRenstraPage />} />
-                    <Route path="/template_renstra/preview" element={<PreviewTemplatePage type="renstra" />} />
-                    <Route path="/template_renstra/new" element={<TemplateRenstraFormPage />} />
-                    <Route path="/template_renstra/:tahun/:uuidIndikator" element={<TemplateRenstraFormPage />} />
+                      <Route path="/template_renstra" element={<TemplateRenstraPage />} />
+                      <Route path="/template_renstra/preview" element={<PreviewTemplatePage type="renstra" />} />
+                      <Route path="/template_renstra/new" element={<TemplateRenstraFormPage />} />
+                      <Route path="/template_renstra/:tahun/:uuidIndikator" element={<TemplateRenstraFormPage />} />
 
-                    <Route path="/template_dokumen_tambahan" element={<TemplateDokumenTambahanPage />} />
-                    <Route path="/template_dokumen_tambahan/preview" element={<PreviewTemplatePage type="dokumen_tambahan" />} />
-                    <Route path="/template_dokumen_tambahan/new" element={<TemplateDokumenTambahanFormPage />} />
-                    <Route path="/template_dokumen_tambahan/:tahun/:uuidJenisFile" element={<TemplateDokumenTambahanFormPage />} />
+                      <Route path="/template_dokumen_tambahan" element={<TemplateDokumenTambahanPage />} />
+                      <Route path="/template_dokumen_tambahan/preview" element={<PreviewTemplatePage type="dokumen_tambahan" />} />
+                      <Route path="/template_dokumen_tambahan/new" element={<TemplateDokumenTambahanFormPage />} />
+                      <Route path="/template_dokumen_tambahan/:tahun/:uuidJenisFile" element={<TemplateDokumenTambahanFormPage />} />
 
-                    <Route path="/schedule_audit" element={<ScheduleAuditPage />} />
-                    <Route path="/schedule_audit/new" element={<ScheduleAuditFormPage />} />
-                    <Route path="/schedule_audit/edit/:uuidSchedule" element={<ScheduleAuditFormPage />} />
-                    {/* <Route element={<AccessControlRoute checkAccess={(auth) => (auth.isAdminAccess() || auth.isCompanyAccess())} />}>
-                      <Route path="/users" element={<UserPage />} />
-                      <Route path="/role_permissions" element={<RolePermissionPage />} />
-                    </Route> */}
+                      <Route path="/schedule_audit" element={<ScheduleAuditPage />} />
+                      <Route path="/schedule_audit/new" element={<ScheduleAuditFormPage />} />
+                      <Route path="/schedule_audit/edit/:uuidSchedule" element={<ScheduleAuditFormPage />} />
+
+                      <Route path="/audit" element={<AuditPage />} />
+                      <Route path="/audit/renstra/:uuidRenstra" element={<AuditRenstraEditPage />} />
+                      <Route path="/audit/tambahan/:uuidRenstra" element={<AuditTambahanEditPage />} />
+
+                      <Route path="/kts/:tahun/:target/:uuidaudit" element={<KtsPage />} />
+                      {/* <Route element={<AccessControlRoute checkAccess={(auth) => (auth.isAdminAccess() || auth.isCompanyAccess())} />}>
+                        <Route path="/users" element={<UserPage />} />
+                        <Route path="/role_permissions" element={<RolePermissionPage />} />
+                      </Route> */}
+                    </Route>
                   </Route>
-                </Route>
-              </Routes>
-            </AuthProvider>
-          </Router>
+                </Routes>
+            </Router>
+          </ContentProvider>
         </SidebarProvider>
-      </AuthProvider>
-    </ToastProvider>
+      </ToastProvider>
+    </AuthProvider>
   );
 }

@@ -27,6 +27,7 @@ const RemoteTable = forwardRef(function RemoteTable(
     adapter,
     onError,
     disableGlobalSearch=true,
+    token,
   },
   ref
 ) {
@@ -107,16 +108,37 @@ const RemoteTable = forwardRef(function RemoteTable(
       (filterQuery ? `&filters=${encodeURIComponent(filterQuery)}` : "");
 
     try {
+      const headers = {
+        ...(mode === "sse" ? { Accept: "text/event-stream" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
       const res = await fetch(url, {
         signal: controller.signal,
-        headers: mode === "sse" ? { Accept: "text/event-stream" } : undefined,
+        headers: headers,
       });
+
+      if (!res.ok) {
+        setRows([]);
+        setAllRows([]);
+        setTotal(0);
+
+        const err = {
+          message: `HTTP ${res.status}`,
+          status: res.status,
+          endpoint: url,
+        };
+
+        setError(err);
+        onError?.(err);
+        return; // ⛔ STOP di sini
+      }
 
       /* ===== SERVER PAGING ===== */
       if (mode === "paging") {
         const json = await res.json();
         setRows(applyAdapter(json.data || json || []));
-        setTotal(json.total || 0);
+        setTotal(Number(json?.total) || data.length || 0);
         return;
       }
 
@@ -389,10 +411,11 @@ const RemoteTable = forwardRef(function RemoteTable(
                     </td>
                   ))}
                   <td className="px-4 py-3 text-right relative">
-                    {
-                      typeof adapter === "function" &&
+                    {/* {
+                      typeof adapter === "function" && */}
                       <button
                         onClick={(e) => {
+                          console.log("rt",r)
                           e.stopPropagation();
                           const rect = e.currentTarget.getBoundingClientRect();
                           setOpenAction({ row: r, rect });
@@ -400,7 +423,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                       >
                         <FiMoreVertical />
                       </button>
-                    }
+                    {/* } */}
 
                     {openAction &&
                       createPortal(
@@ -415,7 +438,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                           onClick={(e) => e.stopPropagation()}
                         >
                           {renderAction({
-                            row: r,
+                            row: openAction.row,
                             close: () => setOpenAction(null),
                           })}
                         </div>,

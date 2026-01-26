@@ -1,7 +1,6 @@
 import { Outlet } from "react-router-dom";
 import Sidebar from "../Components/Sidebar";
 import { useSidebar } from "../Providers/SidebarProvider";
-import { ContentProvider } from "@/Providers/ContentProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useEffect } from "react";
 import ErrorPage from "@/Page/ErrorPage";
@@ -22,7 +21,6 @@ const PanelLayout = () => {
       return <ErrorPage message={userError}/>
     } else{
       return  <div className="md:flex h-screen">
-                <ContentProvider>
                   <Sidebar 
                     isOpen={isSidebarOpen} 
                     toggleSidebar={toggleSidebar} 
@@ -39,7 +37,6 @@ const PanelLayout = () => {
                   >
                       <Outlet />
                   </div>
-                </ContentProvider>
               </div>
     }
   }

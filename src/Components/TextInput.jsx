@@ -26,13 +26,16 @@ const TextInput = React.forwardRef(
           `}
         />
 
-        {error && (
-          <p className="text-xs text-red-500 mt-1">{error}</p>
+        {error?.message && (
+          <p className="text-xs text-red-500 mt-1">
+            {error.message}
+          </p>
         )}
       </div>
     );
   }
 );
+
 
 TextInput.displayName = "TextInput";
 export default TextInput;

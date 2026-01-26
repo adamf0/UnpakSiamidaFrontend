@@ -24,6 +24,7 @@ import ErrorModal from "@/Components/ErrorModal/ErrorModal";
 import { useContent } from "@/Providers/ContentProvider";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import Navbar from "@/Components/Navbar";
+import { useAuth } from "@/Providers/AuthProvider";
 
 /* =========================
    STAKEHOLDER CONFIG
@@ -41,12 +42,13 @@ const isRowActive = (row) => {
 
 const TemplateDokumenTambahanFormPage = () => {
   const navigate = useNavigate();
+  const {getValidToken} = useAuth()
   const { tahun, uuidJenisFile } = useParams();
   const { addToast } = useToast();
-  const mode = !isEmpty(tahun) && !isEmpty(uuidIndikator) ? "edit" : "add";
+  const mode = !isEmpty(tahun) && !isEmpty(uuidJenisFile) ? "edit" : "add";
   const { modal, openModal, closeModal } = useErrorModal();
 
-  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   const {
     register,
@@ -78,10 +80,16 @@ const TemplateDokumenTambahanFormPage = () => {
   const setLoad = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
 
   const fetchJenisFileOptions = async (tahun) => {
+    if(isEmpty(getValidToken())) return;
+
     setLoad("jenisfile", true);
     try {
       const res = await fetch(
-        `http://localhost:3000/jenisfiles?filters=tahun:eq:${tahun}`
+        `http://localhost:3000/jenisfiles?filters=tahun:eq:${tahun}`,{
+          headers: {
+            Authorization: `Bearer ${getValidToken()}`
+          }
+        }
       );
       const json = await res.json();
       setJenisFileOptions(
@@ -99,10 +107,16 @@ const TemplateDokumenTambahanFormPage = () => {
   };
 
   const fetchTemplateDokumenTambahanEdit = async (tahun, jenisFileUuid) => {
+    if(isEmpty(getValidToken())) return;
+
     setLoad("template", true);
     try {
       const res = await fetch(
-        `http://localhost:3000/templatedokumentambahans?mode=all&filters=tahun:eq:${tahun};jenisfileuuid:eq:${jenisFileUuid}`
+        `http://localhost:3000/templatedokumentambahans?mode=all&filters=tahun:eq:${tahun};jenisfileuuid:eq:${jenisFileUuid}`,{
+          headers: {
+            Authorization: `Bearer ${getValidToken()}`
+          }
+        }
       );
       const data = await res.json();
       if(!res.ok){
@@ -170,6 +184,8 @@ const TemplateDokumenTambahanFormPage = () => {
   }, [watchedTahun, watchedJenisFile?.UUID]);
 
   const onSubmit = async (data) => {
+    if(isEmpty(getValidToken())) return;
+
     console.log("kirim");
 
     const valid = await trigger();
@@ -208,6 +224,9 @@ const TemplateDokumenTambahanFormPage = () => {
             {
               method: "POST",
               body: fd,
+              headers: {
+                Authorization: `Bearer ${getValidToken()}`
+              }
             }
           );
 
@@ -253,18 +272,11 @@ const TemplateDokumenTambahanFormPage = () => {
   return (
     <>
       <Navbar
-        userName="John Doe"
-        userLevel={level}
-        years={[]}
-        activeYear={null}
-        positionYear={null}
-        onPositionChange={() => {}}
-        onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
             open={openChangeLevel}
             onClose={() => setOpenChangeLevel(false)}
-            levels={[]}
+            levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
               setLevel(val);

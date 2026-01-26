@@ -7,8 +7,8 @@ import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useContent } from "@/Providers/ContentProvider";
 import { BsPlus } from "react-icons/bs";
-
-// const cn = (...classes) => classes.filter(Boolean).join(" ");
+import { useAuth } from "@/Providers/AuthProvider";
+import { isEmpty } from "@/Common/Utils";
 
 const StandarRenstraPage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -17,6 +17,7 @@ const StandarRenstraPage = () => {
   const [modalMode, setModalMode] = useState("new");
   const [selectedRow, setSelectedRow] = useState(null);
   const { addToast } = useToast();
+  const {getValidToken} = useAuth()
 
   const openNew = () => {
     setModalMode("new");
@@ -31,8 +32,13 @@ const StandarRenstraPage = () => {
   };
 
   const deleteData = async () => {
+    if(isEmpty(getValidToken())) return;
+
     const res = await fetch(`http://localhost:3000/standarrenstra/${selectedRow.UUID}`, {
       method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${getValidToken()}`
+      }
     });
     const data = await res.json();
     console.log(data)
@@ -49,6 +55,7 @@ const StandarRenstraPage = () => {
 
   const {
     level,
+    listLevel,
     setLevel,
     openChangeLevel,
     setOpenChangeLevel,
@@ -57,18 +64,11 @@ const StandarRenstraPage = () => {
   return (
     <>
       <Navbar
-        userName="John Doe"
-        userLevel={level}
-        years={[]}
-        activeYear={null}
-        positionYear={null}
-        onPositionChange={()=>{}}
-        onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
             open={openChangeLevel}
             onClose={() => setOpenChangeLevel(false)}
-            levels={[]}
+            levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
               setLevel(val);
@@ -85,6 +85,7 @@ const StandarRenstraPage = () => {
             ref={tableRef}
             endpoint="http://localhost:3000/standarrenstras"
             mode="paging"
+            token={getValidToken()}
             onError={(err) => {
               console.error("TABLE ERROR:", err);
             }}

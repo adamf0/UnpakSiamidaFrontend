@@ -3,6 +3,7 @@ import { Fragment, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
+import { useAuth } from "@/Providers/AuthProvider";
 
 export default function JenisFileFormModal({
   open,
@@ -12,6 +13,7 @@ export default function JenisFileFormModal({
   onSuccess,
 }) {
   const { addToast } = useToast();
+  const {getValidToken} = useAuth()
 
   const {
     register,
@@ -29,6 +31,8 @@ export default function JenisFileFormModal({
   }, [mode, data]);
 
   const onSubmit = async (form) => {
+    if(isEmpty(getValidToken())) return;
+
     try {
       const fd = new FormData();
       fd.append("nama", form.nama);
@@ -40,6 +44,9 @@ export default function JenisFileFormModal({
         {
           method: mode === "edit" ? "PUT" : "POST",
           body: fd,
+          headers: {
+            Authorization: `Bearer ${getValidToken()}`
+          }
         }
       );
 

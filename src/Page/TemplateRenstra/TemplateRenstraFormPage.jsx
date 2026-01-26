@@ -25,6 +25,7 @@ import { useAutoFillModalFill } from "@/Components/ModalAutoFill/useAutoFillModa
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
+import { useAuth } from "@/Providers/AuthProvider";
 
 const TemplateRenstraFormPage = () => {
   const navigate = useNavigate();
@@ -32,10 +33,10 @@ const TemplateRenstraFormPage = () => {
   const { addToast } = useToast();
   const mode = !isEmpty(tahun) && !isEmpty(uuidIndikator) ? "edit" : "add";
   const { modal, openModal, closeModal } = useErrorModal();
-  const { modalFill, openModalFill, closeModalFill, activeGroupFill } =
-    useAutoFillModalFill();
+  const { modalFill, openModalFill, closeModalFill, activeGroupFill } = useAutoFillModalFill();
+  const {getValidToken} = useAuth();
 
-  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   const {
     register,
@@ -110,6 +111,8 @@ const TemplateRenstraFormPage = () => {
   };
 
   const fetchIndikatorRenstraOptions = async (tahun) => {
+    if(isEmpty(getValidToken())) return;
+
     setLoad("indikator", true);
     setErr("indikator", null);
 
@@ -117,7 +120,7 @@ const TemplateRenstraFormPage = () => {
       try {
         const res = await fetch(
           `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${tahun}`,
-          { headers: { Accept: "text/event-stream" } }
+          { headers: { Accept: "text/event-stream", Authorization: `Bearer ${getValidToken()}` } }
         );
         if (!res.body) throw new Error("SSE not supported");
         const reader = res.body.getReader();
@@ -169,7 +172,7 @@ const TemplateRenstraFormPage = () => {
         const res = await fetch(
           "http://localhost:3000/fakultasunits?mode=sse",
           {
-            headers: { Accept: "text/event-stream" },
+            headers: { Accept: "text/event-stream", Authorization: `Bearer ${getValidToken()}`, },
           }
         );
         if (!res.body) throw new Error("SSE not supported");
@@ -232,13 +235,19 @@ const TemplateRenstraFormPage = () => {
   };
 
   const fetchTemplateRenstraEdit = async (indikatorUuid) => {
+    if(isEmpty(getValidToken())) return;
+
     setLoad("template", true);
     setErr("template", null);
 
     setTimeout(async () => {
       try {
         const res = await fetch(
-          `http://localhost:3000/templaterenstras?mode=all&filters=indikatorrenstrauuid:eq:${indikatorUuid}`
+          `http://localhost:3000/templaterenstras?mode=all&filters=indikatorrenstrauuid:eq:${indikatorUuid}`,{
+            headers: {
+              Authorization: `Bearer ${getValidToken()}`
+            }
+          }
         );
         const data = await res.json();
         if(!res.ok){
@@ -444,18 +453,11 @@ const TemplateRenstraFormPage = () => {
   return (
     <>
       <Navbar
-        userName="John Doe"
-        userLevel={level}
-        years={[]}
-        activeYear={null}
-        positionYear={null}
-        onPositionChange={() => {}}
-        onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
             open={openChangeLevel}
             onClose={() => setOpenChangeLevel(false)}
-            levels={[]}
+            levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
               setLevel(val);

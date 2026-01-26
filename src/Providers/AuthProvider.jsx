@@ -1,8 +1,8 @@
-import { delay } from "@/Common/Utils";
 import axios from "axios";
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext(null);
+
 const decodeJWT = (jwt) => {
   try {
     const payload = jwt.split(".")[1];
@@ -11,12 +11,12 @@ const decodeJWT = (jwt) => {
     return null;
   }
 };
+
 const nowInSeconds = () => Math.floor(Date.now() / 1000);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => sessionStorage.getItem("token"));
-  const [expired, setExpired] = useState(false);
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState(null);
 
@@ -65,7 +65,6 @@ export function AuthProvider({ children }) {
   const fetchUserInfo = async () => {
     setUserLoading(true);
     setUserError(null);
-    await delay(5000);
 
     try {
       const validToken = getValidToken();
@@ -76,42 +75,27 @@ export function AuthProvider({ children }) {
           Authorization: `Bearer ${validToken}`,
         },
       });
+
       const data = res.data;
 
       setUser({
-        "uuid":data.UUID,
-        "name":data.Name,
-        "level":data.Level,
-        "email":data.Email,
-        "fakultas_unit":data.FakultasUnit,
-        "extra_role":data.ExtraRole,
+        uuid: data.UUID,
+        name: data.Name,
+        level: data.Level,
+        email: data.Email,
+        fakultas_unit: data.FakultasUnit,
+        extra_role: data.ExtraRole,
       });
-      return res.data;
+
+      return data;
     } catch (err) {
-      console.error(err);
-      const data = err.response.data;
-
-      if (typeof data === "object" && data !== null) {
-        setUserError(data.message);
-      }
-      else {
-        addToast("error", );
-        setUserError("ada masalah pada aplikasi");
-      }
-
+      setUser(null);
+      setUserError("Session expired");
       throw err;
     } finally {
       setUserLoading(false);
     }
   };
-
-  /* ======================
-   * EFFECT
-   * ====================== */
-
-  useEffect(() => {
-    setExpired(isSessionExpired());
-  }, []);
 
   /* ======================
    * LOGOUT
@@ -120,9 +104,9 @@ export function AuthProvider({ children }) {
   const logout = () => {
     sessionStorage.removeItem("token");
     sessionStorage.removeItem("refresh");
+    sessionStorage.removeItem("positionYear");
     setUser(null);
     setToken(null);
-    setExpired(false);
   };
 
   return (
@@ -130,8 +114,6 @@ export function AuthProvider({ children }) {
       value={{
         user,
         token,
-        expired,
-        setUser,
         setToken,
         isSessionExpired,
         getValidToken,

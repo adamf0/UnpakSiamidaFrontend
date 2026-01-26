@@ -20,7 +20,7 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
   const [tableData, setTableData] = useState([]);
   const [tableLoading, setTableLoading] = useState(false);
 
-  const { level, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   const fetchFakultasUnit = async () => {
     setLoading(true);
@@ -128,18 +128,11 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
   return (
     <>
       <Navbar
-        userName="John Doe"
-        userLevel={level}
-        years={[]}
-        activeYear={null}
-        positionYear={null}
-        onPositionChange={() => {}}
-        onChangeLevelClick={() => setOpenChangeLevel(true)}
         renderChangeLevelModal={() => (
           <ChangeLevelModal
             open={openChangeLevel}
             onClose={() => setOpenChangeLevel(false)}
-            levels={[]}
+            levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
               setLevel(val);
