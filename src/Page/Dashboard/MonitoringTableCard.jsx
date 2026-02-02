@@ -324,7 +324,7 @@ export function MonitoringFilterDrawer({
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-500 text-sm bg-purple-500 text-white hover:bg-purple-600"
+              className="text-gray-500 text-black"
             >
               ✕
             </button>
