@@ -601,10 +601,10 @@ const AuditRenstraEditPage = () => {
                     >
                       <div className="flex flex-col">
                         <p className="flex-1 font-bold text-lg">
-                          {q.Indikator}
+                          {q.NamaIndikator}
                         </p>
                         <small className="flex-1 italic text-sm">
-                          {q.NamaStandarRenstra}
+                          {q.NamaIndikator}
                         </small>
                       </div>
 

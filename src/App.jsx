@@ -13,7 +13,7 @@ import TemplateRenstraPage from "./Page/TemplateRenstra/TemplateRenstraPage";
 import TemplateDokumenTambahanPage from "./Page/TemplateDokumenTambahan/TemplateDokumenTambahanPage";
 import TemplateDokumenTambahanFormPage from "./Page/TemplateDokumenTambahan/TemplateDokumenTambahanFormPage";
 import TemplateRenstraFormPage from "./Page/TemplateRenstra/TemplateRenstraFormPage";
-import PreviewTemplatePage from "./Page/PreviewTemplate/PreviewTemplateDokumenTambahanPage";
+import PreviewTemplatePage from "./Page/PreviewTemplate/PreviewTemplatePage";
 import ScheduleAuditPage from "./Page/ScheduleAudit/ScheduleAuditPage";
 import ScheduleAuditFormPage from "./Page/ScheduleAudit/ScheduleAuditFormPage";
 import AuditPage from "./Page/Audit/AuditPage";

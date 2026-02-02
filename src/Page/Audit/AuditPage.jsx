@@ -6,6 +6,7 @@ import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useNavigate } from "react-router-dom";
+import { renderLabelFakultasUnit } from "@/Common/Utils";
 
 const AuditPage = () => {
   const navigate = useNavigate();
@@ -55,17 +56,7 @@ const AuditPage = () => {
               adapter={AuditAdapter}
               listcolumns={[
                 { key: "Tahun", label: "Tahun", searchable: true },
-                { key: "FakultasUnit", label: "Target Audit", searchable: true, renderKey: (row) => {
-                let label = row.FakultasUnit;
-                if(row.Type=="prodi"){
-                  label = `${row.FakultasUnit} (${row.Jenjang})`;
-                } else if(row.Type=="fakultas"){
-                  label = `${row.FakultasUnit} (fakultas)`;
-                } else if(row.Type=="unit"){
-                  label = `${row.FakultasUnit} (unit)`;
-                }
-                return label
-              }},
+                { key: "FakultasUnit", label: "Target Audit", searchable: true, renderKey: (row) => renderLabelFakultasUnit(row)},
                 { key: "Fakultas", label: "Fakultas", searchable: true },
                 { key: "PeriodeUploadDokumenMulai", label: "Status Jadwal", className: "w-64", renderKey: (row) => {
                   let styleBadge = "bg-gray-500 hover:bg-gray-600";

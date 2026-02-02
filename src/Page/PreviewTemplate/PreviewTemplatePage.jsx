@@ -5,11 +5,13 @@ import RemoteTable from "@/Components/RemoteTable";
 import SearchSelect from "@/Components/SearchSelect";
 import Shimmer from "@/Components/Shimmer";
 import TextInput from "@/Components/TextInput";
+import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
 const PreviewTemplatePage = ({ type = "renstra" }) => {
+  const {getValidToken} = useAuth()
   const [loading, setLoading] = useState(false);
   const [_, setErr] = useState(null);
 
@@ -23,6 +25,7 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
 
   const fetchFakultasUnit = async () => {
+    if(isEmpty(getValidToken())) return;
     setLoading(true);
     setErr(null);
 
@@ -31,7 +34,10 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
         const res = await fetch(
           "http://localhost:3000/fakultasunits?mode=sse",
           {
-            headers: { Accept: "text/event-stream" },
+            headers: { 
+              Accept: "text/event-stream", 
+              Authorization: `Bearer ${getValidToken()}` 
+            },
           }
         );
         if (!res.body) throw new Error("SSE not supported");
@@ -90,12 +96,19 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
   };
 
   const fetchPreviewData = async (tahun, fakultasUUID) => {
+    if(isEmpty(getValidToken())) return;
     setTableLoading(true);
     try {
       await delay(3000);
 
       const res = await fetch(
-        `http://localhost:3000/preview/audit/${type}/${tahun}/${fakultasUUID}`
+        `http://localhost:3000/preview/audit/${type}/${tahun}/${fakultasUUID}`,
+        {
+            headers: { 
+              Accept: "text/event-stream", 
+              Authorization: `Bearer ${getValidToken()}` 
+            },
+          }
       );
 
       if (!res.ok) throw new Error("Gagal memuat data preview");
