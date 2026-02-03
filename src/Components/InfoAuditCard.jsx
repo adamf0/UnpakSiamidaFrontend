@@ -1,8 +1,10 @@
-export function InfoRow({ label, value }) {
+import { cn } from "@/Common/Utils";
+
+export function InfoRow({ label, value, className }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-[minmax(12cqi,auto)_1fr] gap-2">
       <b>{label}:</b>
-      <p className="break-words">{value}</p>
+      <p className={cn("break-words", className)}>{value}</p>
     </div>
   );
 }

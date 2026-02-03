@@ -312,9 +312,8 @@ export default function IndikatorRenstraFormModal({
             leave="ease-in duration-150"
             leaveFrom="scale-100 opacity-100"
             leaveTo="scale-95 opacity-0"
-            className="h-screen overflow-y-auto"
           >
-            <Dialog.Panel className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+            <Dialog.Panel className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg max-h-[90vh] overflow-y-auto">
               <Dialog.Title className="text-lg font-semibold mb-4">
                 {mode === "edit" ? "Edit" : "Tambah"} Indikator Renstra
               </Dialog.Title>

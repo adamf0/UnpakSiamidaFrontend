@@ -4,6 +4,7 @@ import SearchSelect from "@/Components/SearchSelect";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { useEffect, useMemo, useState } from "react";
+import { BsFilter } from "react-icons/bs";
 
  {/* //[note] cek lagi bagian select, kalau masih waiting dibuat skeleton */}
 export default function MonitoringTableCard() {
@@ -208,7 +209,7 @@ export default function MonitoringTableCard() {
             onClick={() => setDrawerOpen(true)}
             className="px-3 py-2 border rounded-lg text-sm bg-purple-500 text-white hover:bg-purple-600"
           >
-            Filter
+            <BsFilter />
           </button>
         </div>
 

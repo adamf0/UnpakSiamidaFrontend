@@ -21,6 +21,7 @@ import { ContentProvider } from "./Providers/ContentProvider";
 import KtsPage from "./Page/Kts/KtsPage";
 import AuditRenstraEditPage from "./Page/Audit/AuditRenstraEditPage";
 import AuditTambahanEditPage from "./Page/Audit/AuditTambahanEditPage";
+import BeritaAcaraPage from "./Page/BeritaAcara/BeritaAcaraPage";
 
 export default function App() {
   return (
@@ -57,6 +58,10 @@ export default function App() {
                       <Route path="/audit/tambahan/:uuidRenstra" element={<AuditTambahanEditPage />} />
 
                       <Route path="/kts/:tahun/:target/:uuidaudit" element={<KtsPage />} />
+
+                      <Route path="/berita_acara" element={<BeritaAcaraPage />} />
+                      <Route path="/berita_acara/:target" element={<BeritaAcaraPage />} />
+
                       {/* <Route element={<AccessControlRoute checkAccess={(auth) => (auth.isAdminAccess() || auth.isCompanyAccess())} />}>
                         <Route path="/users" element={<UserPage />} />
                         <Route path="/role_permissions" element={<RolePermissionPage />} />

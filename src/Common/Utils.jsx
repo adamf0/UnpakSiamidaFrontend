@@ -23,6 +23,31 @@ export function formatDate(dateString) {
   );
 }
 
+export const formatTanggalIndo = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  return date.toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+};
+
+export function formatYMD(dateString) {
+  if (!dateString) return "-";
+
+  const date = new Date(dateString);
+
+  if (isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-CA").format(date);
+}
+
 export function isValidDateTime(dateString) {
   if (isEmpty(dateString)) {
     return false;
@@ -158,13 +183,13 @@ export function getBackground({ r0, r1, r2, r3 }) {
 }
 
 export function renderLabelFakultasUnit(row) {
-  let label = row.FakultasUnit;
+  let label = row?.FakultasUnit ?? row?.Nama;
   if (row.Type == "prodi") {
-    label = `${row.FakultasUnit} (${row.Jenjang})`;
+    label = `${label} (${row.Jenjang})`;
   } else if (row.Type == "fakultas") {
-    label = `${row.FakultasUnit} (fakultas)`;
+    label = `${label} (fakultas)`;
   } else if (row.Type == "unit") {
-    label = `${row.FakultasUnit} (unit)`;
+    label = `${label} (unit)`;
   }
 
   return label;
