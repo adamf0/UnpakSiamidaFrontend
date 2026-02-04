@@ -20,12 +20,11 @@ const BeritaAcaraPage = () => {
   const [selectedRow, setSelectedRow] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [infoTarget, setInfoTarget] = useState(null);
-  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } =
+  const { positionYear, level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } =
     useContent();
 
   const [loading, setLoading] = useState(false);
   const [datas, setDatas] = useState([]);
-  const actionRef = useRef(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("new");
 
@@ -102,26 +101,32 @@ const BeritaAcaraPage = () => {
     setModalOpen(true);
   };
 
+  const openDelete = (row) => {
+    setSelectedRow(row);
+    setConfirmDelete(true);
+  };
+
   const deleteBeritaAcara = async () => {
     if (isEmpty(getValidToken())) return;
 
-    // const res = await fetch(
-    //   `http://localhost:3000/beritaacara/${selectedRow.UUID}`,
-    //   {
-    //     method: "DELETE",
-    //     headers: {
-    //       Authorization: `Bearer ${getValidToken()}`,
-    //     },
-    //   },
-    // );
-    // const data = await res.json();
+    const res = await fetch(
+      `http://localhost:3000/beritaacara/${selectedRow.UUID}?ctxtahun=${positionYear}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${getValidToken()}`,
+        },
+      },
+    );
+    const data = await res.json();
 
-    // if (res.ok) {
-    //   addToast("success", "Data berhasil dihapus");
-    // } else {
-    //   addToast("error", data?.message || "Data tidak ditemukan");
-    // }
-
+    if (res.ok) {
+      addToast("success", "Data berhasil dihapus");
+    } else {
+      addToast("error", data?.message || "Data tidak ditemukan");
+    }
+    
+    fetchData();
     setConfirmDelete(false);
   };
 
@@ -164,10 +169,7 @@ const BeritaAcaraPage = () => {
       <BeritaAcaraList
         datas={datas}
         onEdit={openEdit}
-        onDelete={() => {
-          setSelectedRow(null);
-          setConfirmDelete(true);
-        }}
+        onDelete={openDelete}
       />
     );
   }
@@ -241,8 +243,9 @@ const BeritaAcaraPage = () => {
         open={modalOpen}
         mode={modalMode}
         data={selectedRow}
+        fakultasunit={target}
         onClose={() => setModalOpen(false)}
-        onSuccess={() => {}}
+        onSuccess={() => fetchData()}
       />
 
       <ConfirmDeleteDialog

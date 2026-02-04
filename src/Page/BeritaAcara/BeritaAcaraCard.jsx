@@ -7,7 +7,6 @@ export default function BeritaAcaraCard({
   row,
   onOpenAction,
 }) {
-  console.log(row)
   return (
     <div
       className="relative border rounded-lg px-3 py-4 hover:shadow-md transition bg-white"

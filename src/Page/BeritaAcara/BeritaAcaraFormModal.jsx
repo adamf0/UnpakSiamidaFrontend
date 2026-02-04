@@ -1,23 +1,25 @@
 import { Dialog, Transition } from "@headlessui/react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
 import SearchSelect from "@/Components/SearchSelect";
 import { useAuth } from "@/Providers/AuthProvider";
 import { formatYMD, isEmpty } from "@/Common/Utils";
+import { useContent } from "@/Providers/ContentProvider";
 
 export default function BeritaAcaraFormModal({
   open,
   mode,
   data,
+  fakultasunit = "",
   onClose,
   onSuccess,
 }) {
   const { addToast } = useToast();
-  const [targetOptions, setTargetOptions] = useState([]);
   const [userOptions, setUserOptions] = useState([]);
   const { getValidToken } = useAuth();
+  const { positionYear } = useContent();
 
   const {
     register,
@@ -105,32 +107,32 @@ export default function BeritaAcaraFormModal({
     console.log("SUBMIT:", form);
     try {
       const fd = new FormData();
-      fd.append("tahun", form.tahun ?? "");
-      fd.append("tanggal", form?.tanggal ?? "");
-      fd.append("fakultasunit", data?.FakultasUnitUuid ?? "");
-      fd.append("auditee", form?.auditee?.UUID ?? "");
-      fd.append("auditor1", form?.auditor1?.UUID ?? "");
-      fd.append("auditor2", form?.auditor2?.UUID ?? "");
+      fd.append("tahun", form.Tahun ?? "");
+      fd.append("tanggal", form?.Tanggal ?? "");
+      fd.append("fakultasunit", data?.FakultasUnitUuid ?? fakultasunit);
+      fd.append("auditee", form?.Auditee?.UUID ?? "");
+      fd.append("auditor1", form?.Auditor1?.UUID ?? "");
+      fd.append("auditor2", form?.Auditor2?.UUID ?? "");
 
-    //   const res = await fetch(
-    //     mode === "edit"
-    //       ? `http://localhost:3000/beritaacara/${data.Uuid}`
-    //       : "http://localhost:3000/beritaacara",
-    //     {
-    //       method: mode === "edit" ? "PUT" : "POST",
-    //       body: fd,
-    //       headers: {
-    //         Authorization: `Bearer ${getValidToken()}`,
-    //       },
-    //     },
-    //   );
+      const res = await fetch(
+        mode === "edit"
+          ? `http://localhost:3000/beritaacara/${data.UUID}?ctxtahun=${positionYear}`
+          : `http://localhost:3000/beritaacara?ctxtahun=${positionYear}`,
+        {
+          method: mode === "edit" ? "PUT" : "POST",
+          body: fd,
+          headers: {
+            Authorization: `Bearer ${getValidToken()}`,
+          },
+        },
+      );
 
-    //   const json = await res.json();
+      const json = await res.json();
 
-    //   if (!res.ok) {
-    //     addToast("error", json.message || "Gagal menyimpan");
-    //     return;
-    //   }
+      if (!res.ok) {
+        addToast("error", json.message || "Gagal menyimpan");
+        return;
+      }
 
       addToast("success", "Berhasil disimpan");
       onSuccess?.();
@@ -203,7 +205,7 @@ export default function BeritaAcaraFormModal({
                   type="text"
                   disabled
                   value={data?.FakultasUnit ?? ""}
-                 />
+                />
 
                 <SearchSelect
                   label="Nama Auditee"
