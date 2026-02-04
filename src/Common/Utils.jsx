@@ -184,11 +184,11 @@ export function getBackground({ r0, r1, r2, r3 }) {
 
 export function renderLabelFakultasUnit(row) {
   let label = row?.FakultasUnit ?? row?.Nama;
-  if (row.Type == "prodi") {
-    label = `${label} (${row.Jenjang})`;
-  } else if (row.Type == "fakultas") {
+  if (row?.Type == "prodi") {
+    label = `${label} (${row?.Jenjang})`;
+  } else if (row?.Type == "fakultas") {
     label = `${label} (fakultas)`;
-  } else if (row.Type == "unit") {
+  } else if (row?.Type == "unit") {
     label = `${label} (unit)`;
   }
 

@@ -277,7 +277,7 @@ const KtsPage = () => {
             </div>
 
             {/* ================= CARD 2 ================= */}
-            <div className="border rounded-lg p-4 flex flex-col overflow-hidden">
+            <div className={`border rounded-lg p-4 overflow-hidden flex flex-col ${!selectedRow? "justify-center items-center":""}`}>
               {/* Mobile */}
               <div className="sm:hidden flex gap-4 overflow-x-auto">
                 {selectedRow ? (
@@ -309,23 +309,29 @@ const KtsPage = () => {
           </div>
 
           <div className="flex flex-col gap-4 overflow-y-auto pr-1">
-            {data.map((row) => (
-              <CardKts
-                key={row.UUID}
-                row={row}
-                tahun={positionYear}
-                level={level}
-                activeActionId={activeActionId}
-                setActiveActionId={setActiveActionId}
-                onEdit={(row) => setSelectedRow(row)}
-                onChangePosition={(status, ubahTindakan) => {
-                  console.log(status, ubahTindakan);
-                  setPositionStatus(status);
-                  setIsUbahTindakan(ubahTindakan);
-                }}
-                isActive={selectedRow?.UUID == row.UUID}
-              />
-            ))}
+            {data.length > 0 ? (
+              data.map((row) => (
+                <CardKts
+                  key={row.UUID}
+                  row={row}
+                  tahun={positionYear}
+                  level={level}
+                  activeActionId={activeActionId}
+                  setActiveActionId={setActiveActionId}
+                  onEdit={(row) => setSelectedRow(row)}
+                  onChangePosition={(status, ubahTindakan) => {
+                    console.log(status, ubahTindakan);
+                    setPositionStatus(status);
+                    setIsUbahTindakan(ubahTindakan);
+                  }}
+                  isActive={selectedRow?.UUID == row.UUID}
+                />
+              ))
+            ) : (
+              <div class="border rounded-lg p-4 h-screen flex justify-center items-center">
+                <div class="text-gray-400 text-sm">Tidak ada data kts</div>
+              </div>
+            )}
           </div>
         </div>
       </div>

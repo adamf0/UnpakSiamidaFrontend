@@ -244,6 +244,7 @@ const BeritaAcaraPage = () => {
         mode={modalMode}
         data={selectedRow}
         fakultasunit={target}
+        namafakultasunit={renderLabelFakultasUnit(infoTarget)}
         onClose={() => setModalOpen(false)}
         onSuccess={() => fetchData()}
       />

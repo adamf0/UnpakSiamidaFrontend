@@ -13,6 +13,7 @@ export default function BeritaAcaraFormModal({
   mode,
   data,
   fakultasunit = "",
+  namafakultasunit = "",
   onClose,
   onSuccess,
 }) {
@@ -204,7 +205,7 @@ export default function BeritaAcaraFormModal({
                   label="Nama Target" //hanya tahun, tidak boleh ada text melainkan number 4 digit
                   type="text"
                   disabled
-                  value={data?.FakultasUnit ?? ""}
+                  value={data?.FakultasUnit ?? namafakultasunit}
                 />
 
                 <SearchSelect
