@@ -12,6 +12,7 @@ import BeritaAcaraFilterContent from "./BeritaAcaraFilterContent";
 import BeritaAcaraList from "./BeritaAcaraList";
 import { BsFilter, BsPlus } from "react-icons/bs";
 
+//[pr] belum tambah pengecekan penugasan audit di tahun & unit yg dicari pada list group
 const BeritaAcaraPage = () => {
   const { target } = useParams();
   const isBeritaAcara = !isEmpty(target);
@@ -106,6 +107,89 @@ const BeritaAcaraPage = () => {
     setConfirmDelete(true);
   };
 
+  const downloadHandler = async (row) => {
+    try {
+      if (isEmpty(getValidToken())) return;
+
+      const responsePublish = await fetch(
+        `http://localhost:3000/beritaacara/publish/${row.UUID}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${getValidToken()}`,
+          },
+        },
+      );
+      const dataPublish = await responsePublish.json();
+
+      if (!responsePublish.ok) {
+        addToast("error", dataPublish?.message || "Data tidak ditemukan");
+      } else{
+        const response = await fetch(
+          `http://localhost:3000/beritaacara/export/${row.UUID}?ctxtahun=2024`,
+          {
+            headers: {
+              Accept: "application/pdf",
+              Authorization: `Bearer ${getValidToken()}`,
+            },
+          }
+        );
+
+        const dataDownload = response.headers.get("Content-Type") || "";
+
+        // Jika JSON → tampilkan error
+        if (dataDownload.includes("application/json")) {
+          const json = await response.json();
+          alert(json.message || "Terjadi error pada aplikasi");
+          return;
+        }
+
+        // Jika bukan PDF atau status bukan 200
+        if (!response.ok || !dataDownload.includes("application/pdf")) {
+          alert("Ada masalah pada server");
+          return;
+        }
+
+        // Handle streaming download
+        const contentLength = response.headers.get("Content-Length");
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+
+        const reader = response.body.getReader();
+        const chunks = [];
+        let received = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          chunks.push(value);
+          received += value.length;
+
+          if (total) {
+            console.log(
+              `Progress: ${Math.round((received / total) * 100)}%`
+            );
+          }
+        }
+
+        const blob = new Blob(chunks, { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "berita_acara.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan jaringan");
+    }
+  };
+
   const deleteBeritaAcara = async () => {
     if (isEmpty(getValidToken())) return;
 
@@ -170,6 +254,7 @@ const BeritaAcaraPage = () => {
         datas={datas}
         onEdit={openEdit}
         onDelete={openDelete}
+        onDownload={downloadHandler}
       />
     );
   }

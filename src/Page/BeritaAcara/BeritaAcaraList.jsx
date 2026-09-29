@@ -23,13 +23,14 @@ export default function BeritaAcaraList({ datas, onDownload, onEdit, onDelete })
           onClose={() => setOpenAction(null)}
           onEdit={onEdit}
           onDelete={onDelete}
+          onDownload={onDownload}
         />
       )}
     </div>
   );
 }
 
-export function ActionMenu({ row, rect, onEdit, onDelete, onClose }) {
+export function ActionMenu({ row, rect, onEdit, onDelete, onDownload, onClose }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export function ActionMenu({ row, rect, onEdit, onDelete, onClose }) {
       <button
         onClick={() => {
           onDownload(row);
-          onClose();;
+          onClose();
         }}
         className="block w-full px-3 py-2 text-sm hover:bg-gray-100 text-left"
       >

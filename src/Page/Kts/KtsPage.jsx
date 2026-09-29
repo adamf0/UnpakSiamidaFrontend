@@ -1,10 +1,10 @@
-import React, { act, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
-import { cn, isNumeric } from "@/Common/Utils";
+import { cn, isEmpty, isNumeric } from "@/Common/Utils";
 import ErrorImg from "@/assets/data-breach.png";
 import { useParams } from "react-router-dom";
 import { BsThreeDotsVertical } from "react-icons/bs";
@@ -13,6 +13,28 @@ import RestrictedCkEditor from "@/Components/RestrictedCkEditor";
 import TextInput from "@/Components/TextInput";
 import Choice from "@/Components/Choice";
 import InfoAuditCard from "@/Components/InfoAuditCard";
+
+const decodeJWT = (jwt) => {
+  try {
+    const payload = jwt.split(".")[1];
+    return JSON.parse(atob(payload));
+  } catch {
+    return null;
+  }
+};
+
+const getSID = () => {
+  const token = sessionStorage.getItem("token");
+  if (!token) return null;
+
+  const payload = decodeJWT(token);
+  return payload?.sid || null;
+};
+
+function ruleAllowAccess(row) {
+  console.log("sid:", getSID());
+  return getSID() == row.AuditorUuid || getSID() == row.AuditeeUuid;
+}
 
 function renderStatus(currentStatus) {
   const showUbahTindakan = {
@@ -44,7 +66,7 @@ function renderStatus(currentStatus) {
   };
 
   const styleMap = {
-    draf: "bg-gray-400 text-gray-800",
+    draf: "bg-gray-600 text-white",
     tolak: "bg-red-500/70 text-white",
     menunggu_verif_auditee: "bg-orange-500/90 text-white",
     tolak_auditee: "bg-red-500/70 text-white",
@@ -91,6 +113,10 @@ const KtsPage = () => {
 
   // popper action
   const [activeActionId, setActiveActionId] = useState(null);
+  const [onlyAllowed, setOnlyAllowed] = useState(false);
+  const filteredData = onlyAllowed
+    ? data.filter((row) => ruleAllowAccess(row))
+    : data;
 
   useEffect(() => {
     console.log(data);
@@ -220,6 +246,87 @@ const KtsPage = () => {
     return <Component data={selectedRow} />;
   }
 
+  const downloadHandler = async (row) => {
+    try {
+      if (isEmpty(getValidToken())) return;
+
+      const responsePublish = await fetch(
+        `http://localhost:3000/kts/publish/${row.UUID}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${getValidToken()}`,
+          },
+        },
+      );
+      const dataPublish = await responsePublish.json();
+
+      if (!responsePublish.ok) {
+        addToast("error", dataPublish?.message || "Data tidak ditemukan");
+      } else {
+        const response = await fetch(
+          `http://localhost:3000/kts/export/${row.UUID}?ctxtahun=2024`,
+          {
+            headers: {
+              Accept: "application/pdf",
+              Authorization: `Bearer ${getValidToken()}`,
+            },
+          },
+        );
+
+        const dataDownload = response.headers.get("Content-Type") || "";
+
+        // Jika JSON → tampilkan error
+        if (dataDownload.includes("application/json")) {
+          const json = await response.json();
+          alert(json.message || "Terjadi error pada aplikasi");
+          return;
+        }
+
+        // Jika bukan PDF atau status bukan 200
+        if (!response.ok || !dataDownload.includes("application/pdf")) {
+          alert("Ada masalah pada server");
+          return;
+        }
+
+        // Handle streaming download
+        const contentLength = response.headers.get("Content-Length");
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+
+        const reader = response.body.getReader();
+        const chunks = [];
+        let received = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          chunks.push(value);
+          received += value.length;
+
+          if (total) {
+            console.log(`Progress: ${Math.round((received / total) * 100)}%`);
+          }
+        }
+
+        const blob = new Blob(chunks, { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "kts.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan jaringan");
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -277,7 +384,9 @@ const KtsPage = () => {
             </div>
 
             {/* ================= CARD 2 ================= */}
-            <div className={`border rounded-lg p-4 overflow-hidden flex flex-col ${!selectedRow? "justify-center items-center":""}`}>
+            <div
+              className={`border rounded-lg p-4 overflow-hidden flex flex-col ${!selectedRow ? "justify-center items-center" : ""}`}
+            >
               {/* Mobile */}
               <div className="sm:hidden flex gap-4 overflow-x-auto">
                 {selectedRow ? (
@@ -309,11 +418,44 @@ const KtsPage = () => {
           </div>
 
           <div className="flex flex-col gap-4 overflow-y-auto pr-1">
-            {data.length > 0 ? (
-              data.map((row) => (
+            <div
+              onClick={() => setOnlyAllowed(!onlyAllowed)}
+              className={`flex items-start gap-3 rounded-lg border p-3 mb-4 cursor-pointer transition ${onlyAllowed ? "bg-purple-50 border-purple-400" : "hover:bg-gray-50"}`}
+            >
+              <div
+                className={`w-4 h-4 mt-1 rounded border flex items-center justify-center ${onlyAllowed ? "bg-purple-600 border-purple-600" : "border-gray-400"}`}
+              >
+                {onlyAllowed && (
+                  <svg
+                    className="w-3 h-3 text-white"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </div>
+
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">
+                  Tampilkan hanya yang memiliki akses
+                </span>
+                <span className="text-xs text-gray-500">
+                  Filter berdasarkan auditee atau auditor yg dimiliki
+                </span>
+              </div>
+            </div>
+
+            {filteredData.length > 0 ? (
+              filteredData.map((row) => (
                 <CardKts
                   key={row.UUID}
                   row={row}
+                  onDownload={downloadHandler}
                   tahun={positionYear}
                   level={level}
                   activeActionId={activeActionId}
@@ -353,6 +495,7 @@ function CardKts({
   onEdit,
   onChangePosition,
   isActive = false,
+  onDownload,
 }) {
   const isRenstraNilai =
     !isNumeric(row?.RenstraNilai) && isNumeric(row?.DokumenTambahan);
@@ -431,58 +574,63 @@ function CardKts({
             </span>
 
             {/* ACTION */}
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveActionId(
-                    activeActionId === row.UUID ? null : row.UUID,
-                  );
-                }}
-                className="p-1 rounded hover:bg-gray-100"
-              >
-                <BsThreeDotsVertical />
-              </button>
+            {ruleAllowAccess(row) && (
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveActionId(
+                      activeActionId === row.UUID ? null : row.UUID,
+                    );
+                  }}
+                  className="p-1 rounded hover:bg-gray-100"
+                >
+                  <BsThreeDotsVertical />
+                </button>
 
-              {activeActionId === row.UUID && (
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className="
+                {activeActionId === row.UUID && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="
                     absolute right-0 mt-1 w-52
                     bg-white border rounded shadow-lg z-20
                   "
-                >
-                  <ActionItem
-                    label={action}
-                    danger={action == "Closing"}
-                    onClick={() => {
-                      setActiveActionId(null);
-                      onEdit(row);
-                      onChangePosition(null, false);
-                    }}
-                  />
-                  {visibleUbahTindakan && "auditee" == level && (
+                  >
                     <ActionItem
-                      label="Ubah Tindakan"
+                      label={action}
+                      danger={action == "Closing"}
                       onClick={() => {
                         setActiveActionId(null);
-                        onChangePosition("menunggu_verif_auditee", true);
                         onEdit(row);
+                        onChangePosition(null, false);
                       }}
                     />
-                  )}
+                    {visibleUbahTindakan && "auditee" == level && (
+                      <ActionItem
+                        label="Ubah Tindakan"
+                        onClick={() => {
+                          setActiveActionId(null);
+                          onChangePosition("menunggu_verif_auditee", true);
+                          onEdit(row);
+                        }}
+                      />
+                    )}
 
-                  {/* <Divider />
+                    {/* <Divider />
                   <ActionItem label="Ubah Tindakan" />
                   <ActionItem label="Penyelesaian" /> */}
-                  {/* <Divider />
+                    {/* <Divider />
                   <ActionItem label="Closing" danger />
                   <ActionItem label="Diketahui" /> */}
-                  <Divider />
-                  <ActionItem label="Download" />
-                </div>
-              )}
-            </div>
+                    <Divider />
+                    <ActionItem
+                      label="Download"
+                      onClick={() => onDownload(row)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {renderContent()}

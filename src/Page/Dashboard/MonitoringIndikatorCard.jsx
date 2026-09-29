@@ -223,21 +223,6 @@ export default function MonitoringIndikatorCard() {
           </button>
         </div>
 
-        {/* LEGEND */}
-        <div className="px-5 py-3 border-b bg-gray-50">
-          <div className="flex flex-wrap gap-4">
-            {Object.values(STATUS_LEGEND).map((item, idx) => (
-              <div
-                key={idx}
-                className="flex items-center gap-2 text-sm text-gray-600"
-              >
-                <span className={`w-3 h-3 rounded-sm ${item.color}`} />
-                <span>{item.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* FILTER BADGES */}
         <div className="px-5 py-3 flex flex-wrap gap-2 border-b bg-gray-50">
           {filters.map(

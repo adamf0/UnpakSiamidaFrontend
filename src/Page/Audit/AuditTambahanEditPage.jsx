@@ -13,7 +13,6 @@ import { useForm } from "react-hook-form";
 import RadioButton from "@/Components/RadioButton";
 import InfoAuditCard from "@/Components/InfoAuditCard";
 
-//[pr] masih problem ux antara modal user
 const AuditTambahanEditPage = () => {
   const { uuidRenstra } = useParams();
   const { addToast } = useToast();
@@ -388,7 +387,7 @@ const AuditTambahanEditPage = () => {
                       </small>
                     </div>
 
-                    {
+                    { //[pr] belum di disable berdasarkan dataRenstra range
                       level=="auditee"? 
                       <TextInput
                         type="text"
@@ -405,7 +404,7 @@ const AuditTambahanEditPage = () => {
                       </>
                     }
 
-                    {
+                    { //[pr] belum di disable berdasarkan dataRenstra range
                       (level=="auditor1" || level=="auditor2") && <>
                         <hr className="my-3"/>
 

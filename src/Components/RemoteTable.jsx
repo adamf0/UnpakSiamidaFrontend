@@ -468,7 +468,7 @@ const RemoteTable = forwardRef(function RemoteTable(
           Page {page} / {total>0? Math.ceil(total / limit):1}  · Total Data {total}
         </span>
 
-        <div className="flex gap-2"> {/*[pr] bemum atur disable*/}
+        <div className="flex gap-2"> {/*[pr] belum atur disable*/}
           <button
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}

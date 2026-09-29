@@ -13,7 +13,6 @@ import { useForm } from "react-hook-form";
 import SearchSelect from "@/Components/SearchSelect";
 import InfoAuditCard from "@/Components/InfoAuditCard";
 
-//[pr] masih problem ux antara modal user
 //[pr] ini masih belum selesai
 const AuditRenstraEditPage = () => {
   const { uuidRenstra } = useParams();
@@ -313,6 +312,7 @@ const AuditRenstraEditPage = () => {
     }
     return "#";
   }
+  
   const renderCapaian = (dataAudit) => {
     if (dataAudit.Kategori == "kategori") {
       return dataAudit.Target ?? "-";
@@ -327,6 +327,7 @@ const AuditRenstraEditPage = () => {
     }
   };
 
+  //[pr] belum di disable berdasarkan dataRenstra range
   const renderInputCapaian = (dataAudit) => {
     if (dataAudit.Kategori == "kategori") {
       return level == "auditee" ? (
@@ -418,6 +419,8 @@ const AuditRenstraEditPage = () => {
       );
     }
   };
+
+  //[pr] belum di disable berdasarkan dataRenstra range
   const renderInputCapaianAuditor = (dataAudit) => {
     if (dataAudit.Kategori == "kategori") {
       return (
