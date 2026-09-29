@@ -4,9 +4,21 @@ import React, { createContext, useContext, useState } from "react";
 const AuthContext = createContext(null);
 
 const decodeJWT = (jwt) => {
+  if (!jwt || typeof jwt !== "string") return null;
   try {
-    const payload = jwt.split(".")[1];
-    return JSON.parse(atob(payload));
+    const parts = jwt.split(".");
+    if (parts.length < 2) return null;
+    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    const binString = atob(base64);
+    try {
+      const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch {
+      return JSON.parse(binString);
+    }
   } catch {
     return null;
   }
@@ -24,24 +36,33 @@ export function AuthProvider({ children }) {
    * TOKEN CHECK
    * ====================== */
 
-  const isTokenExpired = () => {
-    const token = sessionStorage.getItem("token");
+  const cleanTokenString = (t) => {
+    if (!t || typeof t !== "string") return "";
+    return t.startsWith("Bearer ") ? t.slice(7).trim() : t.trim();
+  };
+
+  const isTokenExpired = (rawToken) => {
+    const token = cleanTokenString(rawToken ?? sessionStorage.getItem("token"));
     if (!token) return true;
 
     const payload = decodeJWT(token);
-    if (!payload?.exp) return true;
+    if (payload?.exp) {
+      return payload.exp <= nowInSeconds();
+    }
 
-    return payload.exp <= nowInSeconds();
+    return token.split(".").length !== 3;
   };
 
-  const isRefreshExpired = () => {
-    const refresh = sessionStorage.getItem("refresh");
+  const isRefreshExpired = (rawRefresh) => {
+    const refresh = cleanTokenString(rawRefresh ?? sessionStorage.getItem("refresh"));
     if (!refresh) return true;
 
     const payload = decodeJWT(refresh);
-    if (!payload?.exp) return true;
+    if (payload?.exp) {
+      return payload.exp <= nowInSeconds();
+    }
 
-    return payload.exp <= nowInSeconds();
+    return refresh.split(".").length !== 3;
   };
 
   const isSessionExpired = () => {
@@ -53,8 +74,17 @@ export function AuthProvider({ children }) {
    * ====================== */
 
   const getValidToken = () => {
-    if (!isTokenExpired()) return sessionStorage.getItem("token");
-    if (!isRefreshExpired()) return sessionStorage.getItem("refresh");
+    const rawToken = cleanTokenString(sessionStorage.getItem("token"));
+    if (rawToken && !isTokenExpired(rawToken)) return rawToken;
+
+    const rawRefresh = cleanTokenString(sessionStorage.getItem("refresh"));
+    if (rawRefresh && !isRefreshExpired(rawRefresh)) return rawRefresh;
+
+    // Fallback: if rawToken exists and has valid 3-part structure, return it
+    if (rawToken && rawToken.split(".").length === 3) {
+      return rawToken;
+    }
+
     return null;
   };
 

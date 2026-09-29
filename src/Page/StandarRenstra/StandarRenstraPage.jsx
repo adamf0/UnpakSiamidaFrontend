@@ -6,7 +6,8 @@ import { useToast } from "@/Providers/ToastProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useContent } from "@/Providers/ContentProvider";
-import { BsPlus } from "react-icons/bs";
+import { Plus } from "lucide-react";
+import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
 
@@ -90,11 +91,16 @@ const StandarRenstraPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              <button 
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg" 
-                onClick={()=>openNew()}>
-                <BsPlus/>
-              </button>
+              <Tooltip content="Tambah Standar Renstra">
+                <button 
+                  type="button"
+                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0" 
+                  onClick={()=>openNew()}
+                  aria-label="Tambah Standar Renstra"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </Tooltip>
             }
             listcolumns={[
               { key: "Nama", label: "Jenis File", searchable: true},

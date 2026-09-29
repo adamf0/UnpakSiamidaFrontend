@@ -4,7 +4,8 @@ import RemoteTable from "@/Components/RemoteTable";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import React, { useState } from "react";
-import { BsEye, BsPlus } from "react-icons/bs";
+import { Plus, Eye } from "lucide-react";
+import Tooltip from "@/Components/Tooltip";
 import { useNavigate } from "react-router-dom";
 
 const TemplateDokumenTambahanPage = () => {
@@ -55,20 +56,28 @@ const TemplateDokumenTambahanPage = () => {
             adapter={templateDokumenTambahanAdapter}
             token={getValidToken()}
             renderAddAction={
-              <>
-                <button
-                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg"
-                  onClick={() => navigate("/template_dokumen_tambahan/new")}
-                >
-                  <BsPlus />
-                </button>
-                <button
-                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg"
-                  onClick={() => navigate("/template_dokumen_tambahan/preview")}
-                >
-                  <BsEye />
-                </button>
-              </>
+              <div className="flex items-center gap-2">
+                <Tooltip content="Tambah Template">
+                  <button
+                    type="button"
+                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs"
+                    onClick={() => navigate("/template_dokumen_tambahan/new")}
+                    aria-label="Tambah Template"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </Tooltip>
+                <Tooltip content="Preview Template">
+                  <button
+                    type="button"
+                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs"
+                    onClick={() => navigate("/template_dokumen_tambahan/preview")}
+                    aria-label="Preview Template"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </button>
+                </Tooltip>
+              </div>
             }
             listcolumns={[
               {

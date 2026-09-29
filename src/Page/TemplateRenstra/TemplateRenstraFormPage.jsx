@@ -4,7 +4,7 @@ import { useForm, useWatch } from "react-hook-form";
 import SearchSelect from "@/Components/SearchSelect";
 import TextInput from "@/Components/TextInput";
 import RadioButton from "@/Components/RadioButton";
-import { PencilIcon } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import {
   delay,
   isEmpty,
@@ -22,6 +22,7 @@ import { useErrorModal } from "@/Components/ErrorModal/useErrorModal";
 import ErrorModal from "@/Components/ErrorModal/ErrorModal";
 import AutoFillModalFill from "@/Components/ModalAutoFill/AutoFillModal";
 import { useAutoFillModalFill } from "@/Components/ModalAutoFill/useAutoFillModal";
+import Tooltip from "@/Components/Tooltip";
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
@@ -45,7 +46,8 @@ const TemplateRenstraFormPage = () => {
     watch,
     control,
     trigger,
-    formState: { errors },
+    clearErrors,
+    formState: { errors, isSubmitting },
   } = useForm({
     defaultValues: {
       tahun: "",
@@ -118,9 +120,10 @@ const TemplateRenstraFormPage = () => {
 
     setTimeout(async () => {
       try {
+        const token = getValidToken();
         const res = await fetch(
           `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${tahun}`,
-          { headers: { Accept: "text/event-stream", Authorization: `Bearer ${getValidToken()}` } }
+          { headers: { Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) } }
         );
         if (!res.body) throw new Error("SSE not supported");
         const reader = res.body.getReader();
@@ -169,10 +172,11 @@ const TemplateRenstraFormPage = () => {
 
     setTimeout(async () => {
       try {
+        const token = getValidToken();
         const res = await fetch(
           "http://localhost:3000/fakultasunits?mode=sse",
           {
-            headers: { Accept: "text/event-stream", Authorization: `Bearer ${getValidToken()}`, },
+            headers: { Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           }
         );
         if (!res.body) throw new Error("SSE not supported");
@@ -242,10 +246,11 @@ const TemplateRenstraFormPage = () => {
 
     setTimeout(async () => {
       try {
+        const token = getValidToken();
         const res = await fetch(
           `http://localhost:3000/templaterenstras?mode=all&filters=indikatorrenstrauuid:eq:${indikatorUuid}`,{
             headers: {
-              Authorization: `Bearer ${getValidToken()}`
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
             }
           }
         );
@@ -362,6 +367,12 @@ const TemplateRenstraFormPage = () => {
       return;
     }
 
+    const token = getValidToken();
+    if (!token) {
+      addToast("error", "Sesi login tidak valid atau telah berakhir. Silakan login kembali.");
+      return;
+    }
+
     const totalSendData = Object.values(data.rows).filter(
       (row) => row?.enable
     ).length;
@@ -415,6 +426,9 @@ const TemplateRenstraFormPage = () => {
           const res = await fetch("http://localhost:3000/templaterenstra", {
             method: "POST",
             body: fd,
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           });
 
           const json = await res.json();
@@ -467,7 +481,7 @@ const TemplateRenstraFormPage = () => {
         )}
       />
 
-      <div className="p-4 bg-white w-full">
+      <div className="p-4 pb-16 bg-white w-full">
         <div className="mb-4 flex flex-col gap-4">
           <nav
             className="flex-1 text-sm text-gray-500 mb-1"
@@ -555,6 +569,7 @@ const TemplateRenstraFormPage = () => {
               groupDatas={groupDatas}
               watch={watch}
               loading={loading}
+              isSubmitting={isSubmitting}
             />
           </form>
         )}
@@ -605,34 +620,41 @@ export const GroupDataTable = ({
       key={gd.Type + gd.Jenjang}
       className="p-6 border rounded-lg w-full mt-2"
     >
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-sm font-medium">
-          {gd.Jenjang
-            ? `${gd.Type.toUpperCase()} - ${gd.Jenjang.toUpperCase()}`
-            : gd.Type.toUpperCase()}
-        </h2>
-        <button
-          type="button"
-          onClick={() => {
-            if (watch("indikator_renstra")) openModalFill(gd);
-            else addToast("error", "Pilih dulu indikator");
-          }}
-          className="w-[30px] h-[30px] bg-purple-500 hover:bg-purple-400 rounded text-white flex items-center justify-center"
-        >
-          <PencilIcon size={16} />
-        </button>
+      <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-purple-600"></span>
+          <h2 className="text-sm font-semibold text-gray-800 tracking-wide">
+            {gd.Jenjang
+              ? `${gd.Type.toUpperCase()} - ${gd.Jenjang.toUpperCase()}`
+              : gd.Type.toUpperCase()}
+          </h2>
+        </div>
+        <Tooltip content="Isi otomatis seluruh baris dalam kelompok ini">
+          <button
+            type="button"
+            onClick={() => {
+              if (watch("indikator_renstra")) openModalFill(gd);
+              else addToast("error", "Pilih dulu indikator");
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 border border-purple-200 rounded-lg transition-colors shadow-xs"
+            aria-label="Isi otomatis seluruh baris dalam kelompok ini"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <span>Isi Otomatis</span>
+          </button>
+        </Tooltip>
       </div>
 
       <div className="w-full overflow-x-auto">
         <table className="w-full table-auto">
-          <thead className="bg-gray-100">
+          <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-3 py-2 w-[140px]">Stakeholder</th>
-              <th className="px-3 py-2 w-[220px]">Klasifikasi Temuan</th>
-              <th className="px-3 py-2 w-[140px]">Satuan</th>
-              <th className="px-3 py-2 w-[180px]">Target</th>
-              <th className="px-3 py-2 w-[220px]">Pembagian Tugas</th>
-              <th className="px-3 py-2 w-[80px]">Action</th>
+              <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left w-[140px]">Stakeholder</th>
+              <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center w-[220px]">Klasifikasi Temuan</th>
+              <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left w-[140px]">Satuan</th>
+              <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left w-[180px]">Target</th>
+              <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center w-[220px]">Pembagian Tugas</th>
+              <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center w-[90px]">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -658,8 +680,26 @@ export const GroupDataTable = ({
                 )?.message;
                 const errorSatuanMessage = get(errors, fieldSatuan)?.message;
 
-                let targetInput;
                 const tipeTarget = watch("indikator_renstra")?.TipeTarget;
+                const valKlasifikasi = watch(fieldKlasifikasi);
+                const valSatuan = watch(fieldSatuan);
+                const valPembagianTugas = watch(fieldPembagianTugas);
+
+                const hasKlasifikasi = Boolean(valKlasifikasi);
+                const hasSatuan = Boolean(valSatuan && String(valSatuan).trim() !== "");
+                const hasTugas = Boolean(valPembagianTugas);
+                const hasTarget = tipeTarget === "range"
+                  ? Boolean(
+                      (watch(`rows.${rowKey}.target_min`) !== undefined && watch(`rows.${rowKey}.target_min`) !== null && String(watch(`rows.${rowKey}.target_min`)).trim() !== "") ||
+                      (watch(`rows.${rowKey}.target_max`) !== undefined && watch(`rows.${rowKey}.target_max`) !== null && String(watch(`rows.${rowKey}.target_max`)).trim() !== "")
+                    )
+                  : Boolean(
+                      watch(`rows.${rowKey}.target`) !== undefined && watch(`rows.${rowKey}.target`) !== null && String(watch(`rows.${rowKey}.target`)).trim() !== ""
+                    );
+
+                const isRowEmpty = !hasKlasifikasi && !hasSatuan && !hasTugas && !hasTarget;
+
+                let targetInput;
                 if (tipeTarget === "range") {
                   const fieldTargetMin = `rows.${rowKey}.target_min`;
                   const fieldTargetMax = `rows.${rowKey}.target_max`;
@@ -810,17 +850,28 @@ export const GroupDataTable = ({
                       )}
                     </td>
 
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
+                    <td className="px-3 py-2.5 text-center align-middle">
+                      <div className="inline-flex items-center justify-center gap-1.5">
                         <RowClearAction
                           status={status}
-                          onClear={() =>
+                          disabled={isRowEmpty}
+                          onClear={() => {
                             setValue(
                               `rows.${rowKey}`,
-                              { enable: false, status: null },
+                              {
+                                enable: false,
+                                status: null,
+                                klasifikasi: null,
+                                satuan: "",
+                                target: "",
+                                target_min: "",
+                                target_max: "",
+                                pembagian_tugas: null,
+                              },
                               { shouldValidate: true, shouldDirty: true }
-                            )
-                          }
+                            );
+                            clearErrors(`rows.${rowKey}`);
+                          }}
                         />
                         {status && (
                           <RowStatusAction
@@ -847,6 +898,7 @@ export const SubmitButtonWithLoading = ({
   groupDatas,
   watch,
   loading,
+  isSubmitting = false,
   ...props
 }) => {
   const { totalRows, totalLoading } = groupDatas.reduce(
@@ -863,18 +915,30 @@ export const SubmitButtonWithLoading = ({
     { totalRows: 0, totalLoading: 0 }
   );
 
-  return loading.indikator ||
-    loading.template ||
-    loading.fakultas ||
-    totalLoading > 0 ? (
-    <Shimmer rows={1} />
-  ) : (
+  const isSaving = isSubmitting || totalLoading > 0;
+  const isDataLoading = Boolean(loading?.indikator || loading?.template || loading?.fakultas);
+  const isLoading = isSaving || isDataLoading;
+
+  return (
     <button
       type="submit"
-      className="px-3 py-1 my-3 bg-purple-500 text-sm hover:bg-purple-400 rounded text-white"
+      disabled={isLoading || props.disabled}
+      className={`
+        inline-flex items-center justify-center gap-2
+        px-3 py-1.5 my-3 text-sm font-medium rounded text-white
+        transition-colors shadow-xs
+        ${
+          isLoading || props.disabled
+            ? "bg-purple-400 cursor-not-allowed opacity-90"
+            : "bg-purple-500 hover:bg-purple-400 cursor-pointer"
+        }
+      `}
       {...props}
     >
-      Simpan
+      {isLoading && (
+        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+      )}
+      <span>{isSaving ? "Menyimpan..." : isDataLoading ? "Memuat..." : "Simpan"}</span>
     </button>
   );
 };

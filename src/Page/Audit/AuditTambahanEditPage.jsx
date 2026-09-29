@@ -108,13 +108,16 @@ const AuditTambahanEditPage = () => {
           };
         })
       );
-    } catch {
-      addToast("error", "Server tidak dapat dihubungi");
-    } finally{
+    } catch (err) {
+      addToast(
+        "error",
+        `Gagal menyimpan data dokumen tambahan: ${err?.message || "Server tidak dapat dihubungi atau offline"}`
+      );
+    } finally {
       setLoading(false);
     }
 
-    console.log(data)
+    console.log(data);
   };
   useEffect(() => {
     (async () => {
@@ -140,46 +143,67 @@ const AuditTambahanEditPage = () => {
     console.log("dataAudit", dataAudit);
   }, [dataAudit]);
 
-  useEffect(()=>{
-    const data = (dataAudit ?? []).find((item)=> item.TemplateDokumenTambahanUUID==activeQuestion);
-    
-    reset({ link: data?.Link ?? "", capaian_auditor: data?.CapaianAuditor ?? "", catatan_auditor: data?.CatatanAuditor ?? "" });
-  },[activeQuestion]);
+  useEffect(() => {
+    const data = (dataAudit ?? []).find(
+      (item) => item.TemplateDokumenTambahanUUID == activeQuestion
+    );
+
+    reset({
+      link: data?.Link ?? "",
+      capaian_auditor: data?.CapaianAuditor ?? "",
+      catatan_auditor: data?.CatatanAuditor ?? "",
+    });
+  }, [activeQuestion]);
 
   const fetchTemplateQuestion = async (
     tipe = "dokumen_tambahan",
     tahun,
     uuidfakultasunit
   ) => {
-    if (isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (isEmpty(token)) return;
 
     try {
       const res = await fetch(
         `http://localhost:3000/preview/audit/${tipe}/${tahun}/${uuidfakultasunit}`,
         {
           headers: {
-            Authorization: `Bearer ${getValidToken()}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
+      if (!res.ok) {
+        let errorMsg = `Layanan preview dokumen tambahan gagal (HTTP ${res.status})`;
+        try {
+          const jsonErr = await res.json();
+          if (jsonErr?.message) errorMsg = jsonErr.message;
+        } catch (_) {}
+        addToast("error", errorMsg);
+        return;
+      }
+
       const json = await res.json();
 
       let increment = 1;
-      const mapped = json.map(item => ({
+      const mapped = (Array.isArray(json) ? json : []).map((item) => ({
         ...item,
         Pointing: increment++,
       }));
 
       setDataTemplate(mapped);
     } catch (err) {
-      //[pr] banyak yg belum tangkap error selain 200
-      console.error("Fetch Indikator renstra gagal:", err);
+      console.error("Fetch Indikator dokumen tambahan gagal:", err);
+      addToast(
+        "error",
+        `Gagal memuat indikator dokumen tambahan: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
+      );
     }
   };
 
   const fetchDataAudit = async (uuidRenstra) => {
-    if (isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (isEmpty(token)) return;
 
     try {
       const res = await fetch(
@@ -187,13 +211,23 @@ const AuditTambahanEditPage = () => {
         {
           headers: {
             Accept: "text/event-stream",
-            Authorization: `Bearer ${getValidToken()}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
+      if (!res.ok) {
+        let errorMsg = `Layanan data dokumen tambahan gagal (HTTP ${res.status})`;
+        try {
+          const jsonErr = await res.json();
+          if (jsonErr?.message) errorMsg = jsonErr.message;
+        } catch (_) {}
+        addToast("error", errorMsg);
+        return;
+      }
+
       if (!res.body) {
-        throw new Error("SSE not supported");
+        throw new Error("SSE stream body tidak didukung browser atau kosong");
       }
 
       const reader = res.body.getReader();
@@ -231,25 +265,43 @@ const AuditTambahanEditPage = () => {
 
       setDataAudit(result);
     } catch (err) {
-      //[pr] banyak yg belum tangkap error selain 200
       console.error("Fetch data audit gagal:", err);
+      addToast(
+        "error",
+        `Gagal memuat data nilai dokumen tambahan: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
+      );
     }
   };
 
   const fetchDataRenstra = async (uuidRenstra) => {
-    if (isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (isEmpty(token)) return;
 
     try {
       const res = await fetch(`http://localhost:3000/renstra/${uuidRenstra}`, {
         headers: {
-          Authorization: `Bearer ${getValidToken()}`,
+          Authorization: `Bearer ${token}`,
         },
       });
+
+      if (!res.ok) {
+        let errorMsg = `Layanan data renstra gagal (HTTP ${res.status})`;
+        try {
+          const jsonErr = await res.json();
+          if (jsonErr?.message) errorMsg = jsonErr.message;
+        } catch (_) {}
+        addToast("error", errorMsg);
+        return;
+      }
+
       const json = await res.json();
       setDataRenstra(json);
     } catch (err) {
-      //[pr] banyak yg belum tangkap error selain 200
       console.error("Fetch data renstra gagal:", err);
+      addToast(
+        "error",
+        `Gagal memuat data jadwal renstra: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
+      );
     }
   };
 

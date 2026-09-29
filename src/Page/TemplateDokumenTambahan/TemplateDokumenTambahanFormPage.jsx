@@ -57,7 +57,8 @@ const TemplateDokumenTambahanFormPage = () => {
     watch,
     control,
     trigger,
-    formState: { errors },
+    clearErrors,
+    formState: { errors, isSubmitting },
   } = useForm({
     defaultValues: {
       tahun: "",
@@ -80,14 +81,15 @@ const TemplateDokumenTambahanFormPage = () => {
   const setLoad = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
 
   const fetchJenisFileOptions = async (tahun) => {
-    if(isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if(!token) return;
 
     setLoad("jenisfile", true);
     try {
       const res = await fetch(
         `http://localhost:3000/jenisfiles?filters=tahun:eq:${tahun}`,{
           headers: {
-            Authorization: `Bearer ${getValidToken()}`
+            Authorization: `Bearer ${token}`
           }
         }
       );
@@ -107,14 +109,15 @@ const TemplateDokumenTambahanFormPage = () => {
   };
 
   const fetchTemplateDokumenTambahanEdit = async (tahun, jenisFileUuid) => {
-    if(isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if(!token) return;
 
     setLoad("template", true);
     try {
       const res = await fetch(
         `http://localhost:3000/templatedokumentambahans?mode=all&filters=tahun:eq:${tahun};jenisfileuuid:eq:${jenisFileUuid}`,{
           headers: {
-            Authorization: `Bearer ${getValidToken()}`
+            Authorization: `Bearer ${token}`
           }
         }
       );
@@ -184,7 +187,11 @@ const TemplateDokumenTambahanFormPage = () => {
   }, [watchedTahun, watchedJenisFile?.UUID]);
 
   const onSubmit = async (data) => {
-    if(isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (!token) {
+      addToast("error", "Sesi login tidak valid atau telah berakhir. Silakan login kembali.");
+      return;
+    }
 
     console.log("kirim");
 
@@ -213,6 +220,7 @@ const TemplateDokumenTambahanFormPage = () => {
       });
     console.log("SUBMIT:", data, payloads);
 
+    let successCount = 0;
     await Promise.all(
       payloads.map(async ({ key, fd }) => {
         try {
@@ -225,7 +233,7 @@ const TemplateDokumenTambahanFormPage = () => {
               method: "POST",
               body: fd,
               headers: {
-                Authorization: `Bearer ${getValidToken()}`
+                Authorization: `Bearer ${token}`
               }
             }
           );
@@ -266,6 +274,14 @@ const TemplateDokumenTambahanFormPage = () => {
 
   if (error) return <ErrorSection />;
 
+  const rowsValues = watch("rows") || {};
+  const isRowLoading = Object.values(rowsValues).some(
+    (row) => row?.status === "loading"
+  );
+  const isSaving = isSubmitting || isRowLoading;
+  const isDataLoading = Boolean(loading.jenisfile || loading.template);
+  const isButtonLoading = isSaving || isDataLoading;
+
   /* =========================
      RENDER
   ========================== */
@@ -285,7 +301,7 @@ const TemplateDokumenTambahanFormPage = () => {
           />
         )}
       />
-      <div className="p-4 bg-white w-full">
+      <div className="p-4 pb-16 bg-white w-full">
         <div className="mb-4 flex flex-col gap-4">
           <nav
             className="flex-1 text-sm text-gray-500 mb-1"
@@ -349,12 +365,12 @@ const TemplateDokumenTambahanFormPage = () => {
             <div className="p-6 border rounded-lg w-full mt-2 overflow-x-auto">
               <div className="w-full overflow-x-auto">
                 <table className="w-full table-auto min-w-[900px]">
-                  <thead className="bg-gray-100">
+                  <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-3 py-2">Stakeholder</th>
-                      <th className="px-3 py-2">Klasifikasi</th>
-                      <th className="px-3 py-2">Tugas</th>
-                      <th className="px-3 py-2">Action</th>
+                      <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Stakeholder</th>
+                      <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Klasifikasi</th>
+                      <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Tugas</th>
+                      <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center w-[90px]">Aksi</th>
                     </tr>
                   </thead>
 
@@ -374,6 +390,10 @@ const TemplateDokumenTambahanFormPage = () => {
                         klasifikasiPath
                       )?.message;
                       const errTugas = get(errors, tugasPath)?.message;
+
+                      const valKlasifikasi = watch(klasifikasiPath);
+                      const valTugas = watch(tugasPath);
+                      const isRowEmpty = !valKlasifikasi && !valTugas;
 
                       return (
                         <tr key={rowKey} className="border-b text-center">
@@ -444,34 +464,38 @@ const TemplateDokumenTambahanFormPage = () => {
                           </td>
 
                           {/* ACTION */}
-                          <td className="px-3 py-2 flex gap-2">
-                            <RowClearAction
-                              status={status}
-                              onClear={() =>
-                                setValue(
-                                  `rows.${rowKey}`,
-                                  {
-                                    klasifikasi: null,
-                                    tugas: null,
-                                    enable: false,
-                                    status: null,
-                                  },
-                                  { shouldValidate: true, shouldDirty: true }
-                                )
-                              }
-                            />
-                            {status && (
-                              <RowStatusAction
+                          <td className="px-3 py-2.5 text-center align-middle">
+                            <div className="inline-flex items-center justify-center gap-1.5">
+                              <RowClearAction
                                 status={status}
-                                errorMessage={errorMessage}
-                                onShowError={(message) =>
-                                  openModal({
-                                    title: "Pesan error",
-                                    message: message,
-                                  })
-                                }
+                                disabled={isRowEmpty}
+                                onClear={() => {
+                                  setValue(
+                                    `rows.${rowKey}`,
+                                    {
+                                      klasifikasi: null,
+                                      tugas: null,
+                                      enable: false,
+                                      status: null,
+                                    },
+                                    { shouldValidate: true, shouldDirty: true }
+                                  );
+                                  clearErrors([klasifikasiPath, tugasPath]);
+                                }}
                               />
-                            )}
+                              {status && (
+                                <RowStatusAction
+                                  status={status}
+                                  errorMessage={errorMessage}
+                                  onShowError={(message) =>
+                                    openModal({
+                                      title: "Pesan error",
+                                      message: message,
+                                    })
+                                  }
+                                />
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -484,9 +508,22 @@ const TemplateDokumenTambahanFormPage = () => {
 
           <button
             type="submit"
-            className="px-4 py-2 mt-4 bg-purple-500 text-white rounded"
+            disabled={isButtonLoading}
+            className={`
+              inline-flex items-center justify-center gap-2
+              px-4 py-2 mt-4 text-sm font-medium rounded text-white
+              transition-colors shadow-xs
+              ${
+                isButtonLoading
+                  ? "bg-purple-400 cursor-not-allowed opacity-90"
+                  : "bg-purple-500 hover:bg-purple-600 cursor-pointer"
+              }
+            `}
           >
-            Simpan
+            {isButtonLoading && (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+            )}
+            <span>{isSaving ? "Menyimpan..." : isDataLoading ? "Memuat..." : "Simpan"}</span>
           </button>
 
           <ErrorModal modal={modal} onClose={closeModal} />

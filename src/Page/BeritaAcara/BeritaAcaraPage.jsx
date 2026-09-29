@@ -10,7 +10,8 @@ import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import BeritaAcaraFormModal from "./BeritaAcaraFormModal";
 import BeritaAcaraFilterContent from "./BeritaAcaraFilterContent";
 import BeritaAcaraList from "./BeritaAcaraList";
-import { BsFilter, BsPlus } from "react-icons/bs";
+import { Plus, Filter } from "lucide-react";
+import Tooltip from "@/Components/Tooltip";
 
 //[pr] belum tambah pengecekan penugasan audit di tahun & unit yg dicari pada list group
 const BeritaAcaraPage = () => {
@@ -296,20 +297,28 @@ const BeritaAcaraPage = () => {
 
           <div className="flex gap-2">
             {isBeritaAcara && (
-              <button
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg"
-                onClick={() => openNew()}
-              >
-                <BsPlus />
-              </button>
+              <Tooltip content="Tambah Berita Acara">
+                <button
+                  type="button"
+                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
+                  onClick={() => openNew()}
+                  aria-label="Tambah Berita Acara"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </Tooltip>
             )}
             {!isBeritaAcara && (
-              <button
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg"
-                onClick={() => {}}
-              >
-                <BsFilter />
-              </button>
+              <Tooltip content="Filter Berita Acara">
+                <button
+                  type="button"
+                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
+                  onClick={() => {}}
+                  aria-label="Filter Berita Acara"
+                >
+                  <Filter className="w-4 h-4" />
+                </button>
+              </Tooltip>
             )}
           </div>
         </div>

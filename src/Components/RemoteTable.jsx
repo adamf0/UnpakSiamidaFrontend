@@ -1,7 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FiMoreVertical, FiSearch } from "react-icons/fi";
-import { v4 as uuidv4 } from "uuid";
 
 /* =========================
    UTILS
@@ -278,7 +277,7 @@ const RemoteTable = forwardRef(function RemoteTable(
      RENDER
   ========================== */
   return (
-    <div className="p-6 bg-white">
+    <div className="p-6 bg-white w-full max-w-full min-w-0">
       {/* SEARCH */}
       <div className="flex justify-start gap-2 relative mb-4">
         {
@@ -309,19 +308,19 @@ const RemoteTable = forwardRef(function RemoteTable(
 
       {/* TABLE */}
       {/*table-fixed*/}
-      <div className="overflow-x-auto">
-        <table className="w-full ">
+      <div className="overflow-x-auto w-full max-w-full">
+        <table className="w-full min-w-max">
           <colgroup>
-            {listcolumns.map(() => (
-              <col key={uuidv4()} />
+            {listcolumns.map((c, i) => (
+              <col key={c.key ? `${c.key}-${i}` : i} />
             ))}
             <col style={{ width: "60px" }} />
           </colgroup>
 
           <thead className="bg-gray-100">
             <tr>
-              {listcolumns.map((c) => (
-                <th key={c.label} className="px-4 py-2 text-sm text-left">
+              {listcolumns.map((c, i) => (
+                <th key={c.key ? `${c.key}-${c.label || i}` : (c.label || i)} className={`px-4 py-2 text-sm text-left ${c.className || ""}`}>
                   <div className="font-medium mb-1">{c.label}</div>
 
                   {c.searchable && (
@@ -403,10 +402,10 @@ const RemoteTable = forwardRef(function RemoteTable(
             )}
 
             {!loading &&
-              rows.map((r) => (
-                <tr key={uuidv4()} className="border-t">
-                  {listcolumns.map((c) => (
-                    <td key={uuidv4()} className="px-4 py-3 text-sm">
+              rows.map((r, idx) => (
+                <tr key={r.id || r.UUID || r.uuid || idx} className="border-t">
+                  {listcolumns.map((c, i) => (
+                    <td key={c.key ? `${c.key}-${i}` : i} className={`px-4 py-3 text-sm ${c.className || ""}`}>
                       {c.renderKey ? c.renderKey(r) : r[c.key]}
                     </td>
                   ))}
@@ -463,28 +462,46 @@ const RemoteTable = forwardRef(function RemoteTable(
       </div>
 
       {/* PAGINATION */}
-      <div className="flex justify-between items-center mt-4">
-        <span className="text-sm">
-          Page {page} / {total>0? Math.ceil(total / limit):1}  · Total Data {total}
-        </span>
+      {(() => {
+        const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
+        const isPrevDisabled = page <= 1 || loading;
+        const isNextDisabled = page >= totalPages || total === 0 || loading;
 
-        <div className="flex gap-2"> {/*[pr] belum atur disable*/}
-          <button
-            disabled={page === 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="px-3 py-1 border rounded"
-          >
-            Prev
-          </button>
-          <button
-            disabled={page * limit >= total}
-            onClick={() => setPage((p) => p + 1)}
-            className="px-3 py-1 border rounded"
-          >
-            Next
-          </button>
-        </div>
-      </div>
+        return (
+          <div className="flex justify-between items-center px-4 py-3 border-t border-gray-100 bg-white">
+            <span className="text-sm text-gray-600">
+              Page {page} / {totalPages} · Total Data {total}
+            </span>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isPrevDisabled}
+                onClick={() => !isPrevDisabled && setPage((p) => Math.max(1, p - 1))}
+                className={`px-3 py-1.5 border rounded text-sm font-medium transition-colors ${
+                  isPrevDisabled
+                    ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                    : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300 active:bg-gray-100"
+                }`}
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                disabled={isNextDisabled}
+                onClick={() => !isNextDisabled && setPage((p) => Math.min(totalPages, p + 1))}
+                className={`px-3 py-1.5 border rounded text-sm font-medium transition-colors ${
+                  isNextDisabled
+                    ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                    : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300 active:bg-gray-100"
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 });

@@ -122,8 +122,9 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
       {/* SIDEBAR */}
       <aside
         className={`
-          fixed top-0 left-0 z-50 h-screen
+          fixed top-0 left-0 z-50 h-screen h-[100svh] max-h-[100svh]
           bg-[#F3F4F6] border-r
+          flex flex-col
           transition-all duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
@@ -133,7 +134,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
       >
 
         {/* HEADER / LOGO */}
-        <div className="h-16 flex items-center justify-center border-b">
+        <div className="h-16 shrink-0 flex items-center justify-center border-b">
           <span
             className={`text-lg font-bold transition-all ${
               isCollapsed ? "hidden" : "block"
@@ -144,8 +145,8 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
         </div>
 
         {/* MENU */}
-        <nav className="p-3">
-          <ul className="flex flex-col gap-1">
+        <nav className="p-3 flex-1 overflow-y-auto overscroll-contain">
+          <ul className="flex flex-col gap-1 pb-8">
             {getMenu().map((item) => {
               const isActive = currentPath.startsWith(item.path);
 

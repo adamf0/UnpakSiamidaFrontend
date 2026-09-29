@@ -4,7 +4,8 @@ import RemoteTable from "@/Components/RemoteTable";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import React, { useState } from "react";
-import { BsEye, BsPlus } from "react-icons/bs";
+import { Plus, Eye } from "lucide-react";
+import Tooltip from "@/Components/Tooltip";
 import { useNavigate } from "react-router-dom";
 
 const TemplateRenstraPage = () => {
@@ -86,7 +87,7 @@ const TemplateRenstraPage = () => {
       />
       <div className="p-3 bg-white">
         <h2 className="text-lg font-semibold mb-4">
-          Template Dokumen Tambahan
+          Template Renstra
         </h2>
 
         <div className="border rounded mt-3">
@@ -95,20 +96,28 @@ const TemplateRenstraPage = () => {
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
             token={getValidToken()}
             renderAddAction={
-              <>
-                <button
-                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg"
-                  onClick={() => navigate("/template_renstra/new")}
-                >
-                  <BsPlus />
-                </button>
-                <button
-                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg"
-                  onClick={() => navigate("/template_renstra/preview")}
-                >
-                  <BsEye />
-                </button>
-              </>
+              <div className="flex items-center gap-2">
+                <Tooltip content="Tambah Template">
+                  <button
+                    type="button"
+                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs"
+                    onClick={() => navigate("/template_renstra/new")}
+                    aria-label="Tambah Template"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </Tooltip>
+                <Tooltip content="Preview Template">
+                  <button
+                    type="button"
+                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs"
+                    onClick={() => navigate("/template_renstra/preview")}
+                    aria-label="Preview Template"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </button>
+                </Tooltip>
+              </div>
             }
             adapter={templateRenstraAdapter}
             listcolumns={[
@@ -158,7 +167,7 @@ const TemplateRenstraPage = () => {
                 searchable: false,
               },
               {
-                key: "Targets",
+                key: "Tags",
                 label: "Tags",
                 renderKey: (row) => {
                   if (!Array.isArray(row.Targets)) return "-";
@@ -300,12 +309,17 @@ const TemplateRenstraPage = () => {
                       <div className="font-medium">Satuan</div>
                       <div>{t.Satuan}</div>
                       <div className="font-medium">Target</div>{" "}
-                      {/*[pr] belum masukkan operator*/}
-                      <div>{t.Target}</div>
-                      <div className="font-medium">Target Min</div>
-                      <div>{t.TargetMin ?? "-"}</div>
-                      <div className="font-medium">Target Max</div>
-                      <div>{t.TargetMax ?? "-"}</div>
+                      <div>{
+                        t.TipeTarget=="range"? 
+                        <>
+                          {t.TargetMin ?? "0"} - {t.TargetMax ?? "0"}
+                        </>:
+                        t.TipeTarget=="kategori"?
+                        <>
+                          {">="} {t.Target}
+                        </>:
+                        t.Target  
+                      }</div>
                       <div className="font-medium">Tugas</div>
                       <div>{t.Tugas}</div>
                     </div>

@@ -6,7 +6,6 @@ import {
   shift,
   autoUpdate,
 } from "@floating-ui/react";
-import { v4 as uuidv4 } from "uuid";
 
 const SearchSelect = ({
   label,
@@ -99,9 +98,9 @@ const SearchSelect = ({
           style={floatingStyles}
           className="z-50 w-full bg-white border rounded shadow max-h-60 overflow-auto"
         >
-          {filtered.map((item) => (
+          {filtered.map((item, idx) => (
             <div
-              key={uuidv4()}
+              key={item.id ?? item.uuid ?? item.UUID ?? item.nama ?? idx}
               onMouseDown={(e) => e.preventDefault()} 
               onClick={() => {
                 onChange(item);

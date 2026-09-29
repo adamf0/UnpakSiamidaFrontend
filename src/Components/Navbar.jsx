@@ -19,6 +19,8 @@ const Navbar = ({ renderChangeLevelModal }) => {
     setOpenChangeLevel,
   } = useContent();
 
+  const isAdmin = level === "admin" || user?.level === "admin";
+
   const [notifications] = useState([
     { id: 1, message: "Notifikasi 1" },
     { id: 2, message: "Notifikasi 2" },
@@ -44,54 +46,56 @@ const Navbar = ({ renderChangeLevelModal }) => {
             <Menu className="hover:text-white" size={20} />
           </button>
 
-          {/* Tahun selection (desktop only) */}
-          <Popover className="relative hidden sm:block">
-            <Popover.Button className="flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm hover:bg-gray-100">
-              <Calendar size={16} />
-              <span>{positionYear}</span>
-              {positionYear === activeYear ? (
-                <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                  Active
-                </span>
-              ) : (
-                <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                  Open Now
-                </span>
-              )}
-            </Popover.Button>
+          {/* Tahun selection (desktop only) - Disembunyikan untuk admin */}
+          {!isAdmin && (
+            <Popover className="relative hidden sm:block">
+              <Popover.Button className="flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm hover:bg-gray-100">
+                <Calendar size={16} />
+                <span>{positionYear}</span>
+                {positionYear === activeYear ? (
+                  <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                    Active
+                  </span>
+                ) : (
+                  <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                    Open Now
+                  </span>
+                )}
+              </Popover.Button>
 
-            <Popover.Panel className="absolute left-0 mt-2 w-44 bg-white border rounded-md shadow-lg z-50">
-              <ul className="text-sm">
-                {(serverYears ?? []).map((item) => {
-                  const year = item.Tahun;
-                  const isActive = item.Status === "active";
-                  const isPosition = year === positionYear;
+              <Popover.Panel className="absolute left-0 mt-2 w-44 bg-white border rounded-md shadow-lg z-50">
+                <ul className="text-sm">
+                  {(serverYears ?? []).map((item) => {
+                    const year = item.Tahun;
+                    const isActive = item.Status === "active";
+                    const isPosition = year === positionYear;
 
-                  return (
-                    <li
-                      key={year}
-                      onClick={() => setPositionYear(year)}
-                      className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center
-                        ${isPosition ? "bg-gray-100 font-medium" : ""}
-                      `}
-                    >
-                      <span>{year}</span>
-                      {isActive && (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 rounded-full">
-                          Active
-                        </span>
-                      )}
-                      {!isActive && isPosition && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 rounded-full">
-                          Open
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </Popover.Panel>
-          </Popover>
+                    return (
+                      <li
+                        key={year}
+                        onClick={() => setPositionYear(year)}
+                        className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center
+                          ${isPosition ? "bg-gray-100 font-medium" : ""}
+                        `}
+                      >
+                        <span>{year}</span>
+                        {isActive && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 rounded-full">
+                            Active
+                          </span>
+                        )}
+                        {!isActive && isPosition && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 rounded-full">
+                            Open
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Popover.Panel>
+            </Popover>
+          )}
         </div>
 
         {/* RIGHT */}
@@ -159,15 +163,17 @@ const Navbar = ({ renderChangeLevelModal }) => {
                   )}
                 </button>
 
-                <button
-                  className="sm:hidden w-full rounded text-left px-4 hover:bg-gray-100 flex justify-between items-center"
-                  onClick={() => setYearModalOpen(true)}
-                >
-                  <span>Pilih Tahun</span>
-                  <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                    {positionYear}
-                  </span>
-                </button>
+                {!isAdmin && (
+                  <button
+                    className="sm:hidden w-full rounded text-left px-4 hover:bg-gray-100 flex justify-between items-center"
+                    onClick={() => setYearModalOpen(true)}
+                  >
+                    <span>Pilih Tahun</span>
+                    <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                      {positionYear}
+                    </span>
+                  </button>
+                )}
 
                 <button className="w-full rounded text-left px-4 hover:bg-gray-100">
                   Settings
@@ -214,8 +220,8 @@ const Navbar = ({ renderChangeLevelModal }) => {
         </div>
       )}
 
-      {/* Tahun Modal */}
-      {yearModalOpen && ( //kok listener onMobileModeListener selalu null ya, harusnya ketika ini kebuka update listener active=
+      {/* Tahun Modal - Disembunyikan untuk admin */}
+      {!isAdmin && yearModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg shadow-lg w-72 p-4">
             <div className="flex justify-between items-center mb-4">

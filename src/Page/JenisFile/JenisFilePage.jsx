@@ -6,7 +6,8 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
-import { BsPlus } from "react-icons/bs";
+import { Plus } from "lucide-react";
+import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
 
@@ -84,12 +85,16 @@ const JenisFilePage = () => {
               mode="paging"
               token={getValidToken()}
               renderAddAction={
-                <button
-                  className="px-3 py-2 bg-purple-600 text-white rounded-lg"
-                  onClick={() => openNew()}
-                >
-                  <BsPlus />
-                </button>
+                <Tooltip content="Tambah Jenis File">
+                  <button
+                    type="button"
+                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
+                    onClick={() => openNew()}
+                    aria-label="Tambah Jenis File"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </Tooltip>
               }
               listcolumns={[
                 { key: "Nama", label: "Jenis File", searchable: true },

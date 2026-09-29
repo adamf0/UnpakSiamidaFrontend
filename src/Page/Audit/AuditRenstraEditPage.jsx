@@ -131,8 +131,11 @@ const AuditRenstraEditPage = () => {
           };
         });
       });
-    } catch {
-      addToast("error", "Server tidak dapat dihubungi");
+    } catch (err) {
+      addToast(
+        "error",
+        `Gagal menyimpan data audit: ${err?.message || "Server tidak dapat dihubungi atau offline"}`
+      );
     } finally {
       setLoading(false);
     }
@@ -182,28 +185,43 @@ const AuditRenstraEditPage = () => {
     tahun,
     uuidfakultasunit
   ) => {
-    if (isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (isEmpty(token)) return;
 
     try {
       const res = await fetch(
         `http://localhost:3000/preview/audit/${tipe}/${tahun}/${uuidfakultasunit}`,
         {
           headers: {
-            Authorization: `Bearer ${getValidToken()}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
+      if (!res.ok) {
+        let errorMsg = `Layanan preview indikator renstra gagal (HTTP ${res.status})`;
+        try {
+          const jsonErr = await res.json();
+          if (jsonErr?.message) errorMsg = jsonErr.message;
+        } catch (_) {}
+        addToast("error", errorMsg);
+        return;
+      }
+
       const json = await res.json();
       setDataTemplate(json);
     } catch (err) {
-      //[pr] banyak yg belum tangkap error selain 200
       console.error("Fetch Indikator renstra gagal:", err);
+      addToast(
+        "error",
+        `Gagal memuat indikator audit: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
+      );
     }
   };
 
   const fetchDataAudit = async (uuidRenstra) => {
-    if (isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (isEmpty(token)) return;
 
     try {
       const res = await fetch(
@@ -211,13 +229,23 @@ const AuditRenstraEditPage = () => {
         {
           headers: {
             Accept: "text/event-stream",
-            Authorization: `Bearer ${getValidToken()}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
+      if (!res.ok) {
+        let errorMsg = `Layanan data nilai audit renstra gagal (HTTP ${res.status})`;
+        try {
+          const jsonErr = await res.json();
+          if (jsonErr?.message) errorMsg = jsonErr.message;
+        } catch (_) {}
+        addToast("error", errorMsg);
+        return;
+      }
+
       if (!res.body) {
-        throw new Error("SSE not supported");
+        throw new Error("SSE stream body tidak didukung browser atau kosong");
       }
 
       const reader = res.body.getReader();
@@ -255,25 +283,43 @@ const AuditRenstraEditPage = () => {
 
       setDataAudit(result);
     } catch (err) {
-      //[pr] banyak yg belum tangkap error selain 200
       console.error("Fetch data audit gagal:", err);
+      addToast(
+        "error",
+        `Gagal memuat data nilai audit renstra: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
+      );
     }
   };
 
   const fetchDataRenstra = async (uuidRenstra) => {
-    if (isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (isEmpty(token)) return;
 
     try {
       const res = await fetch(`http://localhost:3000/renstra/${uuidRenstra}`, {
         headers: {
-          Authorization: `Bearer ${getValidToken()}`,
+          Authorization: `Bearer ${token}`,
         },
       });
+
+      if (!res.ok) {
+        let errorMsg = `Layanan data renstra gagal (HTTP ${res.status})`;
+        try {
+          const jsonErr = await res.json();
+          if (jsonErr?.message) errorMsg = jsonErr.message;
+        } catch (_) {}
+        addToast("error", errorMsg);
+        return;
+      }
+
       const json = await res.json();
       setDataRenstra(json);
     } catch (err) {
-      //[pr] banyak yg belum tangkap error selain 200
       console.error("Fetch data renstra gagal:", err);
+      addToast(
+        "error",
+        `Gagal memuat data jadwal renstra: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
+      );
     }
   };
 
