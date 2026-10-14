@@ -4,6 +4,7 @@ import { Dialog, Transition } from "@headlessui/react";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
+import { apiClient } from "@/Common/api";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
@@ -96,16 +97,8 @@ export default function ProkerV3AktivitasPage() {
     if (!prokerUuid) return;
     setLoading(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/${prokerUuid}/aktivitas`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal memuat aktivitas");
-      }
+      const res = await apiClient.get(`/proker_v3/${prokerUuid}/aktivitas`);
+      const json = res.data;
       setProker(json.proker || null);
       setActivities(json.data || []);
     } catch (err) {
@@ -211,23 +204,15 @@ export default function ProkerV3AktivitasPage() {
 
       const url =
         actModalMode === "edit"
-          ? `http://localhost:3000/proker_v3/aktivitas/${selectedAct.UUID}`
-          : `http://localhost:3000/proker_v3/${prokerUuid}/aktivitas`;
-      const method = actModalMode === "edit" ? "PUT" : "POST";
+          ? `/proker_v3/aktivitas/${selectedAct.UUID}`
+          : `/proker_v3/${prokerUuid}/aktivitas`;
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      const res =
+        actModalMode === "edit"
+          ? await apiClient.put(url, payload)
+          : await apiClient.post(url, payload);
 
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menyimpan aktivitas");
-      }
+      const json = res.data;
 
       addToast(
         "success",
@@ -247,17 +232,8 @@ export default function ProkerV3AktivitasPage() {
   const handleDeleteActivity = async () => {
     if (!actToDelete?.UUID) return;
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/aktivitas/${actToDelete.UUID}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menghapus aktivitas");
-      }
+      const res = await apiClient.delete(`/proker_v3/aktivitas/${actToDelete.UUID}`);
+      const json = res.data;
       addToast("success", "Aktivitas berhasil dihapus");
       fetchData();
     } catch (err) {
@@ -270,19 +246,10 @@ export default function ProkerV3AktivitasPage() {
 
   const handleUpdateStatusActivity = async (act, nextStatus) => {
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/aktivitas/${act.UUID}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: nextStatus }),
+      const res = await apiClient.put(`/proker_v3/aktivitas/${act.UUID}/status`, {
+        status: nextStatus,
       });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal mengubah status aktivitas");
-      }
+      const json = res.data;
       addToast("success", `Status aktivitas diubah menjadi: ${nextStatus.toUpperCase()}`);
       fetchData();
     } catch (err) {

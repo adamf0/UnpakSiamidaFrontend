@@ -8,6 +8,7 @@ import {
 } from "@/Common/Utils";
 import Portal from "@/Components/Portal";
 import SearchSelect from "@/Components/SearchSelect";
+import { apiClient } from "@/Common/api";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { useToast } from "@/Providers/ToastProvider";
@@ -50,22 +51,11 @@ export default function MonitoringTableCard() {
   }
 
   const fetchDataTahun = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return [];
-
     setLoadingTahun(true);
     setErrorTahun(null);
     try {
-      const res = await fetch(`http://localhost:3000/tahunprokers?mode=all`, {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      await throwIfResponseNotOk(res, "Gagal memuat tahun proker");
-
-      const data = await res.json();
+      const res = await apiClient.get("/tahunprokers?mode=all");
+      const data = res.data;
       const mapped = (data ?? []).map((j) => ({
         id: j.UUID,
         nama: j.Tahun,
@@ -84,22 +74,11 @@ export default function MonitoringTableCard() {
   };
 
   const fetchDataFakultasUnit = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return [];
-
     setLoadingFakultasUnit(true);
     setErrorFakultasUnit(null);
     try {
-      const res = await fetch(`http://localhost:3000/fakultasunits?mode=all`, {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      await throwIfResponseNotOk(res, "Gagal memuat fakultas/unit");
-
-      const data = await res.json();
+      const res = await apiClient.get("/fakultasunits?mode=all");
+      const data = res.data;
       const mapped = (data ?? []).map((j) => ({
         id: j.UUID,
         nama: fullFakultasUnit(j),
@@ -119,9 +98,6 @@ export default function MonitoringTableCard() {
 
   const fetchMonitoringProker = useCallback(
     async (targetTahun = tahun, targetUnit = fakultasunit) => {
-      const token = getValidToken();
-      if (isEmpty(token)) return;
-
       const tahunUuid = targetTahun?.UUID;
       const unitUuid = targetUnit?.UUID;
 
@@ -129,23 +105,8 @@ export default function MonitoringTableCard() {
 
       setLoading(true);
       try {
-        const res = await fetch(
-          `http://localhost:3000/monitoringproker/${tahunUuid}/${unitUuid}?mode=all`,
-          {
-            headers: {
-              Accept: "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          addToast("errors", err.message || "Gagal memuat data monitoring proker");
-          return;
-        }
-
-        const json = await res.json();
+        const res = await apiClient.get(`/monitoringproker/${tahunUuid}/${unitUuid}?mode=all`);
+        const json = res.data;
         setRawData(Array.isArray(json) ? json : []);
       } catch (err) {
         console.error("Fetch monitoring proker gagal:", err);

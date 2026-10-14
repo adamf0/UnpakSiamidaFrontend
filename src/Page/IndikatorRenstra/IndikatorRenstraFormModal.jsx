@@ -10,6 +10,7 @@ import {
   throwIfResponseNotOk,
   formatFetchError,
 } from "@/Common/Utils";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 export default function IndikatorRenstraFormModal({
   open,
@@ -121,7 +122,7 @@ export default function IndikatorRenstraFormModal({
     setErrorStandar(null);
     try {
       const res = await fetch(
-        "http://localhost:3000/standarrenstras?mode=sse",
+        `${API_BASE_URL}/standarrenstras?mode=sse`,
         {
           headers: {
             Accept: "text/event-stream",
@@ -193,7 +194,7 @@ export default function IndikatorRenstraFormModal({
     setErrorIndikator(null);
     try {
       const res = await fetch(
-        `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${targetTahun}`,
+        `${API_BASE_URL}/indikatorrenstras?mode=sse&filters=tahun:eq:${targetTahun}`,
         {
           signal: controller.signal,
           headers: {
@@ -332,31 +333,20 @@ export default function IndikatorRenstraFormModal({
       fd.append("tipe_target", form?.tipe_target ?? "");
       fd.append("operator", form?.operator ?? "");
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/indikatorrenstra/${data?.Uuid ?? data?.uuid ?? data?.id}`
-          : "http://localhost:3000/indikatorrenstra",
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast("error", json.message || "Gagal menyimpan");
-        return;
+      if (mode === "edit") {
+        await apiClient.put(
+          `/indikatorrenstra/${data?.Uuid ?? data?.uuid ?? data?.id}`,
+          fd
+        );
+      } else {
+        await apiClient.post("/indikatorrenstra", fd);
       }
 
       addToast("success", "Berhasil disimpan");
       onSuccess?.();
       onClose();
-    } catch {
-      addToast("error", "Server tidak dapat dihubungi");
+    } catch (err) {
+      addToast("error", err?.message || "Server tidak dapat dihubungi");
     }
   };
 

@@ -27,6 +27,7 @@ import { useContent } from "@/Providers/ContentProvider";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import Navbar from "@/Components/Navbar";
 import { useAuth } from "@/Providers/AuthProvider";
+import { apiClient } from "@/Common/api";
 
 /* =========================
    STAKEHOLDER CONFIG
@@ -84,55 +85,35 @@ const TemplateDokumenTambahanFormPage = () => {
   const setLoad = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
 
   const fetchJenisFileOptions = async (tahun) => {
-    const token = getValidToken();
-    if(!token) return;
-
     setLoad("jenisfile", true);
     setErrorJenisFile(null);
     try {
-      const res = await fetch(
-        `http://localhost:3000/jenisfiles?filters=tahun:eq:${tahun}`,{
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+      const json = await apiClient.get(
+        `/jenisfiles?filters=tahun:eq:${tahun}`
       );
-      await throwIfResponseNotOk(res, "Gagal memuat jenis file");
-      const json = await res.json();
       setJenisFileOptions(
-        (json.data ?? []).map((d) => ({
+        (json?.data ?? json ?? []).map((d) => ({
           ...d,
           id: d.UUID,
           nama: d.Nama,
         }))
       );
     } catch (err) {
-      setErrorJenisFile(formatFetchError(err, "Gagal memuat jenis file"));
+      setErrorJenisFile(err?.message || "Gagal memuat jenis file");
     } finally {
       setLoad("jenisfile", false);
     }
   };
 
   const fetchTemplateDokumenTambahanEdit = async (tahun, jenisFileUuid) => {
-    const token = getValidToken();
-    if(!token) return;
-
     setLoad("template", true);
     try {
-      const res = await fetch(
-        `http://localhost:3000/templatedokumentambahans?mode=all&filters=tahun:eq:${tahun};jenisfileuuid:eq:${jenisFileUuid}`,{
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+      const data = await apiClient.get(
+        `/templatedokumentambahans?mode=all&filters=tahun:eq:${tahun};jenisfileuuid:eq:${jenisFileUuid}`
       );
-      const data = await res.json();
-      if(!res.ok){
-        setError(data.message || "Gagal memuat data");
-        return;
-      }
+      const list = Array.isArray(data) ? data : (data?.data || []);
 
-      data.forEach((row, i) => {
+      list.forEach((row, i) => {
         if (i == 0) {
           setValue("pertanyaan", row.Pertanyaan);
         }
@@ -232,40 +213,28 @@ const TemplateDokumenTambahanFormPage = () => {
           setValue(`rows.${key}.status`, "loading");
           await delay(3000);
 
-          const res = await fetch(
-            "http://localhost:3000/templatedokumentambahan",
-            {
-              method: "POST",
-              body: fd,
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
+          try {
+            await apiClient.post("/templatedokumentambahan", fd);
+
+            setValue(`rows.${key}.status`, "success");
+            addToast("success", "Data berhasil disimpan");
+            successCount++;
+            if (successCount >= totalSendData && mode == "add") {
+              navigate(`/template_dokumen_tambahan`);
             }
-          );
-
-          const json = await res.json();
-
-          if (!res.ok) {
-            console.log(json);
+          } catch (err) {
+            console.log(err);
             setValue(`rows.${key}.status`, "error");
-            if (isValidationError(json.code)) {
+            if (isValidationError(err?.code)) {
               const validationMessage = normalizeValidationMessage(
-                json.message
+                err?.message
               );
               setValue(`rows.${key}.errormessage`, validationMessage);
               addToast("error", validationMessage);
             } else {
-              setValue(`rows.${key}.errormessage`, json.message || "Gagal");
-              addToast("error", json.message);
+              setValue(`rows.${key}.errormessage`, err?.message || "Gagal");
+              addToast("error", err?.message || "Gagal");
             }
-            return;
-          }
-
-          setValue(`rows.${key}.status`, "success");
-          addToast("success", "Data berhasil disimpan");
-          successCount++;
-          if (successCount >= totalSendData && mode == "add") {
-            navigate(`/template_dokumen_tambahan`);
           }
         } catch (err) {
           console.log(err);

@@ -12,6 +12,7 @@ import TextInput from "@/Components/TextInput";
 import { useForm } from "react-hook-form";
 import RadioButton from "@/Components/RadioButton";
 import InfoAuditCard from "@/Components/InfoAuditCard";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 const AuditTambahanEditPage = () => {
   const { uuidRenstra } = useParams();
@@ -39,8 +40,6 @@ const AuditTambahanEditPage = () => {
 
   const ensureGenerated = async (renstra) => {
     if (!renstra?.Tahun || !renstra?.UUID || !renstra?.FakultasUnitUuid) return [];
-    const token = getValidToken();
-    if (isEmpty(token)) return [];
 
     try {
       const fd = new FormData();
@@ -48,17 +47,8 @@ const AuditTambahanEditPage = () => {
       fd.append("renstra", renstra.UUID);
       fd.append("fakultas_unit", renstra.FakultasUnitUuid);
 
-      const res = await fetch("http://localhost:3000/renstra/generate", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: fd,
-      });
-
-      if (res.ok) {
-        return await fetchDataAudit(renstra.UUID);
-      }
+      await apiClient.post("/renstra/generate", fd);
+      return await fetchDataAudit(renstra.UUID);
     } catch (err) {
       console.error("Auto generate renstra error:", err);
     }
@@ -93,7 +83,7 @@ const AuditTambahanEditPage = () => {
       return;
     }
 
-    const url = `http://localhost:3000/dokumentambahan/${targetTahun}/${audit.UUID}`;
+    const url = `/dokumentambahan/${targetTahun}/${audit.UUID}`;
     
     const dataForm = new FormData();
     dataForm.append("uuidRenstra", audit?.RenstraUUID ?? dataRenstra?.UUID ?? "");
@@ -110,20 +100,7 @@ const AuditTambahanEditPage = () => {
       setLoading(true);
       await delay(500);
 
-      const res = await fetch(url, {
-        method: "PUT",
-        body: dataForm,
-        headers: {
-          Authorization: `Bearer ${getValidToken()}`,
-        },
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast("error", json.message || "Gagal menyimpan");
-        return;
-      }
+      await apiClient.put(url, dataForm);
 
       addToast("success", "Berhasil disimpan");
       setDataAudit((prev) =>
@@ -207,26 +184,9 @@ const AuditTambahanEditPage = () => {
     if (isEmpty(token)) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/preview/audit/${tipe}/${tahun}/${uuidfakultasunit}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const json = await apiClient.get(
+        `/preview/audit/${tipe}/${tahun}/${uuidfakultasunit}`
       );
-
-      if (!res.ok) {
-        let errorMsg = `Layanan preview dokumen tambahan gagal (HTTP ${res.status})`;
-        try {
-          const jsonErr = await res.json();
-          if (jsonErr?.message) errorMsg = jsonErr.message;
-        } catch (_) {}
-        addToast("error", errorMsg);
-        return;
-      }
-
-      const json = await res.json();
 
       let increment = 1;
       const mapped = (Array.isArray(json) ? json : []).map((item) => ({
@@ -239,7 +199,7 @@ const AuditTambahanEditPage = () => {
       console.error("Fetch Indikator dokumen tambahan gagal:", err);
       addToast(
         "error",
-        `Gagal memuat indikator dokumen tambahan: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
+        `Gagal memuat indikator dokumen tambahan: Gangguan koneksi ke service backend (${err?.message || "Network Error"}). Pastikan service backend aktif.`
       );
     }
   };
@@ -250,7 +210,7 @@ const AuditTambahanEditPage = () => {
 
     try {
       const res = await fetch(
-        `http://localhost:3000/dokumentambahans?mode=sse&filters=uuidrenstra:eq:${uuidRenstra};`,
+        `${API_BASE_URL}/dokumentambahans?mode=sse&filters=uuidrenstra:eq:${uuidRenstra};`,
         {
           headers: {
             Accept: "text/event-stream",
@@ -319,34 +279,15 @@ const AuditTambahanEditPage = () => {
   };
 
   const fetchDataRenstra = async (uuidRenstra) => {
-    const token = getValidToken();
-    if (isEmpty(token)) return null;
-
     try {
-      const res = await fetch(`http://localhost:3000/renstra/${uuidRenstra}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        let errorMsg = `Layanan data renstra gagal (HTTP ${res.status})`;
-        try {
-          const jsonErr = await res.json();
-          if (jsonErr?.message) errorMsg = jsonErr.message;
-        } catch (_) {}
-        addToast("error", errorMsg);
-        return null;
-      }
-
-      const json = await res.json();
+      const json = await apiClient.get(`/renstra/${uuidRenstra}`);
       setDataRenstra(json);
       return json;
     } catch (err) {
       console.error("Fetch data renstra gagal:", err);
       addToast(
         "error",
-        `Gagal memuat data jadwal renstra: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
+        `Gagal memuat data jadwal renstra: Gangguan koneksi ke service backend (${err?.message || "Network Error"}). Pastikan service backend aktif.`
       );
       return null;
     }

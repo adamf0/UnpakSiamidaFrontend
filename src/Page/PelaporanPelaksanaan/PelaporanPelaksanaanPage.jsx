@@ -15,6 +15,7 @@ import {
   isEmpty,
   renderLabelFakultasUnit,
 } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 
 const isValidDateVal = (val) => {
   if (!val) return false;
@@ -44,7 +45,7 @@ const PelaporanPelaksanaanPage = () => {
   const canManage = !isAdmin && !isFakultas;
   const canVerify = isAdmin || isFakultas;
 
-  const endpoint = "http://localhost:3000/pelaporanpelaksanaans";
+  const endpoint = "/pelaporanpelaksanaans";
 
   const openLaporkan = (row) => {
     setModalMode("edit");
@@ -58,32 +59,15 @@ const PelaporanPelaksanaanPage = () => {
   };
 
   const deleteData = async () => {
-    if (isEmpty(getValidToken()) || !selectedRow?.UUID) return;
+    if (!selectedRow?.UUID) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/pelaporanpelaksanaan/${selectedRow.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-      const data = await res.json();
-
-      if (res.ok) {
-        addToast("success", "Berhasil hapus data");
-      } else {
-        addToast(
-          "error",
-          data?.message || data?.Message || "Data tidak ditemukan"
-        );
-      }
+      await apiClient.delete(`/pelaporanpelaksanaan/${selectedRow.UUID}`);
+      addToast("success", "Berhasil hapus data");
     } catch (err) {
       addToast(
         "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
+        err?.message || "Layanan tidak dapat dihubungi"
       );
     } finally {
       setConfirmDelete(false);

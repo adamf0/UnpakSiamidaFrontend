@@ -2,6 +2,7 @@ import React, { Fragment, useEffect, useState, useRef, useMemo } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 import Tooltip from "@/Components/Tooltip";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import {
@@ -63,19 +64,8 @@ export default function ProkerV3DokumenModal({
     if (!proker?.UUID) return;
     setLoading(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/${proker.UUID}/dokumen`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const json = await res.json();
-      if (res.ok) {
-        setDocuments(json.data || []);
-      }
+      const res = await apiClient.get(`/proker_v3/${proker.UUID}/dokumen`);
+      setDocuments(res.data?.data || []);
     } catch (err) {
       console.error("Gagal memuat dokumen proker:", err);
     } finally {
@@ -191,7 +181,7 @@ export default function ProkerV3DokumenModal({
       );
     };
 
-    xhr.open("POST", `http://localhost:3000/proker_v3/${proker.UUID}/dokumen`);
+    xhr.open("POST", `${API_BASE_URL}/proker_v3/${proker.UUID}/dokumen`);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(formData);
   };
@@ -247,20 +237,7 @@ export default function ProkerV3DokumenModal({
     if (!docToDelete?.UUID) return;
     setDeleting(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/dokumen/${docToDelete.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.message || data?.error || "Gagal menghapus dokumen");
-      }
+      await apiClient.delete(`/proker_v3/dokumen/${docToDelete.UUID}`);
       addToast("success", "Dokumen berhasil dihapus dari sistem");
       setDocuments((prev) => prev.filter((d) => d.UUID !== docToDelete.UUID));
       onRefreshParent?.();
@@ -711,7 +688,7 @@ export default function ProkerV3DokumenModal({
                               };
 
                             const fileUrl = doc.FileURL
-                              ? `http://localhost:3000${doc.FileURL.startsWith("/") ? "" : "/"}${doc.FileURL}`
+                              ? `${API_BASE_URL}${doc.FileURL.startsWith("/") ? "" : "/"}${doc.FileURL}`
                               : null;
 
                             return (

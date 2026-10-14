@@ -22,6 +22,7 @@ import Tooltip from "@/Components/Tooltip";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 import ScheduleAuditFilterDrawer, {
   initialAuditFilters,
@@ -505,29 +506,17 @@ const ScheduleAuditPage = () => {
       const formData = new FormData();
       formData.append("kodeAkses", kodeAksesModal.kode || "");
 
-      const res = await fetch(
-        `http://localhost:3000/renstra/${kodeAksesModal.row.UUID}/code_access`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-          body: formData,
-        }
+      await apiClient.put(
+        `/renstra/${kodeAksesModal.row.UUID}/code_access`,
+        formData
       );
 
-      const data = await res.json();
-      if (res.ok) {
-        addToast("success", "Kode akses berhasil diperbarui");
-        setKodeAksesModal({ open: false, row: null, kode: "", loading: false });
-        tableRef.current?.reload?.();
-      } else {
-        addToast("error", data?.message || "Gagal memperbarui kode akses");
-        setKodeAksesModal((prev) => ({ ...prev, loading: false }));
-      }
+      addToast("success", "Kode akses berhasil diperbarui");
+      setKodeAksesModal({ open: false, row: null, kode: "", loading: false });
+      tableRef.current?.reload?.();
     } catch (err) {
       console.error("Gagal update kode akses:", err);
-      addToast("error", "Terjadi kesalahan koneksi server");
+      addToast("error", err?.message || "Gagal memperbarui kode akses");
       setKodeAksesModal((prev) => ({ ...prev, loading: false }));
     }
   };
@@ -644,32 +633,17 @@ const ScheduleAuditPage = () => {
   );
 
   const deleteData = async () => {
-    const token = getValidToken();
-    if (!token) {
-      addToast("error", "Sesi login Anda tidak valid atau telah berakhir");
-      return;
-    }
+    if (!selectedRow?.UUID) return;
 
-    const res = await fetch(
-      `http://localhost:3000/renstra/${selectedRow.UUID}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    );
-    const data = await res.json();
-    console.log(data);
-
-    if (res.ok) {
+    try {
+      await apiClient.delete(`/renstra/${selectedRow.UUID}`);
       addToast("success", "Data berhasil dihapus");
-    } else {
-      addToast("error", data?.message || "Data tidak ditemukan");
+    } catch (err) {
+      addToast("error", err?.message || "Data tidak ditemukan");
+    } finally {
+      setConfirmDelete(false);
+      tableRef.current?.reload?.({ resetPage: true });
     }
-
-    setConfirmDelete(false);
-    tableRef.current?.reload?.({ resetPage: true });
   };
 
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } =
@@ -818,7 +792,7 @@ const ScheduleAuditPage = () => {
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs w-full min-w-0 max-w-full overflow-hidden">
           <RemoteTable
             ref={tableRef}
-            endpoint="http://localhost:3000/renstras"
+            endpoint="/renstras"
             mode="sse"
             token={getValidToken()}
             adapter={ScheduleAuditAdapter}

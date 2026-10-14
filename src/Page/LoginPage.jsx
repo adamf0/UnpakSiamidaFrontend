@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { apiClient } from "@/Common/api";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import slide1 from "@/assets/slide1.jpeg";
@@ -70,7 +70,7 @@ function LoginContent() {
     setLoading(true);
 
     try {
-      const res = await axios.post("http://localhost:3000/login", dataForm); 
+      const res = await apiClient.post("/login", dataForm); 
       const body = res.data;
       console.log(body);
 

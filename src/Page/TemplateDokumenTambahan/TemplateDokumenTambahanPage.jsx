@@ -54,7 +54,7 @@ const TemplateDokumenTambahanPage = () => {
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <RemoteTable
-            endpoint="http://localhost:3000/templatedokumentambahans"
+            endpoint="/templatedokumentambahans"
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
             adapter={templateDokumenTambahanAdapter}
             token={getValidToken()}

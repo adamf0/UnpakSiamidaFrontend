@@ -6,6 +6,7 @@ import SearchSelect from "@/Components/SearchSelect";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import { Eye, EyeOff, Shield, Building2, User, KeyRound, Mail } from "lucide-react";
 
 const LEVEL_OPTIONS = [
@@ -61,19 +62,10 @@ export default function AccountUserFormModal({
   useEffect(() => {
     let isMounted = true;
     const fetchFakultas = async () => {
-      const token = await getValidToken();
-      if (!token) return;
-
       try {
         setLoadingFakultas(true);
-        const res = await fetch("http://localhost:3000/fakultasunits?mode=all", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        });
-        if (!res.ok) throw new Error("Gagal mengambil daftar unit");
-        const list = await res.json();
+        const res = await apiClient.get("/fakultasunits?mode=all");
+        const list = res.data;
         if (isMounted) {
           const mapped = (Array.isArray(list) ? list : []).map((fu) => ({
             id: fu.UUID,
@@ -180,30 +172,10 @@ export default function AccountUserFormModal({
         fd.append("password", form.password.trim());
       }
 
-      const url =
-        mode === "edit"
-          ? `http://localhost:3000/user/${data.UUID}`
-          : "http://localhost:3000/user";
-
-      const res = await fetch(url, {
-        method: mode === "edit" ? "PUT" : "POST",
-        body: fd,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      const resJson = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const errMsg =
-          resJson?.Message ||
-          resJson?.message ||
-          resJson?.error ||
-          "Gagal menyimpan data akun user";
-        addToast("error", errMsg);
-        return;
+      if (mode === "edit") {
+        await apiClient.put(`/user/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/user", fd);
       }
 
       addToast(

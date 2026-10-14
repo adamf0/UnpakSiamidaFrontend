@@ -5,6 +5,7 @@ import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 
 export default function MasterTahunFormModal({
   open,
@@ -44,32 +45,16 @@ export default function MasterTahunFormModal({
   }, [mode, data, open, reset]);
 
   const onSubmit = async (form) => {
-    if (isEmpty(getValidToken())) return;
-
     setSubmitting(true);
     try {
       const fd = new FormData();
       fd.append("tahun", form.tahun);
       fd.append("status", form.status);
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/tahunproker/${data.UUID}`
-          : "http://localhost:3000/tahunproker",
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast("error", json.message || json.Message || "Gagal menyimpan data");
-        return;
+      if (mode === "edit") {
+        await apiClient.put(`/tahunproker/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/tahunproker", fd);
       }
 
       addToast(
@@ -81,7 +66,7 @@ export default function MasterTahunFormModal({
     } catch (err) {
       addToast(
         "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
+        err?.message || "Layanan tidak dapat dihubungi"
       );
     } finally {
       setSubmitting(false);

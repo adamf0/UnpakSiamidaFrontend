@@ -20,6 +20,7 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import TextInput from "@/Components/TextInput";
 import DateRangeInput from "@/Components/DateRangeInput";
 import { useAuth } from "@/Providers/AuthProvider";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 const ScheduleAuditFormPage = () => {
   const {getValidToken} = useAuth()
@@ -140,29 +141,11 @@ const ScheduleAuditFormPage = () => {
     setErr("detail", null);
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/renstra/${uuid}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-      let result = {};
-      try {
-        result = await res.json();
-      } catch {
-        const raw = await res.text().catch(() => "");
-        result = { message: raw };
-      }
-      if(!res.ok){
-        setErr("detail", result.message || "Gagal memuat data");
-        return;
-      }
+      const result = await apiClient.get(`/renstra/${uuid}`);
       setData(result);
     } catch (err) {
       console.error(err);
-      setErr("detail", err.message || "Gagal memuat data");
+      setErr("detail", err?.message || "Gagal memuat data");
     } finally {
       setLoad("detail", false);
     }
@@ -177,7 +160,7 @@ const ScheduleAuditFormPage = () => {
 
     try {
       const res = await fetch(
-        "http://localhost:3000/fakultasunits?mode=sse",
+        `${API_BASE_URL}/fakultasunits?mode=sse`,
         {
           headers: { 
             Accept: "text/event-stream", 
@@ -250,7 +233,7 @@ const ScheduleAuditFormPage = () => {
     setErr("user", null);
 
     try {
-      const res = await fetch("http://localhost:3000/users?mode=sse", {
+      const res = await fetch(`${API_BASE_URL}/users?mode=sse`, {
         headers: { 
           Accept: "text/event-stream",
           Authorization: `Bearer ${token}` 
@@ -349,30 +332,11 @@ const ScheduleAuditFormPage = () => {
       fd.append("auditor1", data.auditor1?.UUID);
       fd.append("auditor2", data.auditor2?.UUID);
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/renstra/${uuidSchedule}`
-          : "http://localhost:3000/renstra",
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: fd,
-        }
-      );
-
-      let json = {};
-      try {
-        json = await res.json();
-      } catch {
-        const rawText = await res.text().catch(() => "");
-        json = { message: rawText };
-      }
-
-      if (!res.ok) {
-        addToast("error", json?.message || "Gagal menyimpan jadwal audit");
-        return;
+      let json;
+      if (mode === "edit") {
+        json = await apiClient.put(`/renstra/${uuidSchedule}`, fd);
+      } else {
+        json = await apiClient.post("/renstra", fd);
       }
 
       if (mode !== "edit" && json?.uuid) {
@@ -382,13 +346,7 @@ const ScheduleAuditFormPage = () => {
           genFd.append("renstra", json.uuid);
           genFd.append("fakultas_unit", data.target_audit?.UUID);
 
-          await fetch("http://localhost:3000/renstra/generate", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            body: genFd,
-          });
+          await apiClient.post("/renstra/generate", genFd);
         } catch (errGen) {
           console.error("Auto generate renstra audit records failed:", errGen);
         }
@@ -400,7 +358,7 @@ const ScheduleAuditFormPage = () => {
         navigate("/schedule_audit");
       }
     } catch (e){
-      addToast("error", "Server tidak dapat dihubungi");
+      addToast("error", e?.message || "Server tidak dapat dihubungi");
     }
   };
 

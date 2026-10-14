@@ -12,6 +12,7 @@ import {
   formatFetchError,
 } from "@/Common/Utils";
 import { useContent } from "@/Providers/ContentProvider";
+import { apiClient } from "@/Common/api";
 
 export default function BeritaAcaraFormModal({
   open,
@@ -77,23 +78,13 @@ export default function BeritaAcaraFormModal({
   }, [mode, data, userOptions]);
 
   const fetchUserOptions = async () => {
-    if (isEmpty(getValidToken())) return;
-
     setLoadingUsers(true);
     setErrorUsers(null);
     try {
-      const res = await fetch("http://localhost:3000/user-options", {
-        headers: {
-          Accept: "application/json", // ganti SSE → JSON
-          Authorization: `Bearer ${getValidToken()}`,
-        },
-      });
+      const data = await apiClient.get("/user-options");
+      const list = Array.isArray(data) ? data : [];
 
-      await throwIfResponseNotOk(res, "Gagal memuat daftar user");
-
-      const data = await res.json(); // langsung parse JSON
-
-      const result = data
+      const result = list
         .filter((item) => !isEmpty(item.Level))
         .map((item) => ({
           id: item.UUID,
@@ -104,7 +95,7 @@ export default function BeritaAcaraFormModal({
       setUserOptions(result);
     } catch (err) {
       console.error("Fetch user gagal:", err);
-      setErrorUsers(formatFetchError(err, "Gagal memuat daftar user"));
+      setErrorUsers(err?.message || "Gagal memuat daftar user");
     } finally {
       setLoadingUsers(false);
     }
@@ -125,31 +116,20 @@ export default function BeritaAcaraFormModal({
       fd.append("auditor1", form?.Auditor1?.UUID ?? "");
       fd.append("auditor2", form?.Auditor2?.UUID ?? "");
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/beritaacara/${data.UUID}?ctxtahun=${positionYear}`
-          : `http://localhost:3000/beritaacara?ctxtahun=${positionYear}`,
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        },
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast("error", json.message || "Gagal menyimpan");
-        return;
+      if (mode === "edit") {
+        await apiClient.put(
+          `/beritaacara/${data.UUID}?ctxtahun=${positionYear}`,
+          fd
+        );
+      } else {
+        await apiClient.post(`/beritaacara?ctxtahun=${positionYear}`, fd);
       }
 
       addToast("success", "Berhasil disimpan");
       onSuccess?.();
       onClose();
-    } catch {
-      addToast("error", "Server tidak dapat dihubungi");
+    } catch (err) {
+      addToast("error", err?.message || "Server tidak dapat dihubungi");
     }
   };
 

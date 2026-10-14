@@ -10,6 +10,7 @@ import { Plus, Pencil, Trash2, Award } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 
 const StandarRenstraPage = () => {
@@ -34,26 +35,18 @@ const StandarRenstraPage = () => {
   };
 
   const deleteData = async () => {
-    if(isEmpty(getValidToken())) return;
+    if (isEmpty(getValidToken()) || !selectedRow) return;
 
-    const res = await fetch(`http://localhost:3000/standarrenstra/${selectedRow.UUID}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${getValidToken()}`
-      }
-    });
-    const data = await res.json();
-    console.log(data)
-    
-    if (res.ok){
+    try {
+      await apiClient.delete(`/standarrenstra/${selectedRow.UUID}`);
       addToast("success", "Data berhasil dihapus");
-    } else{
-      addToast("error", data?.message || "Data tidak ditemukan");
+    } catch (err) {
+      addToast("error", err?.message || "Data tidak ditemukan");
+    } finally {
+      setConfirmDelete(false);
+      tableRef.current?.reload?.({ resetPage: true });
     }
-
-    setConfirmDelete(false);
-    tableRef.current?.reload?.({ resetPage: true });
-  }
+  };
 
   const {
     level,
@@ -89,7 +82,7 @@ const StandarRenstraPage = () => {
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <RemoteTable
             ref={tableRef}
-            endpoint="http://localhost:3000/standarrenstras"
+            endpoint="/standarrenstras"
             mode="paging"
             token={getValidToken()}
             onError={(err) => {

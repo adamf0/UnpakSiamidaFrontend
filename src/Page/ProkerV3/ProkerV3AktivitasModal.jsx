@@ -2,6 +2,7 @@ import React, { Fragment, useState, useEffect } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 import {
   BULAN_LIST,
   WEEKS,
@@ -89,16 +90,8 @@ export default function ProkerV3AktivitasModal({
     if (!prokerUuid) return;
     setLoading(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/${prokerUuid}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal mengambil data detail");
-      }
+      const res = await apiClient.get(`/proker_v3/${prokerUuid}`);
+      const json = res.data;
       setData(json);
 
       // Populate Anggaran & Luaran
@@ -133,29 +126,16 @@ export default function ProkerV3AktivitasModal({
     if (!prokerUuid) return;
     setSavingAnggaran(true);
     try {
-      const token = getValidToken();
       const payload = {
         anggaran: Number(anggaranInput) || 0,
         luaran_produk: luaranProdukInput.trim(),
         dokumen_referensi: dokumenReferensiInput.trim(),
       };
 
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/${prokerUuid}/anggaran_luaran`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
+      await apiClient.put(
+        `/proker_v3/${prokerUuid}/anggaran_luaran`,
+        payload
       );
-
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menyimpan anggaran & luaran");
-      }
 
       addToast("success", "Anggaran & Luaran Produk berhasil disimpan");
       fetchDetail();
@@ -178,7 +158,6 @@ export default function ProkerV3AktivitasModal({
 
     setUploadingDocRef(true);
     try {
-      const token = getValidToken();
       const formData = new FormData();
       docRefFiles.forEach((file) => {
         formData.append("files", file);
@@ -188,21 +167,10 @@ export default function ProkerV3AktivitasModal({
         docRefKeterangan.trim() || "Dokumen Referensi Program (TOR/Proposal/SOP)"
       );
 
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/${prokerUuid}/dokumen_referensi`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
+      await apiClient.post(
+        `/proker_v3/${prokerUuid}/dokumen_referensi`,
+        formData
       );
-
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal mengunggah dokumen referensi");
-      }
 
       addToast("success", `${docRefFiles.length} Dokumen referensi berhasil diunggah`);
       setDocRefFiles([]);
@@ -296,26 +264,16 @@ export default function ProkerV3AktivitasModal({
         status: timelineStatus,
       };
 
-      let url = `http://localhost:3000/proker_v3/${prokerUuid}/timeline`;
-      let method = "POST";
-
       if (editingTimelineUuid) {
-        url = `http://localhost:3000/proker_v3/${prokerUuid}/timeline/${editingTimelineUuid}`;
-        method = "PUT";
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menyimpan aktivitas");
+        await apiClient.put(
+          `/proker_v3/${prokerUuid}/timeline/${editingTimelineUuid}`,
+          payload
+        );
+      } else {
+        await apiClient.post(
+          `/proker_v3/${prokerUuid}/timeline`,
+          payload
+        );
       }
 
       addToast(
@@ -339,20 +297,7 @@ export default function ProkerV3AktivitasModal({
   const handleDeleteTimeline = async (tlUuid) => {
     if (!window.confirm("Yakin ingin menghapus aktivitas kegiatan ini?")) return;
     try {
-      const token = getValidToken();
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/${prokerUuid}/timeline/${tlUuid}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menghapus aktivitas");
-      }
+      await apiClient.delete(`/proker_v3/${prokerUuid}/timeline/${tlUuid}`);
       addToast("success", "Aktivitas berhasil dihapus");
       await fetchDetail();
       onRefreshParent?.();
@@ -373,7 +318,6 @@ export default function ProkerV3AktivitasModal({
 
     setUploadingTimelineId(timeline.Id);
     try {
-      const token = getValidToken();
       const formData = new FormData();
       files.forEach((f) => formData.append("files", f));
       formData.append(
@@ -381,21 +325,10 @@ export default function ProkerV3AktivitasModal({
         keteranganByTimeline[timeline.Id] || "Bukti Pelaksanaan Kegiatan"
       );
 
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/timeline/${timeline.UUID}/files`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
+      await apiClient.post(
+        `/proker_v3/timeline/${timeline.UUID}/files`,
+        formData
       );
-
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal mengunggah file bukti");
-      }
 
       addToast("success", `${files.length} file bukti kegiatan berhasil diunggah`);
       setSelectedFilesByTimeline((prev) => ({ ...prev, [timeline.Id]: [] }));
@@ -415,17 +348,7 @@ export default function ProkerV3AktivitasModal({
   const handleDeleteFile = async (fileUuid) => {
     if (!window.confirm("Hapus berkas lampiran ini?")) return;
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/file/${fileUuid}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menghapus file");
-      }
+      await apiClient.delete(`/proker_v3/file/${fileUuid}`);
       addToast("success", "Berkas berhasil dihapus");
       await fetchDetail();
       onRefreshParent?.();
@@ -691,7 +614,7 @@ export default function ProkerV3AktivitasModal({
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                       <a
-                                        href={`http://localhost:3000/upload/proker_v3/${file.File}`}
+                                        href={`${API_BASE_URL}/upload/proker_v3/${file.File}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="p-1.5 text-purple-600 hover:bg-purple-100 rounded-lg transition"
@@ -1201,7 +1124,7 @@ export default function ProkerV3AktivitasModal({
                                               </div>
                                               <div className="flex items-center gap-1 shrink-0">
                                                 <a
-                                                  href={`http://localhost:3000/upload/proker_v3/${file.File}`}
+                                                  href={`${API_BASE_URL}/upload/proker_v3/${file.File}`}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
                                                   className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition"

@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FiMoreVertical, FiSearch } from "react-icons/fi";
+import { API_BASE_URL } from "../Common/api";
 
 /* =========================
    UTILS
@@ -106,7 +107,7 @@ const RemoteTable = forwardRef(function RemoteTable(
 
     let url;
     try {
-      const parsedUrl = new URL(endpoint, window.location.origin);
+      const parsedUrl = new URL(endpoint, API_BASE_URL || window.location.origin);
       const existingFilters = parsedUrl.searchParams.get("filters");
       const combinedFilters = [existingFilters, filterQuery].filter(Boolean).join(";");
 

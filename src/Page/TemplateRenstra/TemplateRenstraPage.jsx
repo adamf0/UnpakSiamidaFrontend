@@ -95,7 +95,7 @@ const TemplateRenstraPage = () => {
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <RemoteTable
-            endpoint="http://localhost:3000/templaterenstras"
+            endpoint="/templaterenstras"
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
             token={getValidToken()}
             renderAddAction={

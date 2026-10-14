@@ -19,6 +19,7 @@ import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 import SearchSelect from "@/Components/SearchSelect";
 
@@ -53,27 +54,13 @@ const IndikatorRenstraPage = () => {
   // Fetch filter metadata (Tahun & Standar)
   useEffect(() => {
     const fetchFilterMetadata = async () => {
-      const token = getValidToken();
-      if (isEmpty(token)) return;
-
       try {
         // 1. Fetch Tahun
         let years = [];
         try {
-          const resTahunRenstra = await fetch(
-            "http://localhost:3000/tahunrenstras?mode=all",
-            {
-              headers: {
-                Accept: "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-          if (resTahunRenstra.ok) {
-            const data = await resTahunRenstra.json();
-            if (Array.isArray(data) && data.length > 0) {
-              years = data;
-            }
+          const data = await apiClient.get("/tahunrenstras?mode=all");
+          if (Array.isArray(data) && data.length > 0) {
+            years = data;
           }
         } catch (e) {
           console.warn("Gagal fetch tahunrenstras:", e);
@@ -81,20 +68,9 @@ const IndikatorRenstraPage = () => {
 
         if (years.length === 0) {
           try {
-            const resTahunProker = await fetch(
-              "http://localhost:3000/tahunprokers?mode=all",
-              {
-                headers: {
-                  Accept: "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-            if (resTahunProker.ok) {
-              const data = await resTahunProker.json();
-              if (Array.isArray(data)) {
-                years = data;
-              }
+            const data = await apiClient.get("/tahunprokers?mode=all");
+            if (Array.isArray(data)) {
+              years = data;
             }
           } catch (e) {
             console.warn("Gagal fetch tahunprokers:", e);
@@ -120,33 +96,22 @@ const IndikatorRenstraPage = () => {
         setTahunList(uniqueYears);
 
         // 2. Fetch Standar Renstra
-        const resStandar = await fetch(
-          "http://localhost:3000/standarrenstras?mode=all",
-          {
-            headers: {
-              Accept: "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-        if (resStandar.ok) {
-          const data = await resStandar.json();
-          const list = Array.isArray(data) ? data : [];
-          const mappedStandar = list.map((s) => ({
-            id: s.UUID || s.Uuid || s.id,
-            UUID: s.UUID || s.Uuid,
-            nama: s.Nama || s.nama || "",
-            ...s,
-          }));
-          setStandarList(mappedStandar);
-        }
+        const dataStandar = await apiClient.get("/standarrenstras?mode=all");
+        const list = Array.isArray(dataStandar) ? dataStandar : [];
+        const mappedStandar = list.map((s) => ({
+          id: s.UUID || s.Uuid || s.id,
+          UUID: s.UUID || s.Uuid,
+          nama: s.Nama || s.nama || "",
+          ...s,
+        }));
+        setStandarList(mappedStandar);
       } catch (err) {
         console.error("Gagal mengambil metadata filter indikator renstra:", err);
       }
     };
 
     fetchFilterMetadata();
-  }, [getValidToken]);
+  }, []);
 
   // Dynamic RemoteTable Endpoint
   const tableEndpoint = useMemo(() => {
@@ -159,11 +124,11 @@ const IndikatorRenstraPage = () => {
     }
 
     if (filterParts.length > 0) {
-      return `http://localhost:3000/indikatorrenstras?filters=${encodeURIComponent(
+      return `/indikatorrenstras?filters=${encodeURIComponent(
         filterParts.join(";")
       )}`;
     }
-    return "http://localhost:3000/indikatorrenstras";
+    return "/indikatorrenstras";
   }, [selectedTahun, selectedStandar]);
 
   const openNew = () => {
@@ -179,26 +144,11 @@ const IndikatorRenstraPage = () => {
   };
 
   const deleteData = async () => {
-    const token = getValidToken();
-    if (isEmpty(token) || !selectedRow?.Uuid) return;
+    if (!selectedRow?.Uuid) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/indikatorrenstra/${selectedRow.Uuid}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const data = await res.json();
-
-      if (res.ok) {
-        addToast("success", "Data berhasil dihapus");
-      } else {
-        addToast("error", data?.message || data?.Message || "Data gagal dihapus");
-      }
+      await apiClient.delete(`/indikatorrenstra/${selectedRow.Uuid}`);
+      addToast("success", "Data berhasil dihapus");
     } catch (err) {
       addToast(
         "error",

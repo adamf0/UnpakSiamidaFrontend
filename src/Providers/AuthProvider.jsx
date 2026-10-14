@@ -1,5 +1,5 @@
-import axios from "axios";
 import React, { createContext, useContext, useState } from "react";
+import { apiClient } from "../Common/api";
 
 const AuthContext = createContext(null);
 
@@ -100,12 +100,7 @@ export function AuthProvider({ children }) {
       const validToken = getValidToken();
       if (!validToken) throw new Error("Session expired");
 
-      const res = await axios.get("http://localhost:3000/whoami", {
-        headers: {
-          Authorization: `Bearer ${validToken}`,
-        },
-      });
-
+      const res = await apiClient.get("/whoami");
       const data = res.data;
 
       setUser({

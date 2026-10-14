@@ -10,6 +10,7 @@ import {
   formatTanggalIndo,
   renderLabelFakultasUnit,
 } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import { CheckSquare, FileText } from "lucide-react";
 
 const STATUS_REALISASI_OPTIONS = [
@@ -90,26 +91,7 @@ export default function PelaporanPelaksanaanVerifikasiModal({
       fd.append("tanggal_r_akhir", form.target_r_akhir ?? "");
       fd.append("detail", form.detail ?? "");
 
-      const res = await fetch(
-        `http://localhost:3000/pelaporanpelaksanaan/${data.UUID}`,
-        {
-          method: "PUT",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast(
-          "error",
-          json.message || json.Message || "Gagal menyimpan verifikasi"
-        );
-        return;
-      }
+      await apiClient.put(`/pelaporanpelaksanaan/${data.UUID}`, fd);
 
       addToast("success", "Berhasil verifikasi pelaporan pelaksanaan");
       onSuccess?.();
@@ -117,7 +99,7 @@ export default function PelaporanPelaksanaanVerifikasiModal({
     } catch (err) {
       addToast(
         "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
+        err?.message || "Layanan tidak dapat dihubungi"
       );
     } finally {
       setSubmitting(false);

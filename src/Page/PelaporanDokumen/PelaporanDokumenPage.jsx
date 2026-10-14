@@ -15,6 +15,7 @@ import {
   isEmpty,
   renderLabelFakultasUnit,
 } from "@/Common/Utils";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 const PelaporanDokumenPage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -36,7 +37,7 @@ const PelaporanDokumenPage = () => {
   const canManage = !isAdmin && !isFakultas;
   const canVerify = isAdmin || isFakultas;
 
-  const endpoint = "http://localhost:3000/pelaporandokumens";
+  const endpoint = "/pelaporandokumens";
 
   const openNew = () => {
     setModalMode("new");
@@ -56,33 +57,13 @@ const PelaporanDokumenPage = () => {
   };
 
   const deleteData = async () => {
-    if (isEmpty(getValidToken()) || !selectedRow?.UUID) return;
+    if (!selectedRow?.UUID) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/pelaporandokumen/${selectedRow.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-      const data = await res.json();
-
-      if (res.ok) {
-        addToast("success", "Berhasil hapus data");
-      } else {
-        addToast(
-          "error",
-          data?.message || data?.Message || "Data tidak ditemukan"
-        );
-      }
+      await apiClient.delete(`/pelaporandokumen/${selectedRow.UUID}`);
+      addToast("success", "Berhasil hapus data");
     } catch (err) {
-      addToast(
-        "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
-      );
+      addToast("error", err?.message || "Layanan tidak dapat dihubungi");
     } finally {
       setConfirmDelete(false);
       tableRef.current?.reload?.({ resetPage: true });
@@ -171,7 +152,7 @@ const PelaporanDokumenPage = () => {
                 searchable: true,
                 renderKey: (row) => {
                   if (!row.File) return <span className="text-gray-400">-</span>;
-                  const fileUrl = `http://localhost:3000/upload/pelaporan_dokumen/${row.File}`;
+                  const fileUrl = `${API_BASE_URL}/upload/pelaporan_dokumen/${row.File}`;
                   return (
                     <a
                       href={fileUrl}

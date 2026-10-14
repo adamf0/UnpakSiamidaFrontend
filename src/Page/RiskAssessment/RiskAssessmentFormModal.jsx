@@ -6,6 +6,7 @@ import SearchSelect from "@/Components/SearchSelect";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty, throwIfResponseNotOk } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import {
   ShieldAlert,
   AlertTriangle,
@@ -134,19 +135,11 @@ export default function RiskAssessmentFormModal({
 
   // Fetch Master Metadata from DB (risk_criteria, risk_levels, programs)
   const fetchMetadata = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return;
-
     setLoadingMetadata(true);
     try {
-      const res = await fetch("http://localhost:3000/risk_options", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (res.ok) {
-        const json = await res.json();
+      const res = await apiClient.get("/risk_options");
+      const json = res.data;
+      if (json) {
         if (Array.isArray(json.kemungkinan)) {
           setKemungkinanOptions(
             json.kemungkinan.map((k) => ({
@@ -189,33 +182,26 @@ export default function RiskAssessmentFormModal({
           );
         } else {
           try {
-            const resMp = await fetch("http://localhost:3000/mataprograms?mode=all", {
-              headers: {
-                Accept: "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-            });
-            if (resMp.ok) {
-              const jsonMp = await resMp.json();
-              if (Array.isArray(jsonMp)) {
-                setAllPrograms(
-                  jsonMp.map((p) => {
-                    const thn = p.Tahun ? String(p.Tahun) : "";
-                    const mpName = p.MataProgram || "";
-                    const label = thn ? `[${thn}] ${mpName}` : mpName;
-                    return {
-                      id: p.Id || p.ID,
-                      rawId: p.Id || p.ID,
-                      UUID: p.UUID || p.uuid,
-                      nama: label,
-                      mata_program: mpName,
-                      id_master_tahun: p.TahunId,
-                      tahun: thn,
-                      subText: thn ? `Tahun Anggaran: ${thn}` : undefined,
-                    };
-                  })
-                );
-              }
+            const resMp = await apiClient.get("/mataprograms?mode=all");
+            const jsonMp = resMp.data;
+            if (Array.isArray(jsonMp)) {
+              setAllPrograms(
+                jsonMp.map((p) => {
+                  const thn = p.Tahun ? String(p.Tahun) : "";
+                  const mpName = p.MataProgram || "";
+                  const label = thn ? `[${thn}] ${mpName}` : mpName;
+                  return {
+                    id: p.Id || p.ID,
+                    rawId: p.Id || p.ID,
+                    UUID: p.UUID || p.uuid,
+                    nama: label,
+                    mata_program: mpName,
+                    id_master_tahun: p.TahunId,
+                    tahun: thn,
+                    subText: thn ? `Tahun Anggaran: ${thn}` : undefined,
+                  };
+                })
+              );
             }
           } catch (eMp) {
             console.warn("Fallback fetch /mataprograms failed:", eMp);
@@ -230,19 +216,10 @@ export default function RiskAssessmentFormModal({
   };
 
   const fetchTahunOptions = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return;
-
     setLoadingTahun(true);
     try {
-      const res = await fetch("http://localhost:3000/tahunprokers?mode=all", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      await throwIfResponseNotOk(res, "Gagal memuat master tahun");
-      const json = await res.json();
+      const res = await apiClient.get("/tahunprokers?mode=all");
+      const json = res.data;
       const mapped = (Array.isArray(json) ? json : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
@@ -259,19 +236,10 @@ export default function RiskAssessmentFormModal({
   };
 
   const fetchFakultasOptions = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return;
-
     setLoadingFakultas(true);
     try {
-      const res = await fetch("http://localhost:3000/fakultasunits?mode=all", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      await throwIfResponseNotOk(res, "Gagal memuat fakultas / unit");
-      const json = await res.json();
+      const res = await apiClient.get("/fakultasunits?mode=all");
+      const json = res.data;
       const mapped = (Array.isArray(json) ? json : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
@@ -472,23 +440,10 @@ export default function RiskAssessmentFormModal({
       };
 
       const isEdit = mode === "edit" && data?.UUID;
-      const url = isEdit
-        ? `http://localhost:3000/risk_assessment/${data.UUID}`
-        : "http://localhost:3000/risk_assessment";
-
-      const res = await fetch(url, {
-        method: isEdit ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const resJson = await res.json();
-      if (!res.ok) {
-        throw new Error(resJson?.message || resJson?.Message || resJson?.error || "Gagal menyimpan analisis risiko");
+      if (isEdit) {
+        await apiClient.put(`/risk_assessment/${data.UUID}`, payload);
+      } else {
+        await apiClient.post("/risk_assessment", payload);
       }
 
       addToast("success", isEdit ? "Analisis risiko berhasil diperbarui" : "Analisis risiko berhasil ditambahkan");

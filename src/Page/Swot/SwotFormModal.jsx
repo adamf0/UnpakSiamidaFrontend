@@ -10,6 +10,7 @@ import {
   throwIfResponseNotOk,
   formatFetchError,
 } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import { ShieldCheck, AlertTriangle, TrendingUp, AlertCircle, Building2, Calendar } from "lucide-react";
 
 const KATEGORI_OPTIONS = [
@@ -102,19 +103,10 @@ export default function SwotFormModal({
   })();
 
   const fetchTahunOptions = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return;
-
     setLoadingTahun(true);
     try {
-      const res = await fetch("http://localhost:3000/tahunprokers?mode=all", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      await throwIfResponseNotOk(res, "Gagal memuat master tahun");
-      const json = await res.json();
+      const res = await apiClient.get("/tahunprokers?mode=all");
+      const json = res.data;
       const mapped = (Array.isArray(json) ? json : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
@@ -130,19 +122,10 @@ export default function SwotFormModal({
   };
 
   const fetchFakultasOptions = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return;
-
     setLoadingFakultas(true);
     try {
-      const res = await fetch("http://localhost:3000/fakultasunits?mode=all", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      await throwIfResponseNotOk(res, "Gagal memuat fakultas / unit");
-      const json = await res.json();
+      const res = await apiClient.get("/fakultasunits?mode=all");
+      const json = res.data;
       const mapped = (Array.isArray(json) ? json : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
@@ -273,27 +256,10 @@ export default function SwotFormModal({
         }
       }
 
-      const url =
-        mode === "edit"
-          ? `http://localhost:3000/swot/${data.UUID}`
-          : "http://localhost:3000/swot";
-
-      const res = await fetch(url, {
-        method: mode === "edit" ? "PUT" : "POST",
-        body: fd,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast(
-          "error",
-          json?.message || json?.Message || json?.error || "Gagal menyimpan data SWOT"
-        );
-        return;
+      if (mode === "edit") {
+        await apiClient.put(`/swot/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/swot", fd);
       }
 
       addToast(

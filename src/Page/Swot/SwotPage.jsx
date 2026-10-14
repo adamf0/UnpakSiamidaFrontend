@@ -11,6 +11,7 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
 import Tooltip from "@/Components/Tooltip";
 import { isEmpty, throwIfResponseNotOk } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import {
   Plus,
   Pencil,
@@ -103,28 +104,15 @@ const SwotPage = () => {
 
       try {
         // Fetch Tahun
-        const resTahun = await fetch("http://localhost:3000/tahunprokers?mode=all", {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (resTahun.ok) {
-          const jsonTahun = await resTahun.json();
-          setTahunList(Array.isArray(jsonTahun) ? jsonTahun : []);
-        }
+        const resTahun = await apiClient.get("/tahunprokers?mode=all");
+        const jsonTahun = resTahun.data;
+        setTahunList(Array.isArray(jsonTahun) ? jsonTahun : []);
 
         // Fetch Unit List (All for admin, or finding user's unit name for auditee)
-        const resFu = await fetch("http://localhost:3000/fakultasunits?mode=all", {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (resFu.ok) {
-          const jsonFu = await resFu.json();
-          const list = Array.isArray(jsonFu) ? jsonFu : [];
-          setFakultasList(list);
+        const resFu = await apiClient.get("/fakultasunits?mode=all");
+        const jsonFu = resFu.data;
+        const list = Array.isArray(jsonFu) ? jsonFu : [];
+        setFakultasList(list);
 
           // Cari unit milik user auditee
           if (user?.fakultas_unit) {
@@ -144,7 +132,6 @@ const SwotPage = () => {
               });
             }
           }
-        }
       } catch (err) {
         console.error("Gagal mengambil master data filter:", err);
       }
@@ -195,7 +182,7 @@ const SwotPage = () => {
     }
 
     const qs = params.toString();
-    return `http://localhost:3000/swots${qs ? `?${qs}` : ""}`;
+    return `/swots${qs ? `?${qs}` : ""}`;
   }, [selectedTahun, selectedKategori, selectedFakultas, isAdmin, user?.fakultas_unit]);
 
   const openNew = () => {
@@ -211,30 +198,15 @@ const SwotPage = () => {
   };
 
   const handleDelete = async () => {
-    const token = getValidToken();
-    if (isEmpty(token) || !selectedRow?.UUID) return;
+    if (!selectedRow?.UUID) return;
 
     try {
-      const res = await fetch(`http://localhost:3000/swot/${selectedRow.UUID}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        addToast("success", "Berhasil menghapus analisis SWOT");
-      } else {
-        addToast(
-          "error",
-          data?.message || data?.Message || data?.error || "Gagal menghapus data"
-        );
-      }
+      await apiClient.delete(`/swot/${selectedRow.UUID}`);
+      addToast("success", "Berhasil menghapus analisis SWOT");
     } catch (err) {
       addToast(
         "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
+        err?.message || "Gagal menghapus data"
       );
     } finally {
       setConfirmDelete(false);

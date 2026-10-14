@@ -10,6 +10,7 @@ import { Plus, Pencil, Trash2, BookOpen } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 
 const MataProgramPage = () => {
@@ -34,32 +35,15 @@ const MataProgramPage = () => {
   };
 
   const deleteData = async () => {
-    if (isEmpty(getValidToken()) || !selectedRow?.UUID) return;
+    if (!selectedRow?.UUID) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/mataprogram/${selectedRow.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-      const data = await res.json();
-
-      if (res.ok) {
-        addToast("success", "Berhasil hapus data");
-      } else {
-        addToast(
-          "error",
-          data?.message || data?.Message || "Data tidak ditemukan"
-        );
-      }
+      await apiClient.delete(`/mataprogram/${selectedRow.UUID}`);
+      addToast("success", "Berhasil hapus data");
     } catch (err) {
       addToast(
         "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
+        err?.message || "Layanan tidak dapat dihubungi"
       );
     } finally {
       setConfirmDelete(false);
@@ -96,7 +80,7 @@ const MataProgramPage = () => {
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <RemoteTable
             ref={tableRef}
-            endpoint="http://localhost:3000/mataprograms"
+            endpoint="/mataprograms"
             mode="paging"
             token={getValidToken()}
             onError={(err) => {

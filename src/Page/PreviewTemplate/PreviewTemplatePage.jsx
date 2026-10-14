@@ -8,6 +8,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 const PreviewTemplatePage = ({ type = "renstra" }) => {
   const {getValidToken} = useAuth()
@@ -31,7 +32,7 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
     setTimeout(async () => {
       try {
         const res = await fetch(
-          "http://localhost:3000/fakultasunits?mode=sse",
+          `${API_BASE_URL}/fakultasunits?mode=sse`,
           {
             headers: { 
               Accept: "text/event-stream", 
@@ -96,24 +97,13 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
   };
 
   const fetchPreviewData = async (tahun, fakultasUUID) => {
-    if(isEmpty(getValidToken())) return;
     setTableLoading(true);
     try {
       await delay(3000);
 
-      const res = await fetch(
-        `http://localhost:3000/preview/audit/${type}/${tahun}/${fakultasUUID}`,
-        {
-            headers: { 
-              Accept: "text/event-stream", 
-              Authorization: `Bearer ${getValidToken()}` 
-            },
-          }
+      const json = await apiClient.get(
+        `/preview/audit/${type}/${tahun}/${fakultasUUID}`
       );
-
-      if (!res.ok) throw new Error("Gagal memuat data preview");
-
-      const json = await res.json();
       setTableData(json ?? []);
     } catch (e) {
       console.error(e);

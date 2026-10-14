@@ -5,6 +5,7 @@ import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 
 export default function JenisFileFormModal({
   open,
@@ -32,37 +33,21 @@ export default function JenisFileFormModal({
   }, [mode, data]);
 
   const onSubmit = async (form) => {
-    if(isEmpty(getValidToken())) return;
-
     try {
       const fd = new FormData();
       fd.append("nama", form.nama);
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/jenisfile/${data.UUID}`
-          : "http://localhost:3000/jenisfile",
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`
-          }
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast("error", json.message || "Gagal menyimpan");
-        return;
+      if (mode === "edit") {
+        await apiClient.put(`/jenisfile/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/jenisfile", fd);
       }
 
       addToast("success", "Berhasil disimpan");
       onSuccess?.();
       onClose();
-    } catch {
-      addToast("error", "Server tidak dapat dihubungi");
+    } catch (err) {
+      addToast("error", err?.message || "Server tidak dapat dihubungi");
     }
   };
 

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import { APP_VERSIONS, getVersionConfig } from "@/Common/versionConfig";
 
 const ContentContext = createContext(null);
@@ -40,20 +41,8 @@ export const ContentProvider = ({ children }) => {
 
   const fetchYears = async () => {
     try {
-      const token = await getValidToken();
-      if (isEmpty(token)) return;
-
-      const res = await fetch("http://localhost:3000/tahunrenstras?mode=all", {
-        headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        },
-      });
-
-      if (!res.ok) throw new Error("Gagal mengambil tahun");
-
-      const data = await res.json();
-      setServerYears(data);
+      const res = await apiClient.get("/tahunrenstras?mode=all");
+      setServerYears(res.data || []);
     } catch (err) {
       console.error("Fetch tahunrenstras error:", err);
     }

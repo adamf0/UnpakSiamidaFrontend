@@ -5,6 +5,7 @@ import SearchSelect from "@/Components/SearchSelect";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 const LIST_STATUS_VERIFIKASI = [
   { id: "terverifikasi", UUID: "terverifikasi", nama: "Terverifikasi" },
@@ -69,26 +70,7 @@ export default function PelaporanDokumenVerifikasiModal({
       fd.append("status_verifikasi", statusValue);
       fd.append("catatan", form.catatan ?? "");
 
-      const res = await fetch(
-        `http://localhost:3000/pelaporandokumen/${data.UUID}/verifikasi`,
-        {
-          method: "PUT",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast(
-          "error",
-          json.message || json.Message || "Gagal menyimpan verifikasi"
-        );
-        return;
-      }
+      await apiClient.put(`/pelaporandokumen/${data.UUID}/verifikasi`, fd);
 
       addToast("success", "Berhasil verifikasi pelaporan dokumen");
       onSuccess?.();
@@ -96,7 +78,7 @@ export default function PelaporanDokumenVerifikasiModal({
     } catch (err) {
       addToast(
         "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
+        err?.message || "Layanan tidak dapat dihubungi"
       );
     } finally {
       setSubmitting(false);
@@ -104,7 +86,7 @@ export default function PelaporanDokumenVerifikasiModal({
   };
 
   const fileUrl = data?.File
-    ? `http://localhost:3000/upload/pelaporan_dokumen/${data.File}`
+    ? `${API_BASE_URL}/upload/pelaporan_dokumen/${data.File}`
     : null;
 
   return (

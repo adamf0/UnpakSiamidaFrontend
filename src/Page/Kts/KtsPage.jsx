@@ -13,7 +13,7 @@ import RestrictedCkEditor from "@/Components/RestrictedCkEditor";
 import TextInput from "@/Components/TextInput";
 import Choice from "@/Components/Choice";
 import InfoAuditCard from "@/Components/InfoAuditCard";
-import { ktsApi } from "@/Common/api";
+import { apiClient, API_BASE_URL, ktsApi } from "@/Common/api";
 
 const decodeJWT = (jwt) => {
   if (!jwt || typeof jwt !== "string") return null;
@@ -178,26 +178,12 @@ const KtsPage = () => {
     try {
       const infoPromise = (async () => {
         try {
-          const res = await fetch(
-            `http://localhost:3000/renstra/${uuidaudit}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/json",
-              },
-            },
-          );
-
-          if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-          }
-
-          const json = await res.json();
+          const json = await apiClient.get(`/renstra/${uuidaudit}`);
           setInfo(json);
         } catch (err) {
           errors.push({
-            url: `http://localhost:3000/Kts/${uuidAudit}`,
-            message: err.message || "Gagal memuat info KTS",
+            url: `/renstra/${uuidaudit}`,
+            message: err?.message || "Gagal memuat info KTS",
             time: new Date().toISOString(),
             raw: err,
           });
@@ -207,7 +193,7 @@ const KtsPage = () => {
       const ssePromise = (async () => {
         try {
           const res = await fetch(
-            `http://localhost:3000/Ktss?mode=sse&filters=targetuuid:eq:${target};tahun:eq:${tahun};`,
+            `${API_BASE_URL}/Ktss?mode=sse&filters=targetuuid:eq:${target};tahun:eq:${tahun};`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,

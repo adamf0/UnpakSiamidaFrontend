@@ -6,6 +6,7 @@ import Tooltip from "@/Components/Tooltip";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
+import { apiClient } from "@/Common/api";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import {
   GitMerge,
@@ -69,19 +70,8 @@ export default function UserMergePage() {
   const fetchUsers = useCallback(async () => {
     setLoadingUsers(true);
     try {
-      const token = await getValidToken();
-      const res = await fetch("http://localhost:3000/users?mode=all", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error("Gagal mengambil data pengguna");
-      }
-
-      const data = await res.json();
+      const res = await apiClient.get("/users?mode=all");
+      const data = res.data;
       const userList = Array.isArray(data)
         ? data
         : Array.isArray(data?.data)
@@ -90,7 +80,7 @@ export default function UserMergePage() {
       setAllUsers(userList);
     } catch (err) {
       console.error("Fetch users error:", err);
-      addToast("error", "Gagal memuat daftar user dari server");
+      addToast("error", err?.message || "Gagal memuat daftar user dari server");
     } finally {
       setLoadingUsers(false);
     }
@@ -232,34 +222,17 @@ export default function UserMergePage() {
     if (!confirmUnmerge) return;
 
     try {
-      const token = await getValidToken();
-      const res = await fetch("http://localhost:3000/users/merge", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          primary_id: user.ID,
-          primary_uuid: user.UUID,
-          secondary_ids: [],
-          secondary_uuids: [],
-        }),
+      await apiClient.post("/users/merge", {
+        primary_id: user.ID,
+        primary_uuid: user.UUID,
+        secondary_ids: [],
+        secondary_uuids: [],
       });
-
-      const data = await res.json().catch(() => null);
-      if (res.ok) {
-        addToast("success", `Akun "${user.Name || user.Username}" berhasil di-unmerge.`);
-        fetchUsers();
-      } else {
-        addToast(
-          "error",
-          data?.message || data?.Message || "Gagal membatalkan merge user."
-        );
-      }
+      addToast("success", `Akun "${user.Name || user.Username}" berhasil di-unmerge.`);
+      fetchUsers();
     } catch (err) {
       console.error("Unmerge error:", err);
-      addToast("error", "Server tidak dapat dihubungi saat unmerge.");
+      addToast("error", err?.message || "Server tidak dapat dihubungi saat unmerge.");
     }
   };
 
@@ -290,7 +263,6 @@ export default function UserMergePage() {
 
     setIsSubmitting(true);
     try {
-      const token = await getValidToken();
       const payload = {
         primary_id: primaryUser.ID,
         primary_uuid: primaryUser.UUID,
@@ -298,39 +270,19 @@ export default function UserMergePage() {
         secondary_uuids: secondaryUsers.map((u) => u.UUID),
       };
 
-      const res = await fetch("http://localhost:3000/users/merge", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      await apiClient.post("/users/merge", payload);
 
-      const data = await res.json().catch(() => null);
-
-      if (res.ok) {
-        addToast(
-          "success",
-          `Berhasil menggabungkan ${secondaryUsers.length} akun ke "${primaryUser.Name || primaryUser.Username}".`
-        );
-        // Refresh list user dan reset form
-        setPrimaryUser(null);
-        setSecondaryUsers([]);
-        fetchUsers();
-      } else {
-        addToast(
-          "error",
-          data?.message ||
-            data?.Message ||
-            data?.error ||
-            "Gagal menggabungkan akun user."
-        );
-      }
+      addToast(
+        "success",
+        `Berhasil menggabungkan ${secondaryUsers.length} akun ke "${primaryUser.Name || primaryUser.Username}".`
+      );
+      // Refresh list user dan reset form
+      setPrimaryUser(null);
+      setSecondaryUsers([]);
+      fetchUsers();
     } catch (err) {
       console.error("Submit merge error:", err);
-      addToast("error", "Terjadi kesalahan koneksi ke server.");
+      addToast("error", err?.message || "Terjadi kesalahan koneksi ke server.");
     } finally {
       setIsSubmitting(false);
     }

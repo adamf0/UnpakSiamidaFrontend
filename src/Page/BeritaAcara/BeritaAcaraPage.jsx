@@ -13,6 +13,7 @@ import BeritaAcaraList from "./BeritaAcaraList";
 import { Plus, Filter, ScrollText } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import PageHeader from "@/Components/PageHeader";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 //[pr] belum tambah pengecekan penugasan audit di tahun & unit yg dicari pada list group
 const BeritaAcaraPage = () => {
@@ -38,8 +39,8 @@ const BeritaAcaraPage = () => {
     try {
       const res = await fetch(
         isBeritaAcara
-          ? `http://localhost:3000/beritaacaras?mode=sse&filters=target:eq:${target}`
-          : `http://localhost:3000/fakultasunits?mode=sse`,
+          ? `${API_BASE_URL}/beritaacaras?mode=sse&filters=target:eq:${target}`
+          : `${API_BASE_URL}/fakultasunits?mode=sse`,
         {
           headers: {
             Accept: "text/event-stream",
@@ -111,25 +112,16 @@ const BeritaAcaraPage = () => {
 
   const downloadHandler = async (row) => {
     try {
-      if (isEmpty(getValidToken())) return;
+      try {
+        await apiClient.get(`/beritaacara/publish/${row.UUID}`);
+      } catch (err) {
+        addToast("error", err?.message || "Data tidak ditemukan");
+        return;
+      }
 
-      const responsePublish = await fetch(
-        `http://localhost:3000/beritaacara/publish/${row.UUID}`,
+      const response = await fetch(
+        `${API_BASE_URL}/beritaacara/export/${row.UUID}?ctxtahun=2024`,
         {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        },
-      );
-      const dataPublish = await responsePublish.json();
-
-      if (!responsePublish.ok) {
-        addToast("error", dataPublish?.message || "Data tidak ditemukan");
-      } else{
-        const response = await fetch(
-          `http://localhost:3000/beritaacara/export/${row.UUID}?ctxtahun=2024`,
-          {
             headers: {
               Accept: "application/pdf",
               Authorization: `Bearer ${getValidToken()}`,
@@ -185,7 +177,6 @@ const BeritaAcaraPage = () => {
         a.remove();
 
         window.URL.revokeObjectURL(url);
-      }
     } catch (err) {
       console.error(err);
       alert("Terjadi kesalahan jaringan");
@@ -193,27 +184,19 @@ const BeritaAcaraPage = () => {
   };
 
   const deleteBeritaAcara = async () => {
-    if (isEmpty(getValidToken())) return;
+    if (!selectedRow?.UUID) return;
 
-    const res = await fetch(
-      `http://localhost:3000/beritaacara/${selectedRow.UUID}?ctxtahun=${positionYear}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${getValidToken()}`,
-        },
-      },
-    );
-    const data = await res.json();
-
-    if (res.ok) {
+    try {
+      await apiClient.delete(
+        `/beritaacara/${selectedRow.UUID}?ctxtahun=${positionYear}`
+      );
       addToast("success", "Data berhasil dihapus");
-    } else {
-      addToast("error", data?.message || "Data tidak ditemukan");
+    } catch (err) {
+      addToast("error", err?.message || "Data tidak ditemukan");
+    } finally {
+      fetchData();
+      setConfirmDelete(false);
     }
-    
-    fetchData();
-    setConfirmDelete(false);
   };
 
   const fetchInfoTarget = async () => {
@@ -221,20 +204,12 @@ const BeritaAcaraPage = () => {
       setInfoTarget(null);
       return;
     }
-    if (isEmpty(getValidToken())) return;
 
-    const res = await fetch(`http://localhost:3000/fakultasunit/${target}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${getValidToken()}`,
-      },
-    });
-    const data = await res.json();
-
-    if (res.ok) {
+    try {
+      const data = await apiClient.get(`/fakultasunit/${target}`);
       setInfoTarget(data);
-    } else {
-      addToast("error", data?.message || "Data tidak ditemukan");
+    } catch (err) {
+      addToast("error", err?.message || "Data tidak ditemukan");
     }
   };
 

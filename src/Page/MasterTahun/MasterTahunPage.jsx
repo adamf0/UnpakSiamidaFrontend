@@ -10,6 +10,7 @@ import { Plus, Pencil, Trash2, Calendar } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 
 const MasterTahunPage = () => {
@@ -34,30 +35,13 @@ const MasterTahunPage = () => {
   };
 
   const deleteData = async () => {
-    if (isEmpty(getValidToken()) || !selectedRow?.UUID) return;
+    if (!selectedRow?.UUID) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/tahunproker/${selectedRow.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-      const data = await res.json();
-
-      if (res.ok) {
-        addToast("success", "Berhasil hapus data");
-      } else {
-        addToast("error", data?.message || data?.Message || "Data tidak ditemukan");
-      }
+      await apiClient.delete(`/tahunproker/${selectedRow.UUID}`);
+      addToast("success", "Berhasil hapus data");
     } catch (err) {
-      addToast(
-        "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
-      );
+      addToast("error", err?.message || "Layanan tidak dapat dihubungi");
     } finally {
       setConfirmDelete(false);
       tableRef.current?.reload?.({ resetPage: true });
@@ -108,7 +92,7 @@ const MasterTahunPage = () => {
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
             <RemoteTable
             ref={tableRef}
-            endpoint="http://localhost:3000/tahunprokers"
+            endpoint="/tahunprokers"
             mode="paging"
             token={getValidToken()}
             onError={(err) => {

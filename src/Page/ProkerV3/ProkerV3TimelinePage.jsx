@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
@@ -134,16 +135,8 @@ export default function ProkerV3TimelinePage() {
     if (!actUuid) return;
     setLoading(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/aktivitas/${actUuid}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal memuat detail aktivitas");
-      }
+      const res = await apiClient.get(`/proker_v3/aktivitas/${actUuid}`);
+      const json = res.data;
 
       setAktivitas(json.aktivitas || null);
       setProker(json.proker || null);
@@ -294,22 +287,10 @@ export default function ProkerV3TimelinePage() {
         status: realisasiForm.status || "Belum Terlaksana",
       };
 
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/timeline/${selectedTimelineForRealisasi.UUID}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
+      const res = await apiClient.put(
+        `/proker_v3/timeline/${selectedTimelineForRealisasi.UUID}`,
+        payload
       );
-
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal memperbarui perkembangan realisasi");
-      }
 
       addToast("success", `Perkembangan realisasi "${selectedTimelineForRealisasi.NamaAktivitas}" berhasil disimpan`);
       setRealisasiModalOpen(false);
@@ -361,20 +342,12 @@ export default function ProkerV3TimelinePage() {
 
     // Persist new order to backend
     try {
-      const token = getValidToken();
       const payload = reordered.map((item) => ({
         uuid: item.UUID,
         no_aktivitas: item.NoAktivitas,
       }));
 
-      await fetch(`http://localhost:3000/proker_v3/aktivitas/${actUuid}/timeline/reorder`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      await apiClient.put(`/proker_v3/aktivitas/${actUuid}/timeline/reorder`, payload);
 
       addToast("success", "Urutan nomor urut tahapan timeline berhasil diperbarui.");
     } catch (err) {
@@ -446,23 +419,14 @@ export default function ProkerV3TimelinePage() {
       };
 
       const url = editingTimelineUuid
-        ? `http://localhost:3000/proker_v3/timeline/${editingTimelineUuid}`
-        : `http://localhost:3000/proker_v3/aktivitas/${actUuid}/timeline`;
-      const method = editingTimelineUuid ? "PUT" : "POST";
+        ? `/proker_v3/timeline/${editingTimelineUuid}`
+        : `/proker_v3/aktivitas/${actUuid}/timeline`;
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      const res = editingTimelineUuid
+        ? await apiClient.put(url, payload)
+        : await apiClient.post(url, payload);
 
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menyimpan timeline aktivitas");
-      }
+      const json = res.data;
 
       addToast(
         "success",
@@ -484,20 +448,10 @@ export default function ProkerV3TimelinePage() {
     if (!timelineToDelete?.UUID) return;
     setDeletingTimeline(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/timeline/${timelineToDelete.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const res = await apiClient.delete(
+        `/proker_v3/timeline/${timelineToDelete.UUID}`
       );
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menghapus timeline");
-      }
+      const json = res.data;
 
       addToast("success", "Tahapan timeline berhasil dihapus");
       setDeleteTimelineDialog(false);
@@ -707,7 +661,7 @@ export default function ProkerV3TimelinePage() {
             resolve({ aborted: true });
           };
 
-          xhr.open("POST", `http://localhost:3000/proker_v3/timeline/${timelineUuid}/chunk`);
+          xhr.open("POST", `${API_BASE_URL}/proker_v3/timeline/${timelineUuid}/chunk`);
           xhr.setRequestHeader("Authorization", `Bearer ${token}`);
           xhr.send(formData);
         });
@@ -847,15 +801,8 @@ export default function ProkerV3TimelinePage() {
     delete uploadControlsRef.current[item.id];
 
     try {
-      const token = getValidToken();
-      await fetch(
-        `http://localhost:3000/proker_v3/timeline/${timelineUuid}/chunk/${item.uploadId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      await apiClient.delete(
+        `/proker_v3/timeline/${timelineUuid}/chunk/${item.uploadId}`
       );
     } catch (err) {
       console.error("Gagal menghapus temporary chunk:", err);
@@ -868,17 +815,8 @@ export default function ProkerV3TimelinePage() {
     if (!fileToDelete?.UUID) return;
     setDeletingFile(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/file/${fileToDelete.UUID}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menghapus berkas");
-      }
+      const res = await apiClient.delete(`/proker_v3/file/${fileToDelete.UUID}`);
+      const json = res.data;
 
       addToast("success", "Berkas bukti berhasil dihapus");
       setDeleteFileDialog(false);
@@ -1670,7 +1608,7 @@ export default function ProkerV3TimelinePage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                           {files.map((file) => {
                             const fileUrl = file.FileURL
-                              ? `http://localhost:3000${file.FileURL.startsWith("/") ? "" : "/"}${file.FileURL}`
+                              ? `${API_BASE_URL}${file.FileURL.startsWith("/") ? "" : "/"}${file.FileURL}`
                               : null;
 
                             return (

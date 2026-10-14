@@ -3,7 +3,7 @@ import { Fragment, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
-import { useAuth } from "@/Providers/AuthProvider";
+import { apiClient } from "@/Common/api";
 
 export default function StandarRenstraFormModal({
   open,
@@ -13,7 +13,6 @@ export default function StandarRenstraFormModal({
   onSuccess,
 }) {
   const { addToast } = useToast();
-  const {getValidToken} = useAuth()
 
   const {
     register,
@@ -35,31 +34,17 @@ export default function StandarRenstraFormModal({
       const fd = new FormData();
       fd.append("nama", form.nama);
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/standarrenstra/${data.UUID}`
-          : "http://localhost:3000/standarrenstra",
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`
-          }
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast("error", json.message || "Gagal menyimpan");
-        return;
+      if (mode === "edit") {
+        await apiClient.put(`/standarrenstra/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/standarrenstra", fd);
       }
 
       addToast("success", "Berhasil disimpan");
       onSuccess?.();
       onClose();
-    } catch {
-      addToast("error", "Server tidak dapat dihubungi");
+    } catch (err) {
+      addToast("error", err?.message || "Server tidak dapat dihubungi");
     }
   };
 

@@ -11,6 +11,7 @@ import { Plus, Users, Pencil, Trash2, GitMerge } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 
 const LEVEL_BADGES = {
@@ -53,33 +54,14 @@ export default function AccountUserPage() {
   };
 
   const deleteData = async () => {
-    const token = await getValidToken();
-    if (isEmpty(token) || !selectedRow?.UUID) return;
+    if (!selectedRow?.UUID) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/user/${selectedRow.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
-      const data = await res.json().catch(() => null);
-
-      if (res.ok) {
-        addToast("success", "Akun user berhasil dihapus");
-      } else {
-        addToast(
-          "error",
-          data?.Message || data?.message || data?.error || "Gagal menghapus user"
-        );
-      }
+      await apiClient.delete(`/user/${selectedRow.UUID}`);
+      addToast("success", "Akun user berhasil dihapus");
     } catch (err) {
       console.error("Delete user error:", err);
-      addToast("error", "Server tidak dapat dihubungi");
+      addToast("error", err?.message || "Server tidak dapat dihubungi");
     } finally {
       setConfirmDelete(false);
       tableRef.current?.reload?.({ resetPage: true });
@@ -116,7 +98,7 @@ export default function AccountUserPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
             <RemoteTable
               ref={tableRef}
-              endpoint="http://localhost:3000/users"
+              endpoint="/users"
               mode="paging"
               token={getValidToken()}
               onError={(err) => {

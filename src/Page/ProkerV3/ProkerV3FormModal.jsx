@@ -2,6 +2,7 @@ import React, { Fragment, useEffect, useState, useMemo } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
+import { apiClient } from "@/Common/api";
 import SearchSelect from "@/Components/SearchSelect";
 import {
   X,
@@ -204,13 +205,9 @@ export default function ProkerV3FormModal({
         params.append("id_fakultas_unit", String(currentUnitId));
       }
 
-      const res = await fetch(`http://localhost:3000/proker_v3/target_unpak?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (res.ok) {
+      const res = await apiClient.get(`/proker_v3/target_unpak?${params.toString()}`);
+      const data = res.data;
+      if (data) {
         const val =
           data.target_unpak && data.target_unpak !== "-"
             ? data.target_unpak
@@ -321,25 +318,13 @@ export default function ProkerV3FormModal({
         pic: pic.trim(),
       };
 
-      const url =
-        mode === "edit"
-          ? `http://localhost:3000/proker_v3/${initialData.UUID}`
-          : "http://localhost:3000/proker_v3";
-      const method = mode === "edit" ? "PUT" : "POST";
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.message || data?.error || "Gagal menyimpan program kerja");
+      let res;
+      if (mode === "edit") {
+        res = await apiClient.put(`/proker_v3/${initialData.UUID}`, payload);
+      } else {
+        res = await apiClient.post("/proker_v3", payload);
       }
+      const data = res.data;
 
       addToast(
         "success",

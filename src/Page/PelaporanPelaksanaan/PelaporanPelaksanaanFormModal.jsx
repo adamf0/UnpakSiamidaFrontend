@@ -12,6 +12,7 @@ import {
   formatFetchError,
   formatTanggalIndo,
 } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 
 const STATUS_REALISASI_OPTIONS = [
   { id: "terlaksana", nama: "Terlaksana" },
@@ -63,22 +64,11 @@ export default function PelaporanPelaksanaanFormModal({
   });
 
   const fetchOptions = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return;
-
     setLoadingMp(true);
     setErrorMp(null);
     try {
-      const resMp = await fetch("http://localhost:3000/mataprograms?mode=all", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      await throwIfResponseNotOk(resMp, "Gagal memuat mata program");
-
-      const jsonMp = await resMp.json();
+      const resMp = await apiClient.get("/mataprograms?mode=all");
+      const jsonMp = resMp.data;
       const mappedMp = (Array.isArray(jsonMp) ? jsonMp : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
@@ -210,27 +200,10 @@ export default function PelaporanPelaksanaanFormModal({
       fd.append("tanggal_r_akhir", form.target_r_akhir ?? "");
       fd.append("detail", form.detail ?? "");
 
-      const res = await fetch(
-        isEdit
-          ? `http://localhost:3000/pelaporanpelaksanaan/${data.UUID}`
-          : "http://localhost:3000/pelaporanpelaksanaan",
-        {
-          method: isEdit ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast(
-          "error",
-          json.message || json.Message || "Gagal menyimpan data"
-        );
-        return;
+      if (isEdit) {
+        await apiClient.put(`/pelaporanpelaksanaan/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/pelaporanpelaksanaan", fd);
       }
 
       addToast(

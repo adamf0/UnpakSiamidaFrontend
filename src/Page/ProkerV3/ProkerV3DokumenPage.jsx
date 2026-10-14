@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation, useSearchParams } from "react-rout
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
@@ -120,22 +121,11 @@ export default function ProkerV3DokumenPage() {
     if (!doc?.UUID) return;
     setUpdatingVerifikasi(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/dokumen/${doc.UUID}/verifikasi`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status_verifikasi: "terverifikasi",
-          catatan: "",
-        }),
+      const res = await apiClient.put(`/proker_v3/dokumen/${doc.UUID}/verifikasi`, {
+        status_verifikasi: "terverifikasi",
+        catatan: "",
       });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal memverifikasi dokumen");
-      }
+      const json = res.data;
       addToast("success", `Dokumen "${doc.NamaFile}" berhasil diverifikasi`);
       fetchData();
     } catch (err) {
@@ -164,23 +154,11 @@ export default function ProkerV3DokumenPage() {
     if (!docToTolak?.UUID) return;
     setUpdatingVerifikasi(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/dokumen/${docToTolak.UUID}/verifikasi`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status_verifikasi: "ditolak",
-          catatan_penolakan: catatanTolak.trim(),
-          catatan: catatanTolak.trim(),
-        }),
+      await apiClient.put(`/proker_v3/dokumen/${docToTolak.UUID}/verifikasi`, {
+        status_verifikasi: "ditolak",
+        catatan_penolakan: catatanTolak.trim(),
+        catatan: catatanTolak.trim(),
       });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal menolak dokumen");
-      }
       addToast("warning", `Dokumen "${docToTolak.NamaFile}" ditolak`);
       setTolakModalOpen(false);
       setDocToTolak(null);
@@ -198,19 +176,8 @@ export default function ProkerV3DokumenPage() {
     if (!prokerUuid) return;
     setLoading(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/${prokerUuid}/dokumen`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.message || json?.error || "Gagal memuat dokumen proker");
-      }
+      const res = await apiClient.get(`/proker_v3/${prokerUuid}/dokumen`);
+      const json = res.data;
       setProker(json.proker || null);
       setDocuments(json.data || []);
       const actList = json.activities || [];
@@ -427,7 +394,7 @@ export default function ProkerV3DokumenPage() {
             resolve({ aborted: true });
           };
 
-          xhr.open("POST", `http://localhost:3000/proker_v3/${prokerUuid}/dokumen/chunk`);
+          xhr.open("POST", `${API_BASE_URL}/proker_v3/${prokerUuid}/dokumen/chunk`);
           xhr.setRequestHeader("Authorization", `Bearer ${token}`);
           xhr.send(formData);
         });
@@ -541,13 +508,8 @@ export default function ProkerV3DokumenPage() {
     // Bersihkan file part temporary di backend
     if (item.uploadId && prokerUuid) {
       try {
-        const token = getValidToken();
-        await fetch(
-          `http://localhost:3000/proker_v3/${prokerUuid}/dokumen/chunk/${item.uploadId}`,
-          {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
-          }
+        await apiClient.delete(
+          `/proker_v3/${prokerUuid}/dokumen/chunk/${item.uploadId}`
         );
       } catch {}
     }
@@ -690,20 +652,7 @@ export default function ProkerV3DokumenPage() {
     if (!docToDelete?.UUID) return;
     setDeleting(true);
     try {
-      const token = getValidToken();
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/dokumen/${docToDelete.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.message || data?.error || "Gagal menghapus dokumen");
-      }
+      await apiClient.delete(`/proker_v3/dokumen/${docToDelete.UUID}`);
       addToast("success", "Dokumen berhasil dihapus dari sistem.");
       setDocuments((prev) => prev.filter((d) => d.UUID !== docToDelete.UUID));
     } catch (err) {
@@ -1448,7 +1397,7 @@ export default function ProkerV3DokumenPage() {
                   };
 
                 const fileUrl = doc.FileURL
-                  ? `http://localhost:3000${doc.FileURL.startsWith("/") ? "" : "/"}${doc.FileURL}`
+                  ? `${API_BASE_URL}${doc.FileURL.startsWith("/") ? "" : "/"}${doc.FileURL}`
                   : null;
 
                 return (

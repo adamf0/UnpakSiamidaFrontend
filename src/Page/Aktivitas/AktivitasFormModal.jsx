@@ -11,6 +11,7 @@ import {
   throwIfResponseNotOk,
   formatFetchError,
 } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 
 const toDateInput = (val) => {
   if (!val) return "";
@@ -49,22 +50,11 @@ export default function AktivitasFormModal({
   });
 
   const fetchOptions = async () => {
-    const token = getValidToken();
-    if (isEmpty(token)) return;
-
     setLoadingMp(true);
     setErrorMp(null);
     try {
-      const resMp = await fetch("http://localhost:3000/mataprograms?mode=all", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      await throwIfResponseNotOk(resMp, "Gagal memuat mata program");
-
-      const jsonMp = await resMp.json();
+      const resMp = await apiClient.get("/mataprograms?mode=all");
+      const jsonMp = resMp.data;
       const mappedMp = (Array.isArray(jsonMp) ? jsonMp : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
@@ -165,27 +155,10 @@ export default function AktivitasFormModal({
       fd.append("tanggal_rk_akhir", form.tanggal_rk_akhir ?? "");
       fd.append("target_rk_akhir", form.tanggal_rk_akhir ?? "");
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/aktivitasproker/${data.UUID}`
-          : "http://localhost:3000/aktivitasproker",
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast(
-          "error",
-          json.message || json.Message || "Gagal menyimpan data"
-        );
-        return;
+      if (mode === "edit") {
+        await apiClient.put(`/aktivitasproker/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/aktivitasproker", fd);
       }
 
       addToast(
@@ -197,7 +170,7 @@ export default function AktivitasFormModal({
     } catch (err) {
       addToast(
         "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
+        err?.message || "Layanan tidak dapat dihubungi"
       );
     } finally {
       setSubmitting(false);

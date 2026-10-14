@@ -51,7 +51,7 @@ const AuditPage = () => {
             tahun>0 && 
             <RemoteTable
               ref={tableRef}
-              endpoint={`http://localhost:3000/renstra/audit/${tahun}`}
+              endpoint={`/renstra/audit/${tahun}`}
               mode="paging"
               token={getValidToken()}
               adapter={AuditAdapter}

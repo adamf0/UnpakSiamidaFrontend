@@ -9,6 +9,7 @@ import {
   throwIfResponseNotOk,
   formatFetchError,
 } from "@/Common/Utils";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 const LIST_JENIS_DOKUMEN = [
   { id: "SK", UUID: "SK", nama: "SK (Wajib)" },
@@ -51,22 +52,12 @@ export default function PelaporanDokumenFormModal({
 
   const fetchOptions = async () => {
     const token = getValidToken();
-    if (isEmpty(token)) return;
-
     setLoadingMp(true);
     setErrorMp(null);
 
     try {
-      const resMp = await fetch("http://localhost:3000/mataprograms?mode=all", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      await throwIfResponseNotOk(resMp, "Gagal memuat mata program");
-
-      const jsonMp = await resMp.json();
+      const resMp = await apiClient.get("/mataprograms?mode=all");
+      const jsonMp = resMp.data;
       const mappedMp = (Array.isArray(jsonMp) ? jsonMp : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
@@ -189,27 +180,10 @@ export default function PelaporanDokumenFormModal({
         fd.append("file", selectedFile);
       }
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/pelaporandokumen/${data.UUID}`
-          : "http://localhost:3000/pelaporandokumen",
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast(
-          "error",
-          json.message || json.Message || "Gagal menyimpan data"
-        );
-        return;
+      if (mode === "edit") {
+        await apiClient.put(`/pelaporandokumen/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/pelaporandokumen", fd);
       }
 
       addToast(
@@ -318,7 +292,7 @@ export default function PelaporanDokumenFormModal({
                     <p className="text-xs text-gray-500">
                       File saat ini:{" "}
                       <a
-                        href={`http://localhost:3000/upload/pelaporan_dokumen/${data.File}`}
+                        href={`${API_BASE_URL}/upload/pelaporan_dokumen/${data.File}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-purple-600 underline font-medium"

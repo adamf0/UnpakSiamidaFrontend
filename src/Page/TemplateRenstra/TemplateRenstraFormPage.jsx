@@ -29,6 +29,7 @@ import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 
 export const buildRowLabel = (gd, target) =>
   `${(gd?.Type || "").toUpperCase()} - ${(gd?.Jenjang || "").toUpperCase()} - ${(target?.Nama || "").toUpperCase()}`;
@@ -140,7 +141,7 @@ const TemplateRenstraFormPage = () => {
 
     try {
       const res = await fetch(
-        `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${tahun}`,
+        `${API_BASE_URL}/indikatorrenstras?mode=sse&filters=tahun:eq:${tahun}`,
         {
           headers: {
             Accept: "text/event-stream",
@@ -197,7 +198,7 @@ const TemplateRenstraFormPage = () => {
     setErr("fakultas", null);
 
     try {
-      const res = await fetch("http://localhost:3000/fakultasunits?mode=sse", {
+      const res = await fetch(`${API_BASE_URL}/fakultasunits?mode=sse`, {
         headers: {
           Accept: "text/event-stream",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -270,20 +271,9 @@ const TemplateRenstraFormPage = () => {
     setErr("template", null);
 
     try {
-      const res = await fetch(
-        `http://localhost:3000/templaterenstras?mode=all&filters=indikatorrenstrauuid:eq:${indikatorUuid}`,
-        {
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }
+      const data = await apiClient.get(
+        `/templaterenstras?mode=all&filters=indikatorrenstrauuid:eq:${indikatorUuid}`
       );
-      const data = await res.json();
-      if (!res.ok) {
-        setErr("template", data.message || "Gagal memuat data");
-        return;
-      }
-
       const list = Array.isArray(data) ? data : (data?.data || []);
 
       if (list.length > 0 && !watch("indikator_renstra")) {
@@ -553,37 +543,27 @@ const TemplateRenstraFormPage = () => {
 
           await delay(100);
 
-          const res = await fetch("http://localhost:3000/templaterenstra", {
-            method: "POST",
-            body: fd,
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
+          try {
+            await apiClient.post("/templaterenstra", fd);
 
-          const json = await res.json();
-
-          if (!res.ok) {
+            setValue(`rows.${key}.status`, "success");
+            successCount++;
+            if (successCount >= payloads.length) {
+              addToast("success", "Data berhasil disimpan");
+              if (mode === "add") {
+                navigate(`/template_renstra`);
+              }
+            }
+          } catch (err) {
             setValue(`rows.${key}.status`, "error");
 
-            if (isValidationError(json.code)) {
-              const msg = normalizeValidationMessage(json.message);
+            if (isValidationError(err?.code)) {
+              const msg = normalizeValidationMessage(err?.message);
               setValue(`rows.${key}.errormessage`, msg);
               addToast("error", msg);
             } else {
-              setValue(`rows.${key}.errormessage`, json.message || "Gagal");
-              addToast("error", json.message || "Gagal");
-            }
-
-            return;
-          }
-
-          setValue(`rows.${key}.status`, "success");
-          successCount++;
-          if (successCount >= payloads.length) {
-            addToast("success", "Data berhasil disimpan");
-            if (mode === "add") {
-              navigate(`/template_renstra`);
+              setValue(`rows.${key}.errormessage`, err?.message || "Gagal");
+              addToast("error", err?.message || "Gagal");
             }
           }
         } catch (err) {

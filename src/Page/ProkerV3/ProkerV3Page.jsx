@@ -8,6 +8,7 @@ import SearchSelect from "@/Components/SearchSelect";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { useAuth } from "@/Providers/AuthProvider";
+import { apiClient, API_BASE_URL } from "@/Common/api";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
@@ -88,34 +89,27 @@ export default function ProkerV3Page() {
   const fetchOptions = async () => {
     setLoadingOptions(true);
     try {
-      const token = getValidToken();
-      const res = await fetch("http://localhost:3000/proker_v3_options", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const units = (data.units || []).map((u) => ({
-          ...u,
-          label: u.nama,
-          name: u.nama,
-        }));
-        setUnitOptions(units);
+      const res = await apiClient.get("/proker_v3_options");
+      const data = res.data;
+      const units = (data.units || []).map((u) => ({
+        ...u,
+        label: u.nama,
+        name: u.nama,
+      }));
+      setUnitOptions(units);
 
-        const tahuns = [
-          { id: "all", tahun: "all", label: "Semua Tahun", name: "Semua Tahun" },
-          ...(data.tahuns || []).map((t) => ({
-            ...t,
-            label: String(t.tahun),
-            name: String(t.tahun),
-          })),
-        ];
-        setTahunOptions(tahuns);
+      const tahuns = [
+        { id: "all", tahun: "all", label: "Semua Tahun", name: "Semua Tahun" },
+        ...(data.tahuns || []).map((t) => ({
+          ...t,
+          label: String(t.tahun),
+          name: String(t.tahun),
+        })),
+      ];
+      setTahunOptions(tahuns);
 
-        setStandarOptions(data.standars || []);
-        setIndikatorOptions(data.indikators || []);
-      }
+      setStandarOptions(data.standars || []);
+      setIndikatorOptions(data.indikators || []);
     } catch (e) {
       console.error("Failed to load options", e);
     } finally {
@@ -147,7 +141,7 @@ export default function ProkerV3Page() {
     }
 
     const qs = params.toString();
-    return `http://localhost:3000/proker_v3s${qs ? `?${qs}` : ""}`;
+    return `/proker_v3s${qs ? `?${qs}` : ""}`;
   }, [selectedTahun, selectedUnit, isAdmin, user]);
 
   const openCreate = () => {
@@ -179,19 +173,7 @@ export default function ProkerV3Page() {
   // Update Status Proker Handler (Button / Action in table)
   const handleUpdateStatus = async (row, nextStatus) => {
     try {
-      const token = getValidToken();
-      const res = await fetch(`http://localhost:3000/proker_v3/${row.UUID}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.message || data?.error || "Gagal mengubah status");
-      }
+      await apiClient.put(`/proker_v3/${row.UUID}/status`, { status: nextStatus });
       addToast(
         "success",
         `Status program kerja berhasil diubah menjadi: ${nextStatus.toUpperCase()}`
@@ -205,20 +187,7 @@ export default function ProkerV3Page() {
   const deleteData = async () => {
     if (!selectedRow?.UUID) return;
     try {
-      const token = getValidToken();
-      const res = await fetch(
-        `http://localhost:3000/proker_v3/${selectedRow.UUID}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.message || data?.error || "Gagal menghapus data");
-      }
+      await apiClient.delete(`/proker_v3/${selectedRow.UUID}`);
       addToast("success", "Program kerja berhasil dihapus");
     } catch (err) {
       addToast("error", err?.message || "Layanan tidak dapat dihubungi");

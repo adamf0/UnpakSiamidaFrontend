@@ -10,6 +10,7 @@ import {
   throwIfResponseNotOk,
   formatFetchError,
 } from "@/Common/Utils";
+import { apiClient } from "@/Common/api";
 
 export default function MataProgramFormModal({
   open,
@@ -40,21 +41,11 @@ export default function MataProgramFormModal({
   });
 
   const fetchTahunOptions = async () => {
-    if (isEmpty(getValidToken())) return;
-
     setLoadingTahun(true);
     setErrorTahun(null);
     try {
-      const res = await fetch("http://localhost:3000/tahunprokers?mode=all", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${getValidToken()}`,
-        },
-      });
-
-      await throwIfResponseNotOk(res, "Gagal memuat master tahun");
-
-      const json = await res.json();
+      const res = await apiClient.get("/tahunprokers?mode=all");
+      const json = res.data;
       const mapped = (Array.isArray(json) ? json : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
@@ -98,35 +89,16 @@ export default function MataProgramFormModal({
   }, [mode, data, open, tahunOptions, reset]);
 
   const onSubmit = async (form) => {
-    if (isEmpty(getValidToken())) return;
-
     setSubmitting(true);
     try {
       const fd = new FormData();
       fd.append("tahun", form.tahun?.UUID ?? form.tahun?.id ?? "");
       fd.append("mataprogram", form.mataprogram ?? "");
 
-      const res = await fetch(
-        mode === "edit"
-          ? `http://localhost:3000/mataprogram/${data.UUID}`
-          : "http://localhost:3000/mataprogram",
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: fd,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        addToast(
-          "error",
-          json.message || json.Message || "Gagal menyimpan data"
-        );
-        return;
+      if (mode === "edit") {
+        await apiClient.put(`/mataprogram/${data.UUID}`, fd);
+      } else {
+        await apiClient.post("/mataprogram", fd);
       }
 
       addToast(
@@ -138,7 +110,7 @@ export default function MataProgramFormModal({
     } catch (err) {
       addToast(
         "error",
-        `Layanan tidak dapat dihubungi (${err?.message || "Network Error"})`
+        err?.message || "Layanan tidak dapat dihubungi"
       );
     } finally {
       setSubmitting(false);
