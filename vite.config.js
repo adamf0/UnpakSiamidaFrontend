@@ -17,10 +17,5 @@ export default defineConfig({
       "@src": path.resolve(__dirname, "src"),
       "@": path.resolve(__dirname, "src"),
     },
-    define: {
-      "process.env.VITE_API_BASE_URL": JSON.stringify(
-        process.env.VITE_API_BASE_URL || "/api/v2"
-      ),
-    },
   }
 })

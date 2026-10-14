@@ -107,7 +107,16 @@ const RemoteTable = forwardRef(function RemoteTable(
 
     let url;
     try {
-      const parsedUrl = new URL(endpoint, API_BASE_URL || window.location.origin);
+      const isAbsolute = /^https?:\/\//i.test(endpoint);
+      let parsedUrl;
+      if (isAbsolute) {
+        parsedUrl = new URL(endpoint);
+      } else {
+        const base = (API_BASE_URL || window.location.origin).replace(/\/+$/, "");
+        const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+        parsedUrl = new URL(`${base}${cleanEndpoint}`);
+      }
+
       const existingFilters = parsedUrl.searchParams.get("filters");
       const combinedFilters = [existingFilters, filterQuery].filter(Boolean).join(";");
 
@@ -127,9 +136,14 @@ const RemoteTable = forwardRef(function RemoteTable(
       }
       url = parsedUrl.toString();
     } catch {
-      const separator = endpoint.includes("?") ? "&" : "?";
+      const isAbsolute = /^https?:\/\//i.test(endpoint);
+      const base = (API_BASE_URL || window.location.origin).replace(/\/+$/, "");
+      const fullEndpoint = isAbsolute
+        ? endpoint
+        : `${base}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+      const separator = fullEndpoint.includes("?") ? "&" : "?";
       url =
-        `${endpoint}${separator}mode=${mode}` +
+        `${fullEndpoint}${separator}mode=${mode}` +
         `&page=${page}&limit=${limit}` +
         `&search=${encodeURIComponent(search)}` +
         (filterQuery ? `&filters=${encodeURIComponent(filterQuery)}` : "");
