@@ -4,9 +4,10 @@ import RemoteTable from "@/Components/RemoteTable";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import React, { useState } from "react";
-import { Plus, Eye } from "lucide-react";
+import { Plus, Eye, Pencil, Trash2, LayoutTemplate } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useNavigate } from "react-router-dom";
+import PageHeader from "@/Components/PageHeader";
 
 const TemplateRenstraPage = () => {
   const navigate = useNavigate();
@@ -85,12 +86,14 @@ const TemplateRenstraPage = () => {
           />
         )}
       />
-      <div className="p-3 bg-white">
-        <h2 className="text-lg font-semibold mb-4">
-          Template Renstra
-        </h2>
+      <div className="p-4 sm:p-6 bg-gray-50 min-h-screen space-y-4">
+        <PageHeader
+          icon={LayoutTemplate}
+          title="Template Renstra"
+          subtitle="Kelola matriks instrumen dan kriteria target capaian Renstra"
+        />
 
-        <div className="border rounded mt-3">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <RemoteTable
             endpoint="http://localhost:3000/templaterenstras"
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
@@ -214,30 +217,34 @@ const TemplateRenstraPage = () => {
               },
             ]}
             renderAction={({ row, close }) => (
-              <>
+              <div className="flex flex-col gap-0.5">
                 <button
-                  className="block w-full px-3 py-2 text-sm hover:bg-gray-100"
+                  type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition-all cursor-pointer text-left group"
                   onClick={() => {
-                    console.log("edit", row);
                     navigate(
                       `/template_renstra/${row.Tahun}/${row.IndikatorRenstraUuid}`
                     );
                     close();
                   }}
                 >
-                  Edit
+                  <Pencil className="w-4 h-4 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span>Edit</span>
                 </button>
 
+                <div className="my-1 border-t border-gray-150" />
+
                 <button
-                  className="block w-full px-3 py-2 text-sm text-red-600 hover:bg-gray-100"
+                  type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition-all cursor-pointer text-left group"
                   onClick={() => {
-                    console.log("hapus", row);
                     close();
                   }}
                 >
-                  Hapus
+                  <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span>Hapus</span>
                 </button>
-              </>
+              </div>
             )}
           />
         </div>

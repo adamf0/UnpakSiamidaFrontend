@@ -1,9 +1,8 @@
-import { delay, isEmpty } from "@/Common/Utils";
+import { delay, formatFetchError, isEmpty, throwIfResponseNotOk } from "@/Common/Utils";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import Navbar from "@/Components/Navbar";
 import RemoteTable from "@/Components/RemoteTable";
 import SearchSelect from "@/Components/SearchSelect";
-import Shimmer from "@/Components/Shimmer";
 import TextInput from "@/Components/TextInput";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
@@ -13,7 +12,7 @@ import { Link } from "react-router-dom";
 const PreviewTemplatePage = ({ type = "renstra" }) => {
   const {getValidToken} = useAuth()
   const [loading, setLoading] = useState(false);
-  const [_, setErr] = useState(null);
+  const [err, setErr] = useState(null);
 
   const [tahun, setTahun] = useState(null);
   const [fakultasUnit, setFakultasUnit] = useState(null);
@@ -40,7 +39,8 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
             },
           }
         );
-        if (!res.body) throw new Error("SSE not supported");
+        await throwIfResponseNotOk(res, "Gagal memuat target fakultas/unit");
+        if (!res.body) throw new Error("[BE Golang] SSE stream tidak didukung oleh response server");
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
@@ -88,7 +88,7 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
         setFakultasUnitsOptions(result);
       } catch (err) {
         console.error(err);
-        setErr(e.message || "Gagal memuat fakultas");
+        setErr(formatFetchError(err, "Gagal memuat target fakultas/unit"));
       } finally {
         setLoading(false);
       }
@@ -195,20 +195,16 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
               }}
             />
 
-            {loading ? (
-              <>
-                <label className="block text-sm font-medium mb-1">Target</label>
-                <Shimmer rows={1} />
-              </>
-            ) : (
-              <SearchSelect
-                label="Target"
-                options={fakultasUnitsOptions}
-                placeholder="Pilih target"
-                value={fakultasUnit}
-                onChange={(item) => setFakultasUnit(item)}
-              />
-            )}
+            <SearchSelect
+              label="Target"
+              options={fakultasUnitsOptions}
+              placeholder="Pilih target"
+              value={fakultasUnit}
+              loading={loading}
+              loadError={err}
+              onRetry={fetchFakultasUnit}
+              onChange={(item) => setFakultasUnit(item)}
+            />
             <button
               className="p-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-300
                         text-sm text-white rounded flex items-center justify-center gap-2"
@@ -264,7 +260,6 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
                 searchable: false,
               },
             ]}
-            renderAction={({ row, close }) => {}}
           />
         </div>
       </div>

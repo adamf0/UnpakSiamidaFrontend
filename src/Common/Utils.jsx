@@ -175,11 +175,18 @@ export const STATUS_LEGEND = {
   },
 };
 
-export function getBackground({ r0, r1, r2, r3 }) {
-  if (r1 > 0) return STATUS_LEGEND.verifikasi.color;
-  if (r2 > 0) return STATUS_LEGEND.sukses.color;
+export function getBackground({ r0 = 0, r1 = 0, r2 = 0, r3 = 0 } = {}) {
+  if (r1 > 0 || r0 > 0) return STATUS_LEGEND.verifikasi.color;
   if (r3 > 0) return STATUS_LEGEND.gagal.color;
+  if (r2 > 0) return STATUS_LEGEND.sukses.color;
   return STATUS_LEGEND.kosong.color;
+}
+
+export function getStatusText({ r0 = 0, r1 = 0, r2 = 0, r3 = 0 } = {}) {
+  if (r1 > 0 || r0 > 0) return STATUS_LEGEND.verifikasi.label;
+  if (r3 > 0) return STATUS_LEGEND.gagal.label;
+  if (r2 > 0) return STATUS_LEGEND.sukses.label;
+  return STATUS_LEGEND.kosong.label;
 }
 
 export function renderLabelFakultasUnit(row) {
@@ -194,3 +201,53 @@ export function renderLabelFakultasUnit(row) {
 
   return label;
 }
+
+export async function throwIfResponseNotOk(
+  res,
+  fallbackMsg = "Gagal memuat data"
+) {
+  if (res.ok) return;
+  let detail = `HTTP ${res.status}`;
+  try {
+    const text = await res.text();
+    if (text) {
+      try {
+        const json = JSON.parse(text);
+        detail =
+          json?.message ||
+          json?.Message ||
+          json?.error ||
+          json?.Error ||
+          detail;
+      } catch {
+        detail = text.slice(0, 120);
+      }
+    }
+  } catch {
+    // ignore body read error
+  }
+  const err = new Error(`[BE Golang] ${detail}`);
+  err.source = "BE Golang";
+  err.status = res.status;
+  err.fallback = fallbackMsg;
+  throw err;
+}
+
+export function formatFetchError(err, fallbackMsg = "Gagal memuat data") {
+  if (!err) return null;
+  if (typeof err === "string") {
+    if (err.startsWith("[Network]") || err.startsWith("[BE Golang]")) {
+      return err;
+    }
+    return `[BE Golang] ${err}`;
+  }
+  const msg = err?.message || "";
+  if (msg.startsWith("[Network]") || msg.startsWith("[BE Golang]")) {
+    return msg;
+  }
+  if (err?.source === "BE Golang" || err?.status) {
+    return `[BE Golang] ${msg || fallbackMsg}`;
+  }
+  return `[Network] Layanan tidak dapat dihubungi (${msg || fallbackMsg})`;
+}
+

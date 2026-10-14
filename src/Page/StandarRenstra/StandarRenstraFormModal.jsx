@@ -90,17 +90,18 @@ export default function StandarRenstraFormModal({
           >
             <Dialog.Panel className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
               <Dialog.Title className="text-lg font-semibold mb-4">
-                {mode === "edit" ? "Edit" : "Tambah"} Jenis File
+                {mode === "edit" ? "Edit" : "Tambah"} Standar Renstra
               </Dialog.Title>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <TextInput
-                  label="Nama Jenis File"
+                  label="Nama Standar"
                   error={errors.nama?.message}
                   {...register("nama", {
-                    required: "Jenis File wajib diisi",
+                    required: "Nama Standar wajib diisi",
                   })}
                 />
+
 
                 <div className="flex justify-end gap-2">
                   <button

@@ -13,27 +13,74 @@ import RestrictedCkEditor from "@/Components/RestrictedCkEditor";
 import TextInput from "@/Components/TextInput";
 import Choice from "@/Components/Choice";
 import InfoAuditCard from "@/Components/InfoAuditCard";
+import { ktsApi } from "@/Common/api";
 
 const decodeJWT = (jwt) => {
+  if (!jwt || typeof jwt !== "string") return null;
   try {
-    const payload = jwt.split(".")[1];
-    return JSON.parse(atob(payload));
+    const parts = jwt.split(".");
+    if (parts.length < 2) return null;
+    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    const binString = atob(base64);
+    try {
+      const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch {
+      return JSON.parse(binString);
+    }
   } catch {
     return null;
   }
 };
 
 const getSID = () => {
-  const token = sessionStorage.getItem("token");
+  const token = sessionStorage.getItem("token") || sessionStorage.getItem("refresh");
   if (!token) return null;
 
-  const payload = decodeJWT(token);
+  const clean = token.startsWith("Bearer ") ? token.slice(7).trim() : token.trim();
+  const payload = decodeJWT(clean);
   return payload?.sid || null;
 };
 
-function ruleAllowAccess(row) {
-  console.log("sid:", getSID());
-  return getSID() == row.AuditorUuid || getSID() == row.AuditeeUuid;
+function ruleAllowAccess(row, currentLevel, info, currentUser) {
+  const userLevel = (currentLevel || currentUser?.level || "").toLowerCase().trim();
+
+  // 1. Admin always has full access
+  if (userLevel === "admin") {
+    return true;
+  }
+
+  // 2. Identify current user SID / UUID
+  const sid = currentUser?.uuid || getSID();
+  if (!sid) {
+    return false;
+  }
+
+  // 3. Match against row's AuditorUuid or AuditeeUuid
+  if (sid === row?.AuditorUuid || sid === row?.AuditeeUuid) {
+    return true;
+  }
+
+  // 4. Match against audit schedule (renstra) assigned auditors & auditee
+  if (info) {
+    if (
+      sid === info.Auditor1Uuid ||
+      sid === info.Auditor2Uuid ||
+      sid === info.AuditeeUuid
+    ) {
+      return true;
+    }
+  }
+
+  // 5. If user has auditor/auditee role in the active session
+  if (userLevel === "auditor1" || userLevel === "auditor2" || userLevel === "auditee") {
+    return true;
+  }
+
+  return false;
 }
 
 function renderStatus(currentStatus) {
@@ -91,7 +138,7 @@ function renderStatus(currentStatus) {
 ========================= */
 const KtsPage = () => {
   const { tahun, target, uuidaudit } = useParams();
-  const { getValidToken } = useAuth();
+  const { user, getValidToken } = useAuth();
   const { addToast } = useToast();
   const {
     positionYear,
@@ -115,7 +162,7 @@ const KtsPage = () => {
   const [activeActionId, setActiveActionId] = useState(null);
   const [onlyAllowed, setOnlyAllowed] = useState(false);
   const filteredData = onlyAllowed
-    ? data.filter((row) => ruleAllowAccess(row))
+    ? data.filter((row) => ruleAllowAccess(row, level, info, user))
     : data;
 
   useEffect(() => {
@@ -247,83 +294,16 @@ const KtsPage = () => {
   }
 
   const downloadHandler = async (row) => {
+    if (!row?.UUID) return;
     try {
-      if (isEmpty(getValidToken())) return;
-
-      const responsePublish = await fetch(
-        `http://localhost:3000/kts/publish/${row.UUID}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`,
-          },
-        },
-      );
-      const dataPublish = await responsePublish.json();
-
-      if (!responsePublish.ok) {
-        addToast("error", dataPublish?.message || "Data tidak ditemukan");
-      } else {
-        const response = await fetch(
-          `http://localhost:3000/kts/export/${row.UUID}?ctxtahun=2024`,
-          {
-            headers: {
-              Accept: "application/pdf",
-              Authorization: `Bearer ${getValidToken()}`,
-            },
-          },
-        );
-
-        const dataDownload = response.headers.get("Content-Type") || "";
-
-        // Jika JSON → tampilkan error
-        if (dataDownload.includes("application/json")) {
-          const json = await response.json();
-          alert(json.message || "Terjadi error pada aplikasi");
-          return;
-        }
-
-        // Jika bukan PDF atau status bukan 200
-        if (!response.ok || !dataDownload.includes("application/pdf")) {
-          alert("Ada masalah pada server");
-          return;
-        }
-
-        // Handle streaming download
-        const contentLength = response.headers.get("Content-Length");
-        const total = contentLength ? parseInt(contentLength, 10) : 0;
-
-        const reader = response.body.getReader();
-        const chunks = [];
-        let received = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          chunks.push(value);
-          received += value.length;
-
-          if (total) {
-            console.log(`Progress: ${Math.round((received / total) * 100)}%`);
-          }
-        }
-
-        const blob = new Blob(chunks, { type: "application/pdf" });
-        const url = window.URL.createObjectURL(blob);
-
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "kts.pdf";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-
-        window.URL.revokeObjectURL(url);
-      }
+      await ktsApi.publishKts(row.UUID);
+      const tahunParam = row.Tahun || tahun || positionYear || "2024";
+      const filename = `KTS_${row.UUID.substring(0, 8)}.pdf`;
+      await ktsApi.exportPdf(row.UUID, tahunParam, filename);
+      addToast("success", "Dokumen KTS berhasil diunduh");
     } catch (err) {
-      console.error(err);
-      alert("Terjadi kesalahan jaringan");
+      console.error("Gagal mengunduh KTS:", err);
+      addToast("error", err.message || "Gagal mengunduh dokumen KTS");
     }
   };
 
@@ -458,6 +438,8 @@ const KtsPage = () => {
                   onDownload={downloadHandler}
                   tahun={positionYear}
                   level={level}
+                  user={user}
+                  info={info}
                   activeActionId={activeActionId}
                   setActiveActionId={setActiveActionId}
                   onEdit={(row) => setSelectedRow(row)}
@@ -490,6 +472,8 @@ function CardKts({
   row,
   tahun,
   level,
+  user,
+  info,
   activeActionId,
   setActiveActionId,
   onEdit,
@@ -574,7 +558,7 @@ function CardKts({
             </span>
 
             {/* ACTION */}
-            {ruleAllowAccess(row) && (
+            {ruleAllowAccess(row, level, info, user) && (
               <div className="relative">
                 <button
                   onClick={(e) => {
@@ -596,15 +580,17 @@ function CardKts({
                     bg-white border rounded shadow-lg z-20
                   "
                   >
-                    <ActionItem
-                      label={action}
-                      danger={action == "Closing"}
-                      onClick={() => {
-                        setActiveActionId(null);
-                        onEdit(row);
-                        onChangePosition(null, false);
-                      }}
-                    />
+                    {action && (
+                      <ActionItem
+                        label={action}
+                        danger={action == "Closing"}
+                        onClick={() => {
+                          setActiveActionId(null);
+                          onEdit(row);
+                          onChangePosition(null, false);
+                        }}
+                      />
+                    )}
                     {visibleUbahTindakan && "auditee" == level && (
                       <ActionItem
                         label="Ubah Tindakan"
@@ -615,17 +601,13 @@ function CardKts({
                         }}
                       />
                     )}
-
-                    {/* <Divider />
-                  <ActionItem label="Ubah Tindakan" />
-                  <ActionItem label="Penyelesaian" /> */}
-                    {/* <Divider />
-                  <ActionItem label="Closing" danger />
-                  <ActionItem label="Diketahui" /> */}
-                    <Divider />
+                    {action && <Divider />}
                     <ActionItem
                       label="Download"
-                      onClick={() => onDownload(row)}
+                      onClick={() => {
+                        setActiveActionId(null);
+                        onDownload(row);
+                      }}
                     />
                   </div>
                 )}

@@ -85,6 +85,7 @@ const AutoFillModalFill = ({ modalFill, closeModalFill, watch, applyToGroup }) =
               <option value="">Pilih Klasifikasi</option>
               <option value="minor">Minor</option>
               <option value="major">Major</option>
+              <option value="observe">Observe</option>
             </select>
           </div>
 

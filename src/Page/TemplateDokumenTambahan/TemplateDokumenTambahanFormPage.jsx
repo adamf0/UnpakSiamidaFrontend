@@ -13,9 +13,11 @@ import ShimmerTable from "@/Components/ShimmerTable";
 import { useToast } from "@/Providers/ToastProvider";
 import {
   delay,
+  formatFetchError,
   isEmpty,
   isValidationError,
   normalizeValidationMessage,
+  throwIfResponseNotOk,
 } from "@/Common/Utils";
 import RowClearAction from "@/Components/RowClearAction";
 import RowStatusAction from "@/Components/RowStatusAction";
@@ -77,6 +79,7 @@ const TemplateDokumenTambahanFormPage = () => {
     template: false,
   });
   const [error, setError] = useState(null);
+  const [errorJenisFile, setErrorJenisFile] = useState(null);
 
   const setLoad = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
 
@@ -85,6 +88,7 @@ const TemplateDokumenTambahanFormPage = () => {
     if(!token) return;
 
     setLoad("jenisfile", true);
+    setErrorJenisFile(null);
     try {
       const res = await fetch(
         `http://localhost:3000/jenisfiles?filters=tahun:eq:${tahun}`,{
@@ -93,16 +97,17 @@ const TemplateDokumenTambahanFormPage = () => {
           }
         }
       );
+      await throwIfResponseNotOk(res, "Gagal memuat jenis file");
       const json = await res.json();
       setJenisFileOptions(
-        json.data.map((d) => ({
+        (json.data ?? []).map((d) => ({
           ...d,
           id: d.UUID,
           nama: d.Nama,
         }))
       );
-    } catch {
-      setError("Gagal memuat jenis file");
+    } catch (err) {
+      setErrorJenisFile(formatFetchError(err, "Gagal memuat jenis file"));
     } finally {
       setLoad("jenisfile", false);
     }
@@ -336,18 +341,19 @@ const TemplateDokumenTambahanFormPage = () => {
               error={errors.tahun?.message}
             />
 
-            {loading.jenisfile ? (
-              <Shimmer rows={1} />
-            ) : (
-              <SearchSelect
-                label="Jenis File"
-                options={jenisFileOptions}
-                value={watch("jenis_file")}
-                onChange={(v) =>
-                  setValue("jenis_file", v, { shouldValidate: true })
-                }
-              />
-            )}
+            <SearchSelect
+              label="Jenis File"
+              options={jenisFileOptions}
+              value={watch("jenis_file")}
+              loading={loading.jenisfile}
+              loadError={errorJenisFile}
+              onRetry={() =>
+                watchedTahun && fetchJenisFileOptions(watchedTahun)
+              }
+              onChange={(v) =>
+                setValue("jenis_file", v, { shouldValidate: true })
+              }
+            />
 
             <TextInput
               label="Pertanyaan"
@@ -402,7 +408,7 @@ const TemplateDokumenTambahanFormPage = () => {
                           {/* KLASIFIKASI */}
                           <td className="px-3 py-2">
                             <div className="flex gap-4 justify-center">
-                              {["minor", "major"].map((v) => (
+                              {["minor", "major", "observe"].map((v) => (
                                 <RadioButton
                                   key={v}
                                   value={v}

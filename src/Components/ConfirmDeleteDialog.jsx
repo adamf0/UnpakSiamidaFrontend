@@ -3,13 +3,18 @@ import { Fragment } from "react";
 
 export default function ConfirmDeleteDialog({
   open,
+  isOpen,
   title = "Hapus Data",
   message = "Data yang dihapus tidak dapat dikembalikan.",
+  description,
   onConfirm,
   onClose,
 }) {
+  const show = Boolean(open ?? isOpen ?? false);
+  const text = description || message;
+
   return (
-    <Transition appear show={open} as={Fragment}>
+    <Transition appear show={show} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
         <div className="fixed inset-0 bg-black/40" />
 
@@ -19,18 +24,18 @@ export default function ConfirmDeleteDialog({
               {title}
             </Dialog.Title>
 
-            <p className="text-sm text-gray-600 mb-6">{message}</p>
+            <p className="text-sm text-gray-600 mb-6">{text}</p>
 
             <div className="flex justify-end gap-2">
               <button
                 onClick={onClose}
-                className="px-3 py-2 text-black"
+                className="px-3 py-2 text-black hover:bg-gray-100 rounded transition"
               >
                 Batal
               </button>
               <button
                 onClick={onConfirm}
-                className="px-3 py-2 bg-red-600 text-white rounded"
+                className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition shadow-sm"
               >
                 Hapus
               </button>

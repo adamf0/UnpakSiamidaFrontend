@@ -4,14 +4,15 @@ import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { isEmpty, renderLabelFakultasUnit } from "@/Common/Utils";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import BeritaAcaraFormModal from "./BeritaAcaraFormModal";
 import BeritaAcaraFilterContent from "./BeritaAcaraFilterContent";
 import BeritaAcaraList from "./BeritaAcaraList";
-import { Plus, Filter } from "lucide-react";
+import { Plus, Filter, ScrollText } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
+import PageHeader from "@/Components/PageHeader";
 
 //[pr] belum tambah pengecekan penugasan audit di tahun & unit yg dicari pada list group
 const BeritaAcaraPage = () => {
@@ -276,52 +277,52 @@ const BeritaAcaraPage = () => {
           />
         )}
       />
-      <div className="p-3 bg-white space-y-3">
-        <div className="flex justify-between wrap gap-2">
-          <nav className="mb-4" aria-label="Breadcrumb">
-            <ol className="flex items-center gap-2 text-lg text-gray-500">
-              <li>
-                <span className="font-semibold text-black">Berita Acara</span>
-              </li>
+      <div className="p-4 sm:p-6 bg-gray-50 min-h-screen space-y-4">
+        <PageHeader
+          icon={ScrollText}
+          title="Berita Acara"
+          subtitle={
+            infoTarget?.Nama
+              ? `Kelola berita acara hasil audit mutu internal untuk ${renderLabelFakultasUnit(infoTarget)}`
+              : "Kelola dan cetak berita acara hasil audit mutu internal unit & fakultas"
+          }
+        />
 
-              {infoTarget?.Nama && (
-                <>
-                  <li>/</li>
-                  <li className="truncate max-w-[200px]">
-                    {renderLabelFakultasUnit(infoTarget)}
-                  </li>
-                </>
-              )}
-            </ol>
-          </nav>
+        {isBeritaAcara && (
+          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between gap-4">
+            <nav aria-label="Breadcrumb">
+              <ol className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                <li>
+                  <Link
+                    to="/berita_acara"
+                    className="hover:text-purple-600 transition-colors"
+                  >
+                    Berita Acara
+                  </Link>
+                </li>
+                {infoTarget?.Nama && (
+                  <>
+                    <li>/</li>
+                    <li className="text-gray-900 font-semibold truncate max-w-[300px]">
+                      {renderLabelFakultasUnit(infoTarget)}
+                    </li>
+                  </>
+                )}
+              </ol>
+            </nav>
 
-          <div className="flex gap-2">
-            {isBeritaAcara && (
-              <Tooltip content="Tambah Berita Acara">
-                <button
-                  type="button"
-                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
-                  onClick={() => openNew()}
-                  aria-label="Tambah Berita Acara"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </Tooltip>
-            )}
-            {!isBeritaAcara && (
-              <Tooltip content="Filter Berita Acara">
-                <button
-                  type="button"
-                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
-                  onClick={() => {}}
-                  aria-label="Filter Berita Acara"
-                >
-                  <Filter className="w-4 h-4" />
-                </button>
-              </Tooltip>
-            )}
+            <Tooltip content="Tambah Berita Acara">
+              <button
+                type="button"
+                className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
+                onClick={() => openNew()}
+                aria-label="Tambah Berita Acara"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </Tooltip>
           </div>
-        </div>
+        )}
 
         {/* Grid card fakultas (auto minmax) */}
         {isBeritaAcara ? (

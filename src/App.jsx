@@ -19,9 +19,25 @@ import ScheduleAuditFormPage from "./Page/ScheduleAudit/ScheduleAuditFormPage";
 import AuditPage from "./Page/Audit/AuditPage";
 import { ContentProvider } from "./Providers/ContentProvider";
 import KtsPage from "./Page/Kts/KtsPage";
+import PusatKtsPage from "./Page/PusatKts/PusatKtsPage";
 import AuditRenstraEditPage from "./Page/Audit/AuditRenstraEditPage";
+
 import AuditTambahanEditPage from "./Page/Audit/AuditTambahanEditPage";
 import BeritaAcaraPage from "./Page/BeritaAcara/BeritaAcaraPage";
+import MasterTahunPage from "./Page/MasterTahun/MasterTahunPage";
+import MataProgramPage from "./Page/MataProgram/MataProgramPage";
+import AktivitasPage from "./Page/Aktivitas/AktivitasPage";
+import PelaporanPelaksanaanPage from "./Page/PelaporanPelaksanaan/PelaporanPelaksanaanPage";
+import PelaporanDokumenPage from "./Page/PelaporanDokumen/PelaporanDokumenPage";
+import ReportPage from "./Page/Report/ReportPage";
+import AccountUserPage from "./Page/AccountUser/AccountUserPage";
+import UserMergePage from "./Page/AccountUser/UserMergePage";
+import SwotPage from "./Page/Swot/SwotPage";
+import RiskAssessmentPage from "./Page/RiskAssessment/RiskAssessmentPage";
+import ProkerV3Page from "./Page/ProkerV3/ProkerV3Page";
+import ProkerV3AktivitasPage from "./Page/ProkerV3/ProkerV3AktivitasPage";
+import ProkerV3DokumenPage from "./Page/ProkerV3/ProkerV3DokumenPage";
+import ProkerV3TimelinePage from "./Page/ProkerV3/ProkerV3TimelinePage";
 
 export default function App() {
   return (
@@ -35,9 +51,34 @@ export default function App() {
                   <Route element={<ProtectedRoute />}>
                     <Route element={<PanelLayout />}>
                       <Route path="/dashboard" element={<DashboardPage />} />
+                      <Route path="/users" element={<AccountUserPage />} />
+                      <Route path="/users/merge" element={<UserMergePage />} />
+                      <Route path="/account_user" element={<AccountUserPage />} />
+                      <Route path="/account_user/merge" element={<UserMergePage />} />
+                      <Route path="/master_tahun" element={<MasterTahunPage />} />
+                      <Route path="/tahun_proker" element={<MasterTahunPage />} />
+                      <Route path="/mata_program" element={<MataProgramPage />} />
+                      <Route path="/aktivitas" element={<AktivitasPage />} />
+                      <Route path="/aktivitas_proker" element={<AktivitasPage />} />
+                      <Route path="/pelaporan_pelaksanaan" element={<PelaporanPelaksanaanPage />} />
+                      <Route path="/pelaporan_dokumen" element={<PelaporanDokumenPage />} />
                       <Route path="/standar_renstra" element={<StandarRenstraPage />} />
                       <Route path="/indikator_renstra" element={<IndikatorRenstraPage />} />
                       <Route path="/jenis_file_audit" element={<JenisFilePage />} />
+                      <Route path="/swot" element={<SwotPage />} />
+                      <Route path="/analisis_swot" element={<SwotPage />} />
+                      <Route path="/risk_assessment" element={<RiskAssessmentPage />} />
+                      <Route path="/analisis_resiko" element={<RiskAssessmentPage />} />
+                      <Route path="/analisis_risiko" element={<RiskAssessmentPage />} />
+                      <Route path="/proker_v3" element={<ProkerV3Page />} />
+                      <Route path="/proker_v3/:uuid/aktivitas" element={<ProkerV3AktivitasPage />} />
+                      <Route path="/proker_v3/:uuid/aktivitas/:actUuid/timeline" element={<ProkerV3TimelinePage />} />
+                      <Route path="/proker_v3/aktivitas/:actUuid/timeline" element={<ProkerV3TimelinePage />} />
+                      <Route path="/proker_v3/:uuid/dokumen" element={<ProkerV3DokumenPage />} />
+                      <Route path="/proker" element={<ProkerV3Page />} />
+                      <Route path="/proker/:uuid/aktivitas" element={<ProkerV3AktivitasPage />} />
+                      <Route path="/proker/:uuid/aktivitas/:actUuid/timeline" element={<ProkerV3TimelinePage />} />
+                      <Route path="/proker/:uuid/dokumen" element={<ProkerV3DokumenPage />} />
 
                       <Route path="/template_renstra" element={<TemplateRenstraPage />} />
                       <Route path="/template_renstra/preview" element={<PreviewTemplatePage type="renstra" />} />
@@ -58,9 +99,13 @@ export default function App() {
                       <Route path="/audit/tambahan/:uuidRenstra" element={<AuditTambahanEditPage />} />
 
                       <Route path="/kts/:tahun/:target/:uuidaudit" element={<KtsPage />} />
+                      <Route path="/pusat_kts/:uuidRenstra" element={<PusatKtsPage />} />
+                      <Route path="/pusat_kts" element={<PusatKtsPage />} />
 
                       <Route path="/berita_acara" element={<BeritaAcaraPage />} />
+
                       <Route path="/berita_acara/:target" element={<BeritaAcaraPage />} />
+                      <Route path="/report" element={<ReportPage />} />
 
                       {/* <Route element={<AccessControlRoute checkAccess={(auth) => (auth.isAdminAccess() || auth.isCompanyAccess())} />}>
                         <Route path="/users" element={<UserPage />} />

@@ -4,8 +4,10 @@ import { useForm } from "react-hook-form";
 import SearchSelect from "@/Components/SearchSelect";
 import {
   delay,
+  formatFetchError,
   isEmpty,
   isOverlap,
+  throwIfResponseNotOk,
 } from "@/Common/Utils";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import ErrorSection from "@/Components/ErrorSection";
@@ -128,54 +130,63 @@ const ScheduleAuditFormPage = () => {
   };
 
   const fetchData = async (uuid) => {
-    if(isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (!token) {
+      setErr("detail", "Sesi login tidak valid atau telah berakhir");
+      return;
+    }
 
     setLoad("detail", true);
     setErr("detail", null);
 
-    setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `http://localhost:3000/renstra/${uuid}`,
-          {
-            headers: {
-              Authorization: `Bearer ${getValidToken()}`
-            }
+    try {
+      const res = await fetch(
+        `http://localhost:3000/renstra/${uuid}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
           }
-        );
-        const result = await res.json();
-        if(!res.ok){
-          setErr("detail", result.message || "Gagal memuat data");
-          return;
         }
-        setData(result);
-      } catch (err) {
-        console.error(err);
-        setErr("detail", e.message || "Gagal memuat data");
-      } finally {
-        setLoad("detail", false);
+      );
+      let result = {};
+      try {
+        result = await res.json();
+      } catch {
+        const raw = await res.text().catch(() => "");
+        result = { message: raw };
       }
-    }, 3000);
+      if(!res.ok){
+        setErr("detail", result.message || "Gagal memuat data");
+        return;
+      }
+      setData(result);
+    } catch (err) {
+      console.error(err);
+      setErr("detail", err.message || "Gagal memuat data");
+    } finally {
+      setLoad("detail", false);
+    }
   };
 
   const fetchTargets = async () => {
-    if(isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (!token) return;
 
     setLoad("target", true);
     setErr("target", null);
 
-    setTimeout(async () => {
-      try {
-        const res = await fetch(
-          "http://localhost:3000/fakultasunits?mode=sse",
-          {
-            headers: { 
-              Accept: "text/event-stream", 
-              Authorization: `Bearer ${getValidToken()}` 
-            },
-          }
-        );
-        if (!res.body) throw new Error("SSE not supported");
+    try {
+      const res = await fetch(
+        "http://localhost:3000/fakultasunits?mode=sse",
+        {
+          headers: { 
+            Accept: "text/event-stream", 
+            Authorization: `Bearer ${token}` 
+          },
+        }
+      );
+      await throwIfResponseNotOk(res, "Gagal memuat target audit");
+        if (!res.body) throw new Error("[BE Golang] SSE stream tidak didukung oleh response server");
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
@@ -225,71 +236,70 @@ const ScheduleAuditFormPage = () => {
         setFakultasUnits(result);
       } catch (err) {
         console.error(err);
-        setErr("target", e.message || "Gagal memuat fakultas");
+        setErr("target", formatFetchError(err, "Gagal memuat target audit"));
       } finally {
         setLoad("target", false);
       }
-    }, 3000);
   };
 
   const fetchUser = async () => {
-    if(isEmpty(getValidToken())) return;
+    const token = getValidToken();
+    if (!token) return;
 
     setLoad("user", true);
     setErr("user", null);
 
-    setTimeout(async () => {
-      try {
-        const res = await fetch("http://localhost:3000/users?mode=sse", {
-          headers: { 
-            Accept: "text/event-stream",
-            Authorization: `Bearer ${getValidToken()}` 
-          },
-        });
-        if (!res.body) throw new Error("SSE not supported");
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-        const result = [];
+    try {
+      const res = await fetch("http://localhost:3000/users?mode=sse", {
+        headers: { 
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${token}` 
+        },
+      });
+      await throwIfResponseNotOk(res, "Gagal memuat daftar akun");
+      if (!res.body) throw new Error("[BE Golang] SSE stream tidak didukung oleh response server");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      const result = [];
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-          let index;
+        buffer += decoder.decode(value, { stream: true });
+        let index;
 
-          while ((index = buffer.indexOf("\n\n")) !== -1) {
-            const event = buffer.slice(0, index).trim();
-            buffer = buffer.slice(index + 2);
+        while ((index = buffer.indexOf("\n\n")) !== -1) {
+          const event = buffer.slice(0, index).trim();
+          buffer = buffer.slice(index + 2);
 
-            if (!event.startsWith("data:")) continue;
-            const payload = event.replace(/^data:\s*/, "");
+          if (!event.startsWith("data:")) continue;
+          const payload = event.replace(/^data:\s*/, "");
 
-            if (!payload || payload === "start" || payload === "done") continue;
+          if (!payload || payload === "start" || payload === "done") continue;
 
-            try {
-              const parsed = JSON.parse(payload);
-              if(isEmpty(parsed.UUID) || parsed.UUID=="00000000-0000-0000-0000-000000000000"){
-                continue;
-              }
+          try {
+            const parsed = JSON.parse(payload);
+            if(isEmpty(parsed.UUID) || parsed.UUID=="00000000-0000-0000-0000-000000000000"){
+              continue;
+            }
 
-              result.push({
-                id: parsed.UUID,
-                nama: parsed.Name,
-                ...parsed,
-              });
-            } catch {}
-          }
+            result.push({
+              id: parsed.UUID,
+              nama: parsed.Name,
+              ...parsed,
+            });
+          } catch {}
         }
-        setUsers(result);
-      } catch (err) {
-        console.error(err);
-        setErr("user", e.message || "Gagal memuat user");
-      } finally {
-        setLoad("user", false);
       }
-    }, 3000);
+      setUsers(result);
+    } catch (err) {
+      console.error(err);
+      setErr("user", formatFetchError(err, "Gagal memuat daftar akun"));
+    } finally {
+      setLoad("user", false);
+    }
   };
 
   useEffect(() => {
@@ -319,6 +329,12 @@ const ScheduleAuditFormPage = () => {
       return;
     }
 
+    const token = getValidToken();
+    if (!token) {
+      addToast("error", "Sesi login Anda tidak valid atau telah berakhir. Silakan login kembali.");
+      return;
+    }
+
     try {
       const fd = new FormData();
       fd.append("tahun", data.tahun);
@@ -339,19 +355,47 @@ const ScheduleAuditFormPage = () => {
           : "http://localhost:3000/renstra",
         {
           method: mode === "edit" ? "PUT" : "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
           body: fd,
         }
       );
 
-      const json = await res.json();
+      let json = {};
+      try {
+        json = await res.json();
+      } catch {
+        const rawText = await res.text().catch(() => "");
+        json = { message: rawText };
+      }
 
       if (!res.ok) {
-        addToast("error", json.message || "Gagal menyimpan");
+        addToast("error", json?.message || "Gagal menyimpan jadwal audit");
         return;
       }
 
+      if (mode !== "edit" && json?.uuid) {
+        try {
+          const genFd = new FormData();
+          genFd.append("tahun", data.tahun);
+          genFd.append("renstra", json.uuid);
+          genFd.append("fakultas_unit", data.target_audit?.UUID);
+
+          await fetch("http://localhost:3000/renstra/generate", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: genFd,
+          });
+        } catch (errGen) {
+          console.error("Auto generate renstra audit records failed:", errGen);
+        }
+      }
+
       addToast("success", "Berhasil disimpan");
-      if(mode!="edit"){
+      if(mode !== "edit"){
         resetForm();
         navigate("/schedule_audit");
       }
@@ -400,7 +444,7 @@ const ScheduleAuditFormPage = () => {
             Form {mode == "edit" ? "Edit" : "Add"}
           </h2>
         </div>
-        {(mode=="edit"? (error.target || error.user || error.detail) : (error.target || error.user)) ? (
+        {mode == "edit" && error.detail ? (
           <ErrorSection />
         ) : (
           <form onSubmit={handleSubmit(onSubmit)}>
@@ -414,39 +458,31 @@ const ScheduleAuditFormPage = () => {
                 {...register("tahun", { required: "Tahun wajib diisi" })}
               />
 
-              {loading.target ? (
-                <>
-                  <label className="block text-sm font-medium mb-1">
-                    Target Audit <span className="text-red-500">*</span>
-                  </label>
-                  <Shimmer rows={1} />
-                </>
-              ) : (
-                <>
-                  <SearchSelect
-                    label="Target Audit"
-                    required
-                    options={fakultasUnits}
-                    placeholder="Cari target audit"
-                    value={fakultasUnits.find(
-                      (o) => o?.UUID === watch("target_audit")?.UUID
-                    )}
-                    error={errors.target_audit?.message}
-                    onChange={(item) =>
-                      setValue("target_audit", item || "", {
-                        shouldValidate: true,
-                      })
-                    }
-                  />
+              <SearchSelect
+                label="Target Audit"
+                required
+                options={fakultasUnits}
+                placeholder="Cari target audit"
+                value={fakultasUnits.find(
+                  (o) => o?.UUID === watch("target_audit")?.UUID
+                )}
+                error={errors.target_audit?.message}
+                loading={loading.target}
+                loadError={error.target}
+                onRetry={fetchTargets}
+                onChange={(item) =>
+                  setValue("target_audit", item || "", {
+                    shouldValidate: true,
+                  })
+                }
+              />
 
-                  <input
-                    type="hidden"
-                    {...register("target_audit", {
-                      required: "Target Audit wajib dipilih",
-                    })}
-                  />
-                </>
-              )}
+              <input
+                type="hidden"
+                {...register("target_audit", {
+                  required: "Target Audit wajib dipilih",
+                })}
+              />
 
               <DateRangeInput
                 label="Periode Upload"
@@ -547,121 +583,97 @@ const ScheduleAuditFormPage = () => {
                 endError={errors.periode_assesment_lapangan_akhir?.message}
               />
 
-              {loading.user ? (
-                <>
-                  <label className="block text-sm font-medium mb-1">
-                    Penugasan Auditee <span className="text-red-500">*</span>
-                  </label>
-                  <Shimmer rows={1} />
-                </>
-              ) : (
-                <>
-                  <SearchSelect
-                    label="Penugasan Auditee"
-                    required
-                    options={users}
-                    placeholder="Cari nama akun"
-                    value={users.find((u) => u?.UUID === watch("auditee")?.UUID)}
-                    error={errors.auditee?.message}
-                    onChange={(item) =>
-                      setValue("auditee", item || "", { shouldValidate: true })
+              <SearchSelect
+                label="Penugasan Auditee"
+                required
+                options={users}
+                placeholder="Cari nama akun"
+                value={users.find((u) => u?.UUID === watch("auditee")?.UUID)}
+                error={errors.auditee?.message}
+                loading={loading.user}
+                loadError={error.user}
+                onRetry={fetchUser}
+                onChange={(item) =>
+                  setValue("auditee", item || "", { shouldValidate: true })
+                }
+              />
+
+              <input
+                type="hidden"
+                {...register("auditee", {
+                  required: "Auditee wajib dipilih",
+                  validate: (value) => {
+                    const { auditor1, auditor2 } = getValues();
+                    if (
+                      value.UUID === auditor1?.UUID ||
+                      value.UUID === auditor2?.UUID
+                    ) {
+                      return "Auditee tidak boleh sama dengan Auditor";
                     }
-                  />
+                    return true;
+                  },
+                })}
+              />
 
-                  <input
-                    type="hidden"
-                    {...register("auditee", {
-                      required: "Auditee wajib dipilih",
-                      validate: (value) => {
-                        const { auditor1, auditor2 } = getValues();
-                        if (
-                          value.UUID === auditor1?.UUID ||
-                          value.UUID === auditor2?.UUID
-                        ) {
-                          return "Auditee tidak boleh sama dengan Auditor";
-                        }
-                        return true;
-                      },
-                    })}
-                  />
-                </>
-              )}
+              <SearchSelect
+                label="Penugasan Auditor 1"
+                required
+                options={users}
+                placeholder="Cari nama akun"
+                value={users.find((u) => u?.UUID === watch("auditor1")?.UUID)}
+                error={errors.auditor1?.message}
+                loading={loading.user}
+                loadError={error.user}
+                onRetry={fetchUser}
+                onChange={(item) =>
+                  setValue("auditor1", item || "", { shouldValidate: true })
+                }
+              />
 
-              {loading.user ? (
-                <>
-                  <label className="block text-sm font-medium mb-1">
-                    Penugasan Auditor 1 <span className="text-red-500">*</span>
-                  </label>
-                  <Shimmer rows={1} />
-                </>
-              ) : (
-                <>
-                  <SearchSelect
-                    label="Penugasan Auditor 1"
-                    required
-                    options={users}
-                    placeholder="Cari nama akun"
-                    value={users.find((u) => u?.UUID === watch("auditor1")?.UUID)}
-                    error={errors.auditor1?.message}
-                    onChange={(item) =>
-                      setValue("auditor1", item || "", { shouldValidate: true })
-                    }
-                  />
+              <input
+                type="hidden"
+                {...register("auditor1", {
+                  required: "Auditor 1 wajib dipilih",
+                  validate: (value) => {
+                    const { auditee, auditor2 } = getValues();
+                    if (value.UUID === auditee?.UUID)
+                      return "Auditor 1 tidak boleh sama dengan Auditee";
+                    if (value.UUID === auditor2?.UUID)
+                      return "Auditor 1 tidak boleh sama dengan Auditor 2";
+                    return true;
+                  },
+                })}
+              />
 
-                  <input
-                    type="hidden"
-                    {...register("auditor1", {
-                      required: "Auditor 1 wajib dipilih",
-                      validate: (value) => {
-                        const { auditee, auditor2 } = getValues();
-                        if (value.UUID === auditee?.UUID)
-                          return "Auditor 1 tidak boleh sama dengan Auditee";
-                        if (value.UUID === auditor2?.UUID)
-                          return "Auditor 1 tidak boleh sama dengan Auditor 2";
-                        return true;
-                      },
-                    })}
-                  />
-                </>
-              )}
+              <SearchSelect
+                label="Penugasan Auditor 2"
+                required
+                options={users}
+                placeholder="Cari nama akun"
+                value={users.find((u) => u?.UUID === watch("auditor2")?.UUID)}
+                error={errors.auditor2?.message}
+                loading={loading.user}
+                loadError={error.user}
+                onRetry={fetchUser}
+                onChange={(item) =>
+                  setValue("auditor2", item || "", { shouldValidate: true })
+                }
+              />
 
-              {loading.user ? (
-                <>
-                  <label className="block text-sm font-medium mb-1">
-                    Penugasan Auditor 2 <span className="text-red-500">*</span>
-                  </label>
-                  <Shimmer rows={1} />
-                </>
-              ) : (
-                <>
-                  <SearchSelect
-                    label="Penugasan Auditor 2"
-                    required
-                    options={users}
-                    placeholder="Cari nama akun"
-                    value={users.find((u) => u?.UUID === watch("auditor2")?.UUID)}
-                    error={errors.auditor2?.message}
-                    onChange={(item) =>
-                      setValue("auditor2", item || "", { shouldValidate: true })
-                    }
-                  />
-
-                  <input
-                    type="hidden"
-                    {...register("auditor2", {
-                      required: "Auditor 2 wajib dipilih",
-                      validate: (value) => {
-                        const { auditee, auditor1 } = getValues();
-                        if (value.UUID === auditee?.UUID)
-                          return "Auditor 2 tidak boleh sama dengan Auditee";
-                        if (value.UUID === auditor1?.UUID)
-                          return "Auditor 2 tidak boleh sama dengan Auditor 1";
-                        return true;
-                      },
-                    })}
-                  />
-                </>
-              )}
+              <input
+                type="hidden"
+                {...register("auditor2", {
+                  required: "Auditor 2 wajib dipilih",
+                  validate: (value) => {
+                    const { auditee, auditor1 } = getValues();
+                    if (value.UUID === auditee?.UUID)
+                      return "Auditor 2 tidak boleh sama dengan Auditee";
+                    if (value.UUID === auditor1?.UUID)
+                      return "Auditor 2 tidak boleh sama dengan Auditor 1";
+                    return true;
+                  },
+                })}
+              />
 
               <button
                 className="bg-purple-500 hover:bg-purple-400 px-4 py-2 rounded text-sm text-white"

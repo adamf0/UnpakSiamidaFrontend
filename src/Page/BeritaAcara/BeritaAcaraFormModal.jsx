@@ -5,7 +5,12 @@ import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
 import SearchSelect from "@/Components/SearchSelect";
 import { useAuth } from "@/Providers/AuthProvider";
-import { formatYMD, isEmpty } from "@/Common/Utils";
+import {
+  formatYMD,
+  isEmpty,
+  throwIfResponseNotOk,
+  formatFetchError,
+} from "@/Common/Utils";
 import { useContent } from "@/Providers/ContentProvider";
 
 export default function BeritaAcaraFormModal({
@@ -19,6 +24,8 @@ export default function BeritaAcaraFormModal({
 }) {
   const { addToast } = useToast();
   const [userOptions, setUserOptions] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [errorUsers, setErrorUsers] = useState(null);
   const { getValidToken } = useAuth();
   const { positionYear } = useContent();
 
@@ -67,11 +74,13 @@ export default function BeritaAcaraFormModal({
         Auditor2: null,
       });
     }
-  }, [mode, data]);
+  }, [mode, data, userOptions]);
 
   const fetchUserOptions = async () => {
     if (isEmpty(getValidToken())) return;
 
+    setLoadingUsers(true);
+    setErrorUsers(null);
     try {
       const res = await fetch("http://localhost:3000/user-options", {
         headers: {
@@ -80,9 +89,7 @@ export default function BeritaAcaraFormModal({
         },
       });
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      await throwIfResponseNotOk(res, "Gagal memuat daftar user");
 
       const data = await res.json(); // langsung parse JSON
 
@@ -97,6 +104,9 @@ export default function BeritaAcaraFormModal({
       setUserOptions(result);
     } catch (err) {
       console.error("Fetch user gagal:", err);
+      setErrorUsers(formatFetchError(err, "Gagal memuat daftar user"));
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
@@ -213,6 +223,9 @@ export default function BeritaAcaraFormModal({
                   required
                   options={userOptions}
                   placeholder="Cari Auditee"
+                  loading={loadingUsers}
+                  loadError={errorUsers}
+                  onRetry={fetchUserOptions}
                   value={watch("Auditee")}
                   error={errors.Auditee?.message}
                   onChange={(item) =>
@@ -234,6 +247,9 @@ export default function BeritaAcaraFormModal({
                   required
                   options={userOptions}
                   placeholder="Cari Auditor1"
+                  loading={loadingUsers}
+                  loadError={errorUsers}
+                  onRetry={fetchUserOptions}
                   value={watch("Auditor1")}
                   error={errors.Auditor1?.message}
                   onChange={(item) =>
@@ -255,6 +271,9 @@ export default function BeritaAcaraFormModal({
                   required
                   options={userOptions}
                   placeholder="Cari Auditor2"
+                  loading={loadingUsers}
+                  loadError={errorUsers}
+                  onRetry={fetchUserOptions}
                   value={watch("Auditor2")}
                   error={errors.Auditor2?.message}
                   onChange={(item) =>

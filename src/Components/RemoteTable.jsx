@@ -27,6 +27,7 @@ const RemoteTable = forwardRef(function RemoteTable(
     onError,
     disableGlobalSearch=true,
     token,
+    filterFn,
   },
   ref
 ) {
@@ -55,6 +56,9 @@ const RemoteTable = forwardRef(function RemoteTable(
     if (!isManual) return;
 
     let data = [...(listdata || [])];
+    if (typeof filterFn === "function") {
+      data = data.filter(filterFn);
+    }
 
     setTotal(data.length);
 
@@ -62,7 +66,7 @@ const RemoteTable = forwardRef(function RemoteTable(
     const end = start + limit;
 
     setRows(data.slice(start, end));
-  }, [listdata, page, limit, isManual]);
+  }, [listdata, page, limit, isManual, filterFn]);
   
   const applyAdapter = (data) =>
     typeof adapter === "function" ? adapter(data) : data;
@@ -100,11 +104,35 @@ const RemoteTable = forwardRef(function RemoteTable(
 
     const filterQuery = buildFilterQuery(filters);
 
-    const url =
-      `${endpoint}?mode=${mode}` +
-      `&page=${page}&limit=${limit}` +
-      `&search=${encodeURIComponent(search)}` +
-      (filterQuery ? `&filters=${encodeURIComponent(filterQuery)}` : "");
+    let url;
+    try {
+      const parsedUrl = new URL(endpoint, window.location.origin);
+      const existingFilters = parsedUrl.searchParams.get("filters");
+      const combinedFilters = [existingFilters, filterQuery].filter(Boolean).join(";");
+
+      parsedUrl.searchParams.set("mode", mode);
+      parsedUrl.searchParams.set("page", String(page));
+      parsedUrl.searchParams.set("limit", String(limit));
+      if (search) {
+        parsedUrl.searchParams.set("search", search);
+      } else {
+        parsedUrl.searchParams.delete("search");
+      }
+
+      if (combinedFilters) {
+        parsedUrl.searchParams.set("filters", combinedFilters);
+      } else {
+        parsedUrl.searchParams.delete("filters");
+      }
+      url = parsedUrl.toString();
+    } catch {
+      const separator = endpoint.includes("?") ? "&" : "?";
+      url =
+        `${endpoint}${separator}mode=${mode}` +
+        `&page=${page}&limit=${limit}` +
+        `&search=${encodeURIComponent(search)}` +
+        (filterQuery ? `&filters=${encodeURIComponent(filterQuery)}` : "");
+    }
 
     try {
       const headers = {
@@ -136,8 +164,11 @@ const RemoteTable = forwardRef(function RemoteTable(
       /* ===== SERVER PAGING ===== */
       if (mode === "paging") {
         const json = await res.json();
-        setRows(applyAdapter(json.data || json || []));
-        setTotal(Number(json?.total) || data.length || 0);
+        const rawData = json?.data ?? json?.Data ?? (Array.isArray(json) ? json : []);
+        const items = Array.isArray(rawData) ? rawData : [];
+        setRows(applyAdapter(items));
+        const totalCount = json?.total ?? json?.Total ?? items.length;
+        setTotal(typeof totalCount === "number" ? totalCount : (Number(totalCount) || 0));
         return;
       }
 
@@ -145,7 +176,7 @@ const RemoteTable = forwardRef(function RemoteTable(
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      const data = [];
+      const streamData = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -162,18 +193,22 @@ const RemoteTable = forwardRef(function RemoteTable(
             if (!line.startsWith("data:")) continue;
             const payload = line.replace("data:", "").trim();
             if (payload === "start" || payload === "done") continue;
-            data.push(JSON.parse(payload));
+            streamData.push(JSON.parse(payload));
           } else {
-            data.push(JSON.parse(line));
+            streamData.push(JSON.parse(line));
           }
         }
       }
 
-      const adapted = applyAdapter(data || []);
+      const adapted = applyAdapter(streamData || []);
       setAllRows(adapted);
       setTotal(adapted.length);
     } catch (err) {
-      if (err.name !== "AbortError") console.error(err);
+      if (err.name === "AbortError") {
+        // Request dibatalkan dengan normal (re-render / query superseded), abaikan
+        return;
+      }
+      console.error(err);
 
       const normalizedError = {
         message: err.message || "Gagal memuat data",
@@ -231,10 +266,21 @@ const RemoteTable = forwardRef(function RemoteTable(
   useEffect(() => {
     if (!isStreaming) return;
 
+    const filtered =
+      typeof filterFn === "function" ? allRows.filter(filterFn) : allRows;
+
+    setTotal(filtered.length);
+
     const start = (page - 1) * limit;
     const end = start + limit;
-    setRows(allRows.slice(start, end));
-  }, [allRows, page, limit, isStreaming]);
+    setRows(filtered.slice(start, end));
+  }, [allRows, page, limit, isStreaming, filterFn]);
+
+  useEffect(() => {
+    if (typeof filterFn === "function") {
+      setPage(1);
+    }
+  }, [filterFn]);
 
   /* =========================
      CLICK OUTSIDE ACTION
@@ -312,90 +358,96 @@ const RemoteTable = forwardRef(function RemoteTable(
         <table className="w-full min-w-max">
           <colgroup>
             {listcolumns.map((c, i) => (
-              <col key={c.key ? `${c.key}-${i}` : i} />
+              <col
+                key={c.key ? `${c.key}-${i}` : i}
+                style={{
+                  ...(c.width ? { width: c.width } : {}),
+                  ...(c.minWidth ? { minWidth: c.minWidth } : {}),
+                  ...(c.searchable && !c.minWidth && (!c.width || parseInt(c.width, 10) < 175)
+                    ? { minWidth: "175px" }
+                    : {}),
+                }}
+              />
             ))}
-            <col style={{ width: "60px" }} />
+            {typeof renderAction === "function" && <col style={{ width: "60px" }} />}
           </colgroup>
 
           <thead className="bg-gray-100">
             <tr>
-              {listcolumns.map((c, i) => (
-                <th key={c.key ? `${c.key}-${c.label || i}` : (c.label || i)} className={`px-4 py-2 text-sm text-left ${c.className || ""}`}>
-                  <div className="font-medium mb-1">{c.label}</div>
+              {listcolumns.map((c, i) => {
+                const effectiveMinWidth =
+                  c.minWidth ||
+                  (c.searchable && (!c.width || parseInt(c.width, 10) < 175)
+                    ? "175px"
+                    : c.width);
 
-                  {c.searchable && (
-                    <div className="flex h-9 border rounded-md overflow-hidden bg-white">
-                      <select
-                        className="px-2 text-xs bg-gray-50 border-r shrink-0"
-                        value={draftFilters[c.key]?.op ?? allowedOps[0]}
-                        onChange={(e) => {
-                          const op = e.target.value;
+                return (
+                  <th
+                    key={c.key ? `${c.key}-${c.label || i}` : (c.label || i)}
+                    className={`px-4 py-2.5 text-sm text-left ${c.className || ""}`}
+                    style={{
+                      ...(c.width ? { width: c.width } : {}),
+                      ...(effectiveMinWidth ? { minWidth: effectiveMinWidth } : {}),
+                      ...(c.maxWidth ? { maxWidth: c.maxWidth } : {}),
+                    }}
+                  >
+                    <div className="font-semibold text-gray-800 mb-1.5 whitespace-nowrap">{c.label}</div>
 
-                          setDraftFilters((prev) => ({
-                            ...prev,
-                            [c.key]: {
-                              ...prev[c.key],
-                              op,
-                            },
-                          }));
-                        }}
-                        // value={filters[c.key]?.op || allowedOps[0]}
-                        // onChange={(e) =>
-                        //   setFilters((f) => ({
-                        //     ...f,
-                        //     [c.key]: {
-                        //       ...(f[c.key] || {}),
-                        //       op: e.target.value,
-                        //     },
-                        //   }))
-                        // }
-                      >
-                        {(c.allowedOps || allowedOps).map((op) => (
-                          <option key={op} value={op}>
-                            {op}
-                          </option>
-                        ))}
-                      </select>
+                    {c.searchable && (
+                      <div className="flex h-9 border border-gray-300 rounded-lg overflow-hidden bg-white shadow-2xs focus-within:ring-2 focus-within:ring-purple-500/30 focus-within:border-purple-500 transition">
+                        <select
+                          className="px-2 text-xs bg-gray-50 border-r border-gray-200 shrink-0 text-gray-700 outline-none cursor-pointer font-medium"
+                          value={draftFilters[c.key]?.op ?? allowedOps[0]}
+                          onChange={(e) => {
+                            const op = e.target.value;
 
-                      <input
-                        className="flex-1 px-2 text-xs outline-none"
-                        placeholder="filter…"
-                        // value={filters[c.key]?.value || ""}
-                        value={draftFilters[c.key]?.value ?? ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
+                            setDraftFilters((prev) => ({
+                              ...prev,
+                              [c.key]: {
+                                ...prev[c.key],
+                                op,
+                              },
+                            }));
+                          }}
+                        >
+                          {(c.allowedOps || allowedOps).map((op) => (
+                            <option key={op} value={op}>
+                              {op}
+                            </option>
+                          ))}
+                        </select>
 
-                          setDraftFilters((prev) => ({
-                            ...prev,
-                            [c.key]: {
-                              op: prev[c.key]?.op ?? "like",
-                              value,
-                            },
-                          }));
-                        }}
-                        // onChange={(e) => { 
-                        //   setFilters((f) => ({
-                        //     ...f,
-                        //     [c.key]: {
-                        //       op: f[c.key]?.op || "like",
-                        //       value: e.target.value,
-                        //     },
-                        //   }));
-                        //   setPage(1);
-                        // }}
-                      />
-                    </div>
-                  )}
-                </th>
-              ))}
-              <th className="px-4 py-2 text-sm">Aksi</th>
+                        <input
+                          className="flex-1 min-w-0 px-2.5 text-xs outline-none text-gray-800 placeholder-gray-400"
+                          placeholder="filter…"
+                          value={draftFilters[c.key]?.value ?? ""}
+                          onChange={(e) => {
+                            const value = e.target.value;
+
+                            setDraftFilters((prev) => ({
+                              ...prev,
+                              [c.key]: {
+                                op: prev[c.key]?.op ?? "like",
+                                value,
+                              },
+                            }));
+                          }}
+                        />
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
+              {typeof renderAction === "function" && (
+                <th className="px-4 py-2.5 text-sm font-semibold text-gray-800 text-center whitespace-nowrap">Aksi</th>
+              )}
             </tr>
           </thead>
 
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={listcolumns.length + 1} className="py-6 text-center">
+                <td colSpan={listcolumns.length + (typeof renderAction === "function" ? 1 : 0)} className="py-6 text-center">
                   Loading...
                 </td>
               </tr>
@@ -405,52 +457,63 @@ const RemoteTable = forwardRef(function RemoteTable(
               rows.map((r, idx) => (
                 <tr key={r.id || r.UUID || r.uuid || idx} className="border-t">
                   {listcolumns.map((c, i) => (
-                    <td key={c.key ? `${c.key}-${i}` : i} className={`px-4 py-3 text-sm ${c.className || ""}`}>
+                    <td
+                      key={c.key ? `${c.key}-${i}` : i}
+                      className={`px-4 py-3 text-sm ${c.className || ""}`}
+                      style={c.width ? { width: c.width, maxWidth: c.maxWidth || c.width } : undefined}
+                    >
                       {c.renderKey ? c.renderKey(r) : r[c.key]}
                     </td>
                   ))}
-                  <td className="px-4 py-3 text-right relative">
-                    {/* {
-                      typeof adapter === "function" && */}
+                  {typeof renderAction === "function" && (
+                    <td className="px-4 py-3 text-right relative">
                       <button
+                        type="button"
+                        className={`w-8 h-8 rounded-lg inline-flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 active:bg-gray-200 transition-colors cursor-pointer ${
+                          openAction?.row === r ? "bg-purple-50 text-purple-700 ring-1 ring-purple-200" : ""
+                        }`}
+                        title="Pilihan Aksi"
                         onClick={(e) => {
-                          console.log("rt",r)
                           e.stopPropagation();
                           const rect = e.currentTarget.getBoundingClientRect();
-                          setOpenAction({ row: r, rect });
+                          setOpenAction((prev) => (prev?.row === r ? null : { row: r, rect }));
                         }}
                       >
-                        <FiMoreVertical />
+                        <FiMoreVertical size={16} />
                       </button>
-                    {/* } */}
 
-                    {openAction &&
-                      createPortal(
-                        <div
-                          ref={actionRef}
-                          style={{
-                            position: "fixed",
-                            top: openAction.rect.bottom + 4,
-                            left: openAction.rect.right - 150,
-                          }}
-                          className="z-50 w-36 bg-white border rounded shadow"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {renderAction({
-                            row: openAction.row,
-                            close: () => setOpenAction(null),
-                          })}
-                        </div>,
-                        document.body
-                      )}
-                  </td>
+                      {openAction &&
+                        openAction.row === r &&
+                        createPortal(
+                          <div
+                            ref={actionRef}
+                            style={{
+                              position: "fixed",
+                              top:
+                                openAction.rect.bottom + 6 > window.innerHeight - 250
+                                  ? Math.max(8, openAction.rect.top - 230)
+                                  : openAction.rect.bottom + 6,
+                              left: Math.max(12, openAction.rect.right - 185),
+                            }}
+                            className="z-50 min-w-[175px] max-w-[220px] bg-white border border-gray-200/90 rounded-2xl shadow-xl ring-1 ring-black/5 p-1.5 animate-in fade-in zoom-in-95 duration-100 text-left [&_button]:text-left [&_button]:rounded-lg [&_button]:transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {renderAction({
+                              row: openAction.row,
+                              close: () => setOpenAction(null),
+                            })}
+                          </div>,
+                          document.body
+                        )}
+                    </td>
+                  )}
                 </tr>
               ))}
 
             {!loading && rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={listcolumns.length + 1}
+                  colSpan={listcolumns.length + (typeof renderAction === "function" ? 1 : 0)}
                   className="py-6 text-center text-gray-500"
                 >
                   Data tidak ditemukan

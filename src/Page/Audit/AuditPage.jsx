@@ -7,6 +7,7 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { renderLabelFakultasUnit } from "@/Common/Utils";
+import { FileSpreadsheet, FileText, Trash2 } from "lucide-react";
 
 const AuditPage = () => {
   const navigate = useNavigate();
@@ -87,52 +88,85 @@ const AuditPage = () => {
 
                 }, searchable: false},
               ]}
-              renderAction={({ row, close }) => (
-                <>
-                  <button
-                    className="block w-full px-3 py-2 text-sm hover:bg-gray-100"
-                    onClick={() => {
-                      console.log("edit", row);
-                      navigate(`/audit/renstra/${row.UUID}`);
-                      close();
-                    }}
-                  >
-                    Renstra
-                  </button>
+              renderAction={({ row, close }) => {
+                const hasRenstra = parseInt(row?.TotalRenstra || "0", 10) > 0;
+                const hasDokumen = parseInt(row?.TotalDokumen || "0", 10) > 0;
+
+                return (
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      type="button"
+                      disabled={!hasRenstra}
+                      title={hasRenstra ? "Renstra" : "Data renstra kosong"}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-all text-left group ${
+                        hasRenstra
+                          ? "text-gray-700 hover:text-indigo-700 hover:bg-indigo-50/80 cursor-pointer"
+                          : "text-gray-400 opacity-40 cursor-not-allowed"
+                      }`}
+                      onClick={() => {
+                        if (!hasRenstra) return;
+                        navigate(`/audit/renstra/${row.UUID}`);
+                        close();
+                      }}
+                    >
+                      <FileSpreadsheet
+                        className={`w-4 h-4 shrink-0 transition-transform ${
+                          hasRenstra ? "text-indigo-600 group-hover:scale-110" : "text-gray-400"
+                        }`}
+                      />
+                      <span>Renstra</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!hasDokumen}
+                      title={hasDokumen ? "Dokumen Tambahan" : "Data dokumen tambahan kosong"}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-all text-left group ${
+                        hasDokumen
+                          ? "text-gray-700 hover:text-sky-700 hover:bg-sky-50/80 cursor-pointer"
+                          : "text-gray-400 opacity-40 cursor-not-allowed"
+                      }`}
+                      onClick={() => {
+                        if (!hasDokumen) return;
+                        navigate(`/audit/tambahan/${row.UUID}`);
+                        close();
+                      }}
+                    >
+                      <FileText
+                        className={`w-4 h-4 shrink-0 transition-transform ${
+                          hasDokumen ? "text-sky-600 group-hover:scale-110" : "text-gray-400"
+                        }`}
+                      />
+                      <span>Dokumen Tambahan</span>
+                    </button>
 
                   <button
-                    className="block w-full px-3 py-2 text-sm hover:bg-gray-100"
+                    type="button"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-emerald-700 hover:bg-emerald-50/80 rounded-xl transition-all cursor-pointer text-left group"
                     onClick={() => {
-                      console.log("dokumen tambahan", row);
-                      navigate(`/audit/tambahan/${row.UUID}`);
-                      close();
-                    }}
-                  >
-                    Dokumen Tambahan
-                  </button>
-
-                  <button
-                    className="block w-full px-3 py-2 text-sm hover:bg-gray-100"
-                    onClick={() => {
-                      console.log("edit", row);
                       navigate(`/kts/${row.Tahun}/${row.FakultasUnitUuid}/${row.UUID}`);
                       close();
                     }}
                   >
-                    KTS
+                    <FileText className="w-4 h-4 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span>KTS</span>
                   </button>
 
+                  <div className="my-1 border-t border-gray-150" />
+
                   <button
-                    className="block w-full px-3 py-2 text-sm text-red-600 hover:bg-gray-100"
+                    type="button"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition-all cursor-pointer text-left group"
                     onClick={() => {
-                      console.log("hapus", row);
                       close();
                     }}
                   >
-                    Hapus
+                    <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span>Hapus</span>
                   </button>
-                </>
-              )}
+                </div>
+              );
+            }}
             />
           }
         </div>

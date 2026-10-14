@@ -3,6 +3,7 @@ import React from "react";
 export default function DateRangeInput({
   label,
   required = false,
+  disabled = false,
   start,
   end,
   startError,
@@ -23,7 +24,8 @@ export default function DateRangeInput({
         <div className="flex-1">
           <input
             type="date"
-            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2
+            disabled={disabled}
+            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed
               ${
                 startError
                   ? "border-red-500 focus:ring-red-300"
@@ -39,7 +41,8 @@ export default function DateRangeInput({
         <div className="flex-1">
           <input
             type="date"
-            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2
+            disabled={disabled}
+            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed
               ${
                 endError
                   ? "border-red-500 focus:ring-red-300"

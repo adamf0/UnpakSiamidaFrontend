@@ -17,6 +17,7 @@ const TextInput = React.forwardRef(
           className={`
             w-full px-3 py-2 text-sm rounded border
             outline-none transition
+            disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed
             ${
               error
                 ? "border-red-500 focus:ring-0"

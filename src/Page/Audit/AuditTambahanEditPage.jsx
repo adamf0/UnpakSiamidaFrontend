@@ -37,50 +37,86 @@ const AuditTambahanEditPage = () => {
     formState: { errors },
   } = useForm({ defaultValues: { link: "", capaian_auditor: "", catatan_auditor: "", } });
 
+  const ensureGenerated = async (renstra) => {
+    if (!renstra?.Tahun || !renstra?.UUID || !renstra?.FakultasUnitUuid) return [];
+    const token = getValidToken();
+    if (isEmpty(token)) return [];
+
+    try {
+      const fd = new FormData();
+      fd.append("tahun", renstra.Tahun);
+      fd.append("renstra", renstra.UUID);
+      fd.append("fakultas_unit", renstra.FakultasUnitUuid);
+
+      const res = await fetch("http://localhost:3000/renstra/generate", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: fd,
+      });
+
+      if (res.ok) {
+        return await fetchDataAudit(renstra.UUID);
+      }
+    } catch (err) {
+      console.error("Auto generate renstra error:", err);
+    }
+    return [];
+  };
+
   const onSubmit = async (data) => {
     if (isEmpty(getValidToken())) return;
-    const audit = (dataAudit ?? []).find((item)=> item.TemplateDokumenTambahanUUID==activeQuestion);
+    let audit = (dataAudit ?? []).find((item) => item.TemplateDokumenTambahanUUID === activeQuestion);
 
-    if(!audit?.UUID){
-      addToast("error","ada masalah pada audit bagian kode referensi");
+    if (!audit?.UUID && dataRenstra) {
+      setLoading(true);
+      const generatedList = await ensureGenerated(dataRenstra);
+      audit = (generatedList ?? []).find((item) => item.TemplateDokumenTambahanUUID === activeQuestion);
+    }
+
+    if (!audit?.UUID) {
+      addToast("error", "Ada masalah pada audit bagian kode referensi. Silakan coba kembali.");
+      setLoading(false);
       return;
     }
+
+    const targetTahun = dataRenstra?.Tahun || positionYear;
 
     if (
-      audit?.TahunDokumenTambahan !== positionYear ||
-      audit?.TahunRenstra !== positionYear
+      audit?.TahunDokumenTambahan &&
+      audit?.TahunRenstra &&
+      (String(audit.TahunDokumenTambahan) !== String(targetTahun) ||
+        String(audit.TahunRenstra) !== String(targetTahun))
     ) {
-      addToast("error","ada masalah pada audit karena tidak sinkron tahun pertanyaan dengan tahun audit");
+      addToast("error", "ada masalah pada audit karena tidak sinkron tahun pertanyaan dengan tahun audit");
       return;
     }
 
-    const url = `http://localhost:3000/dokumentambahan/${positionYear}/${audit.UUID}`;
+    const url = `http://localhost:3000/dokumentambahan/${targetTahun}/${audit.UUID}`;
     
     const dataForm = new FormData();
-    dataForm.append("uuidRenstra", audit?.RenstraUUID ?? "");
+    dataForm.append("uuidRenstra", audit?.RenstraUUID ?? dataRenstra?.UUID ?? "");
     dataForm.append("mode", level);
 
-    if(level=="auditee"){
-      dataForm.append("link",data?.link ?? "");
-    } else if(level=="auditor1" || level=="auditor2"){
-      dataForm.append("capaianAuditor",data?.capaian_auditor ?? "");
-      dataForm.append("catatanAuditor",data?.catatan_auditor ?? "");
+    if (level === "auditee") {
+      dataForm.append("link", data?.link ?? "");
+    } else if (level === "auditor1" || level === "auditor2") {
+      dataForm.append("capaianAuditor", data?.capaian_auditor ?? "");
+      dataForm.append("catatanAuditor", data?.catatan_auditor ?? "");
     }
 
     try {
       setLoading(true);
-      await delay(1000);
+      await delay(500);
 
-      const res = await fetch(
-        url,
-        {
-          method: "PUT",
-          body: dataForm,
-          headers: {
-            Authorization: `Bearer ${getValidToken()}`
-          }
-        }
-      );
+      const res = await fetch(url, {
+        method: "PUT",
+        body: dataForm,
+        headers: {
+          Authorization: `Bearer ${getValidToken()}`,
+        },
+      });
 
       const json = await res.json();
 
@@ -116,18 +152,20 @@ const AuditTambahanEditPage = () => {
     } finally {
       setLoading(false);
     }
-
-    console.log(data);
   };
+
   useEffect(() => {
+    if (!uuidRenstra) return;
     (async () => {
-      await fetchDataAudit(uuidRenstra);
-      await fetchDataRenstra(uuidRenstra);
+      const auditList = await fetchDataAudit(uuidRenstra);
+      const renstraData = await fetchDataRenstra(uuidRenstra);
+      if (renstraData && (!auditList || auditList.length === 0)) {
+        await ensureGenerated(renstraData);
+      }
     })();
   }, [uuidRenstra]);
 
   useEffect(() => {
-    // console.log("dataRenstra", dataRenstra);
     if (!dataRenstra) return;
 
     (async () => {
@@ -140,12 +178,17 @@ const AuditTambahanEditPage = () => {
   }, [dataRenstra]);
 
   useEffect(() => {
-    console.log("dataAudit", dataAudit);
-  }, [dataAudit]);
+    if (!activeQuestion && dataTemplate && dataTemplate.length > 0) {
+      const firstQ = dataTemplate.find((item) => item.IsPertanyaan);
+      if (firstQ) {
+        setActiveQuestion(firstQ.UUID);
+      }
+    }
+  }, [dataTemplate, activeQuestion]);
 
   useEffect(() => {
     const data = (dataAudit ?? []).find(
-      (item) => item.TemplateDokumenTambahanUUID == activeQuestion
+      (item) => item.TemplateDokumenTambahanUUID === activeQuestion
     );
 
     reset({
@@ -153,7 +196,7 @@ const AuditTambahanEditPage = () => {
       capaian_auditor: data?.CapaianAuditor ?? "",
       catatan_auditor: data?.CatatanAuditor ?? "",
     });
-  }, [activeQuestion]);
+  }, [activeQuestion, dataAudit]);
 
   const fetchTemplateQuestion = async (
     tipe = "dokumen_tambahan",
@@ -264,18 +307,20 @@ const AuditTambahanEditPage = () => {
       }
 
       setDataAudit(result);
+      return result;
     } catch (err) {
       console.error("Fetch data audit gagal:", err);
       addToast(
         "error",
         `Gagal memuat data nilai dokumen tambahan: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
       );
+      return [];
     }
   };
 
   const fetchDataRenstra = async (uuidRenstra) => {
     const token = getValidToken();
-    if (isEmpty(token)) return;
+    if (isEmpty(token)) return null;
 
     try {
       const res = await fetch(`http://localhost:3000/renstra/${uuidRenstra}`, {
@@ -291,17 +336,19 @@ const AuditTambahanEditPage = () => {
           if (jsonErr?.message) errorMsg = jsonErr.message;
         } catch (_) {}
         addToast("error", errorMsg);
-        return;
+        return null;
       }
 
       const json = await res.json();
       setDataRenstra(json);
+      return json;
     } catch (err) {
       console.error("Fetch data renstra gagal:", err);
       addToast(
         "error",
         `Gagal memuat data jadwal renstra: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
       );
+      return null;
     }
   };
 
@@ -414,53 +461,99 @@ const AuditTambahanEditPage = () => {
             onSubmit={handleSubmit(onSubmit)}
             className="flex-1 p-4 border rounded md:mr-4 overflow-y-auto h-screen"
           >
-            {!activeQuestion? 
+            {!activeQuestion ? (
               <div className="h-full flex justify-center items-center">
                 <p className="text-gray-500">Pilih nomor audit nya dulu baru bisa isi pertanyaan</p>
-              </div>:
-              (dataAudit ?? [])
-              .filter((q) => q.TemplateDokumenTambahanUUID === activeQuestion)
-              .map((q) => {
-                if(q.TahunDokumenTambahan != positionYear || q.TahunRenstra != positionYear){
-                  return <div className="h-full flex justify-center items-center">
-                    <p className="text-gray-500">ada masalah pada audit karena tidak sinkron tahun pertanyaan dengan tahun audit</p>
-                  </div>
-                }
+              </div>
+            ) : (() => {
+              const currentTemplate = (dataTemplate ?? []).find(
+                (q) => q.UUID === activeQuestion
+              );
+              const currentAudit = (dataAudit ?? []).find(
+                (q) => q.TemplateDokumenTambahanUUID === activeQuestion
+              );
+
+              if (!currentTemplate) {
                 return (
-                  <div
-                    className="flex flex-col space-y-2"
-                    key={q.TemplateDokumenTambahanUUID}
-                    id={`q-${q.TemplateDokumenTambahanUUID}`}
-                  >
-                    <div className="flex flex-col">
-                      <p className="flex-1 font-bold text-lg">{q.Dokumen}</p>
-                      <small className="flex-1 italic text-sm">
-                        {q.Pertanyaan}
-                      </small>
+                  <div className="h-full flex justify-center items-center">
+                    <p className="text-gray-500">Pertanyaan tidak ditemukan atau sedang dimuat...</p>
+                  </div>
+                );
+              }
+
+              const docName =
+                currentAudit?.Dokumen ||
+                currentTemplate?.Dokumen ||
+                currentTemplate?.JenisFile ||
+                "Dokumen Tambahan";
+
+              const questionText =
+                currentAudit?.Pertanyaan ||
+                currentTemplate?.Pertanyaan ||
+                currentTemplate?.Indikator ||
+                "";
+
+              return (
+                <div
+                  className="flex flex-col space-y-4"
+                  key={currentTemplate.UUID}
+                  id={`q-${currentTemplate.UUID}`}
+                >
+                  <div className="flex flex-col pb-3 border-b border-gray-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                        Point {currentTemplate.Pointing}
+                      </span>
+                      {currentTemplate.Klasifikasi && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          {currentTemplate.Klasifikasi}
+                        </span>
+                      )}
                     </div>
+                    <h3 className="font-bold text-lg text-gray-800">{docName}</h3>
+                    {questionText && (
+                      <p className="italic text-sm text-gray-600 mt-1">
+                        {questionText}
+                      </p>
+                    )}
+                  </div>
 
-                    { //[pr] belum di disable berdasarkan dataRenstra range
-                      level=="auditee"? 
-                      <TextInput
-                        type="text"
-                        label="Link Berkas"
-                        placeholder="misal: drive.google.com"
-                        error={errors.link?.message}
-                        {...register("link", {
-                          required: "Link wajib diisi",
-                        })}
-                      /> : 
-                      <>
-                      <label className="block text-sm font-medium mb-1">Link Berkas </label>
-                      {(isEmpty(watch("link"))? "Tidak ada link bukti":<a href={watch("link")} className="text-purple-500 hover:text-black text-sm rounded" target="_blank">{watch("link")}</a>)}
-                      </>
-                    }
+                  {level === "auditee" ? (
+                    <TextInput
+                      type="text"
+                      label="Link Berkas"
+                      placeholder="misal: drive.google.com/..."
+                      error={errors.link?.message}
+                      {...register("link", {
+                        required: "Link wajib diisi",
+                      })}
+                    />
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Link Berkas
+                      </label>
+                      {isEmpty(watch("link")) ? (
+                        <p className="text-sm text-gray-400 italic">Tidak ada link bukti</p>
+                      ) : (
+                        <a
+                          href={watch("link")?.startsWith("http") ? watch("link") : `https://${watch("link")}`}
+                          className="text-purple-600 hover:text-purple-800 underline text-sm break-all font-medium"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {watch("link")}
+                        </a>
+                      )}
+                    </div>
+                  )}
 
-                    { //[pr] belum di disable berdasarkan dataRenstra range
-                      (level=="auditor1" || level=="auditor2") && <>
-                        <hr className="my-3"/>
-
-                        <label className="block text-sm font-medium mb-1">Capaian</label>
+                  {(level === "auditor1" || level === "auditor2") && (
+                    <div className="space-y-4 pt-2 border-t border-gray-150">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Capaian
+                        </label>
                         <div className="flex gap-4">
                           {["1", "0"].map((v) => (
                             <RadioButton
@@ -477,43 +570,48 @@ const AuditTambahanEditPage = () => {
                             />
                           ))}
                         </div>
-
-                        {/* error message */}
                         {errors.capaian_auditor && (
                           <p className="text-red-500 text-xs mt-1">
                             {errors.capaian_auditor.message}
                           </p>
                         )}
+                      </div>
 
+                      {watch("capaian_auditor") === "0" && (
+                        <div className="relative">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Catatan
+                          </label>
+                          <textarea
+                            {...register("catatan_auditor", {
+                              required: "Catatan wajib diisi jika capaian tidak",
+                            })}
+                            placeholder="Tulis catatan kenapa tidak tercapai..."
+                            className="w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+                            rows={4}
+                          />
+                          {errors.catatan_auditor && (
+                            <p className="text-red-500 text-xs mt-1">
+                              {errors.catatan_auditor.message}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                        {watch("capaian_auditor") === "0" && (
-                          <div className="relative">
-                            <label className="block text-sm font-medium mb-1">
-                              Catatan
-                            </label>
-                            <textarea
-                              {...register("catatan_auditor", {
-                                required: "Catatan wajib diisi jika capaian tidak",
-                              })}
-                              placeholder="Tulis catatan kenapa tidak tercapai..."
-                              className="w-full text-sm p-2 rounded border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600"
-                              rows={5}
-                            />
-                            {errors.catatan_auditor && (
-                              <p className="text-red-500 text-xs mt-1">
-                                {errors.catatan_auditor.message}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                      </>
-                    }
-
-                    <button className="bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-sm text-white rounded py-2" disabled={loading} onClick={handleSubmit(onSubmit)}>Simpan</button>
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-sm font-medium text-white rounded-xl py-2.5 transition shadow-sm cursor-pointer"
+                    >
+                      {loading ? "Menyimpan..." : "Simpan"}
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })()}
           </form>
         </div>
 

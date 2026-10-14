@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { isEmpty } from "@/Common/Utils";
+import { APP_VERSIONS, getVersionConfig } from "@/Common/versionConfig";
 
 const ContentContext = createContext(null);
 
@@ -13,6 +14,23 @@ export const ContentProvider = ({ children }) => {
   const [positionYear, setPositionYear] = useState(() => {
     return sessionStorage.getItem("positionYear");
   });
+
+  /* ================= VERSIONING ================= */
+  const [appVersion, setAppVersion] = useState(() => {
+    return sessionStorage.getItem("appVersion") || "v2";
+  });
+
+  const changeAppVersion = (verId) => {
+    setAppVersion(verId);
+    sessionStorage.setItem("appVersion", verId);
+
+    // Otomatis sesuaikan tahun jika relevan dengan versi
+    const cfg = getVersionConfig(verId);
+    if (cfg?.defaultYear) {
+      setPositionYear(cfg.defaultYear);
+      sessionStorage.setItem("positionYear", cfg.defaultYear);
+    }
+  };
 
   /* ================= YEAR ================= */
   const activeYear = useMemo(
@@ -104,6 +122,12 @@ export const ContentProvider = ({ children }) => {
   return (
     <ContentContext.Provider
       value={{
+        // versioning
+        appVersion,
+        setAppVersion: changeAppVersion,
+        changeAppVersion,
+        APP_VERSIONS,
+
         // year
         serverYears,
         activeYear,

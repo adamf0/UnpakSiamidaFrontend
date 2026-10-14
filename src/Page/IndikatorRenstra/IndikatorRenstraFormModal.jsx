@@ -5,7 +5,11 @@ import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
 import SearchSelect from "@/Components/SearchSelect";
 import { useAuth } from "@/Providers/AuthProvider";
-import { isEmpty } from "@/Common/Utils";
+import {
+  isEmpty,
+  throwIfResponseNotOk,
+  formatFetchError,
+} from "@/Common/Utils";
 
 export default function IndikatorRenstraFormModal({
   open,
@@ -17,7 +21,12 @@ export default function IndikatorRenstraFormModal({
   const { addToast } = useToast();
   const [standarOptions, setStandarOptions] = useState([]);
   const [indikatorOptions, setIndikatorOptions] = useState([]);
-  const {getValidToken} = useAuth()
+  const [loadingStandar, setLoadingStandar] = useState(false);
+  const [errorStandar, setErrorStandar] = useState(null);
+  const [loadingIndikator, setLoadingIndikator] = useState(false);
+  const [errorIndikator, setErrorIndikator] = useState(null);
+  const { getValidToken } = useAuth();
+  const abortIndikatorRef = useRef(null);
 
   const {
     register,
@@ -38,28 +47,31 @@ export default function IndikatorRenstraFormModal({
   });
 
   useEffect(() => {
+    if (!open) {
+      abortIndikatorRef.current?.abort();
+      return;
+    }
+
     if (mode === "edit" && data) {
       const standarSelected = standarOptions.find(
-        (item) => item.id == data.UuidStandar
-      );
-      const indiaktorSelected = indikatorOptions.find(
-        (item) => item.id == data.UuidParent
+        (item) =>
+          item.id === data.UuidStandar ||
+          item.UUID === data.UuidStandar ||
+          item.Uuid === data.UuidStandar
       );
 
-      console.log(
-        standarSelected,
-        indiaktorSelected,
-        data.UuidStandar,
-        data.UuidParent
-      );
       reset({
-        standar_renstra: standarSelected,
-        indikator: data.Indikator,
-        parent: indiaktorSelected,
-        tahun: data.Tahun,
-        tipe_target: data.TipeTarget,
-        operator: data.Operator,
+        standar_renstra: standarSelected || null,
+        indikator: data.Indikator || "",
+        parent: null,
+        tahun: data.Tahun ? String(data.Tahun) : "",
+        tipe_target: data.TipeTarget || "",
+        operator: data.Operator || null,
       });
+
+      if (data.Tahun) {
+        fetchIndikatorRenstraOptions(String(data.Tahun).trim());
+      }
     } else {
       reset({
         standar_renstra: null,
@@ -69,43 +81,44 @@ export default function IndikatorRenstraFormModal({
         tipe_target: "",
         operator: null,
       });
+      setIndikatorOptions([]);
     }
-  }, [mode, data]);
+  }, [open, mode, data]);
 
-  const fetchDetail = async () => {
-    if(isEmpty(getValidToken())) return;
-
-    const res = await fetch(`http://localhost:3000/indikatorrenstra/${uuid}`, {
-      headers: {
-        Authorization: `Bearer ${getValidToken()}`
+  useEffect(() => {
+    if (mode === "edit" && data?.UuidStandar && standarOptions.length > 0) {
+      const foundStandar = standarOptions.find(
+        (item) =>
+          item.id === data.UuidStandar ||
+          item.UUID === data.UuidStandar ||
+          item.Uuid === data.UuidStandar
+      );
+      if (foundStandar) {
+        setValue("standar_renstra", foundStandar);
       }
-    });
-    const data = await res.json();
-    console.log(data);
-
-    if (!res.ok) {
-      addToast("error", data?.message || "Data tidak ditemukan");
     }
+  }, [standarOptions, mode, data]);
 
-    const standarObj =
-      standarOptions.find((o) => o.UUID === data?.StandarRenstraUuid) ?? null;
-
-    const indikatorObj =
-      indikatorOptions.find((o) => o.UUID === data?.ParentUuid) ?? null;
-
-    reset({
-      standar_renstra: standarObj,
-      indikator: data.Indikator,
-      parent: indikatorObj,
-      tahun: data.Tahun,
-      tipe_target: data.TipeTarget,
-      operator: data.Operator,
-    });
-  };
+  useEffect(() => {
+    if (mode === "edit" && data?.UuidParent && indikatorOptions.length > 0) {
+      const foundParent = indikatorOptions.find(
+        (item) =>
+          item.id === data.UuidParent ||
+          item.Uuid === data.UuidParent ||
+          item.UUID === data.UuidParent ||
+          item.uuid === data.UuidParent
+      );
+      if (foundParent) {
+        setValue("parent", foundParent);
+      }
+    }
+  }, [indikatorOptions, mode, data]);
 
   const fetchStandarRenstraOptions = async () => {
     if(isEmpty(getValidToken())) return;
 
+    setLoadingStandar(true);
+    setErrorStandar(null);
     try {
       const res = await fetch(
         "http://localhost:3000/standarrenstras?mode=sse",
@@ -117,8 +130,10 @@ export default function IndikatorRenstraFormModal({
         }
       );
 
+      await throwIfResponseNotOk(res, "Gagal memuat standar renstra");
+
       if (!res.body) {
-        throw new Error("SSE not supported");
+        throw new Error("[BE Golang] SSE not supported");
       }
 
       const reader = res.body.getReader();
@@ -161,25 +176,37 @@ export default function IndikatorRenstraFormModal({
       setStandarOptions(result);
     } catch (err) {
       console.error("Fetch standar renstra gagal:", err);
+      setErrorStandar(formatFetchError(err, "Gagal memuat standar renstra"));
+    } finally {
+      setLoadingStandar(false);
     }
   };
 
-  const fetchIndikatorRenstraOptions = async (tahun) => {
-    if(isEmpty(getValidToken())) return;
-    
+  const fetchIndikatorRenstraOptions = async (targetTahun) => {
+    if (isEmpty(getValidToken()) || !targetTahun) return;
+
+    abortIndikatorRef.current?.abort();
+    const controller = new AbortController();
+    abortIndikatorRef.current = controller;
+
+    setLoadingIndikator(true);
+    setErrorIndikator(null);
     try {
       const res = await fetch(
-        `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${tahun}`,
+        `http://localhost:3000/indikatorrenstras?mode=sse&filters=tahun:eq:${targetTahun}`,
         {
+          signal: controller.signal,
           headers: {
             Accept: "text/event-stream",
-            Authorization: `Bearer ${getValidToken()}`
+            Authorization: `Bearer ${getValidToken()}`,
           },
         }
       );
 
+      await throwIfResponseNotOk(res, "Gagal memuat indikator renstra");
+
       if (!res.body) {
-        throw new Error("SSE not supported");
+        throw new Error("[BE Golang] SSE not supported");
       }
 
       const reader = res.body.getReader();
@@ -187,6 +214,42 @@ export default function IndikatorRenstraFormModal({
 
       let buffer = "";
       const result = [];
+
+      const processEvent = (eventStr) => {
+        if (!eventStr.startsWith("data:")) return;
+        const payload = eventStr.replace(/^data:\s*/, "").trim();
+        if (!payload || payload === "start" || payload === "done") return;
+        try {
+          const parsed = JSON.parse(payload);
+          const itemUuid = parsed.Uuid ?? parsed.UUID ?? parsed.uuid;
+          const itemId = parsed.Id ?? parsed.id ?? itemUuid;
+          const indikatorName = parsed.Indikator ?? parsed.indikator ?? "";
+          const tahunVal = parsed.Tahun ?? parsed.tahun ?? targetTahun;
+
+          // Jangan tampilkan item sendiri sebagai parent jika mode edit
+          if (
+            mode === "edit" &&
+            data?.Uuid &&
+            (itemUuid === data.Uuid || String(itemId) === String(data.Uuid))
+          ) {
+            return;
+          }
+
+          result.push({
+            id: itemUuid || itemId,
+            uuid: itemUuid,
+            UUID: itemUuid,
+            Uuid: itemUuid,
+            Id: itemId,
+            nama: indikatorName
+              ? `${indikatorName} (${tahunVal})`
+              : `Indikator ${itemId}`,
+            ...parsed,
+          });
+        } catch (err) {
+          console.error("JSON parse error:", payload);
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -198,30 +261,27 @@ export default function IndikatorRenstraFormModal({
         while ((index = buffer.indexOf("\n\n")) !== -1) {
           const event = buffer.slice(0, index).trim();
           buffer = buffer.slice(index + 2);
+          processEvent(event);
+        }
+      }
 
-          if (!event.startsWith("data:")) continue;
-
-          const payload = event.replace(/^data:\s*/, "");
-
-          if (!payload || payload === "start" || payload === "done") continue;
-
-          try {
-            const parsed = JSON.parse(payload);
-
-            result.push({
-              id: parsed.UUID,
-              nama: `${parsed.Indikator} (${parsed.Tahun})`,
-              ...parsed,
-            });
-          } catch (err) {
-            console.error("JSON parse error:", payload);
-          }
+      if (buffer.trim()) {
+        const lines = buffer.split("\n");
+        for (const line of lines) {
+          processEvent(line.trim());
         }
       }
 
       setIndikatorOptions(result);
     } catch (err) {
-      console.error("Fetch Indikator renstra gagal:", err);
+      if (err.name !== "AbortError") {
+        console.error("Fetch Indikator renstra gagal:", err);
+        setErrorIndikator(
+          formatFetchError(err, "Gagal memuat indikator renstra")
+        );
+      }
+    } finally {
+      setLoadingIndikator(false);
     }
   };
 
@@ -232,44 +292,56 @@ export default function IndikatorRenstraFormModal({
   const tahun = watch("tahun");
 
   useEffect(() => {
-    if (!tahun) {
+    const rawTahun = String(tahun || "").trim();
+    if (!rawTahun || rawTahun.length < 4) {
       setIndikatorOptions([]);
+      setLoadingIndikator(false);
       return;
     }
 
-    fetchIndikatorRenstraOptions(tahun);
+    const timer = setTimeout(() => {
+      fetchIndikatorRenstraOptions(rawTahun);
+    }, 350);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [tahun]);
-
-  useEffect(() => {
-    if (mode === "new") return;
-    if (!data.uuid) return;
-    // if (standarOptions.length === 0) return;
-    // if (indikatorOptions.length === 0) return;
-
-    fetchDetail();
-  }, [mode, data, standarOptions, indikatorOptions]);
 
   const onSubmit = async (form) => {
     console.log("SUBMIT:", form);
     try {
       const fd = new FormData();
-      fd.append("standar_renstra", form.standar_renstra?.UUID ?? "");
+      const standarUuid =
+        form.standar_renstra?.UUID ??
+        form.standar_renstra?.Uuid ??
+        form.standar_renstra?.uuid ??
+        form.standar_renstra?.id ??
+        "";
+      const parentUuid =
+        form.parent?.Uuid ??
+        form.parent?.UUID ??
+        form.parent?.uuid ??
+        form.parent?.id ??
+        "";
+
+      fd.append("standar_renstra", standarUuid);
       fd.append("indikator", form?.indikator ?? "");
-      fd.append("parent", form?.parent?.UUID ?? "");
+      fd.append("parent", parentUuid);
       fd.append("tahun", form?.tahun ?? "");
       fd.append("tipe_target", form?.tipe_target ?? "");
       fd.append("operator", form?.operator ?? "");
 
       const res = await fetch(
         mode === "edit"
-          ? `http://localhost:3000/indikatorrenstra/${data.Uuid}`
+          ? `http://localhost:3000/indikatorrenstra/${data?.Uuid ?? data?.uuid ?? data?.id}`
           : "http://localhost:3000/indikatorrenstra",
         {
           method: mode === "edit" ? "PUT" : "POST",
           body: fd,
           headers: {
-            Authorization: `Bearer ${getValidToken()}`
-          }
+            Authorization: `Bearer ${getValidToken()}`,
+          },
         }
       );
 
@@ -324,6 +396,9 @@ export default function IndikatorRenstraFormModal({
                   required
                   options={standarOptions}
                   placeholder="Cari standar renstra"
+                  loading={loadingStandar}
+                  loadError={errorStandar}
+                  onRetry={fetchStandarRenstraOptions}
                   value={watch("standar_renstra")}
                   error={errors.standar_renstra?.message}
                   onChange={(item) =>
@@ -355,7 +430,15 @@ export default function IndikatorRenstraFormModal({
                   min="0"
                   required
                   error={errors.tahun?.message}
-                  {...register("tahun", { required: "Tahun wajib diisi" })}
+                  {...register("tahun", {
+                    required: "Tahun wajib diisi",
+                    onChange: (e) => {
+                      const val = e.target.value;
+                      if (!val || String(val).trim().length < 4) {
+                        setValue("parent", null);
+                      }
+                    },
+                  })}
                 />
 
                 <TextInput
@@ -376,7 +459,20 @@ export default function IndikatorRenstraFormModal({
                 <SearchSelect
                   label="Parent Renstra"
                   options={indikatorOptions}
-                  placeholder="Cari indikator renstra"
+                  placeholder={
+                    tahun && String(tahun).trim().length >= 4
+                      ? "Cari indikator renstra"
+                      : "Isi tahun renstra terlebih dahulu"
+                  }
+                  loading={loadingIndikator}
+                  loadError={errorIndikator}
+                  disabled={!tahun || String(tahun).trim().length < 4}
+                  onRetry={() => {
+                    const rawT = String(tahun || "").trim();
+                    if (rawT.length >= 4) {
+                      fetchIndikatorRenstraOptions(rawT);
+                    }
+                  }}
                   value={watch("parent")}
                   onChange={(item) =>
                     setValue("parent", item, {

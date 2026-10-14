@@ -4,12 +4,26 @@ import { Dialog } from "@headlessui/react";
 const ChangeLevelModal = ({
   open,
   onClose,
-  levels,
+  levels = [],
+  listLevel,
   currentLevel,
+  level,
   onSubmit,
+  setLevel,
+  setOpen,
 }) => {
+  const actualLevels = Array.isArray(levels) && levels.length > 0
+    ? levels
+    : (Array.isArray(listLevel) ? listLevel : []);
+  const actualCurrentLevel = currentLevel || level;
+  const handleClose = onClose || (() => setOpen?.(false));
+  const handleSubmit = onSubmit || ((lvl) => {
+    setLevel?.(lvl);
+    handleClose();
+  });
+
   return (
-    <Dialog open={open} onClose={onClose} className="relative z-50">
+    <Dialog open={open} onClose={handleClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/40" />
 
       <div className="fixed inset-0 flex items-center justify-center p-4">
@@ -19,12 +33,12 @@ const ChangeLevelModal = ({
           </Dialog.Title>
 
           <div className="space-y-3">
-            {levels.map((lvl) => (
-              <label key={lvl} className="flex items-center gap-2">
+            {actualLevels.map((lvl) => (
+              <label key={lvl} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
-                  checked={lvl === currentLevel}
-                  onChange={() => onSubmit(lvl)}
+                  checked={lvl === actualCurrentLevel}
+                  onChange={() => handleSubmit(lvl)}
                 />
                 <span className="capitalize">{mappedText(lvl)}</span>
               </label>

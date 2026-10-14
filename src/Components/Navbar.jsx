@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Popover } from "@headlessui/react";
-import { Bell, User, Menu, Calendar } from "lucide-react";
+import { Bell, User, Menu, Calendar, Layers, ChevronDown, Check } from "lucide-react";
 import { mappedText } from "@/Common/Utils";
 import { useSidebar } from "@/Providers/SidebarProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
+import { APP_VERSIONS, getVersionConfig } from "@/Common/versionConfig";
 
 const Navbar = ({ renderChangeLevelModal }) => {
   const { toggleSidebar } = useSidebar();
@@ -17,9 +18,12 @@ const Navbar = ({ renderChangeLevelModal }) => {
     level,
     listLevel,
     setOpenChangeLevel,
+    appVersion,
+    changeAppVersion,
   } = useContent();
 
   const isAdmin = level === "admin" || user?.level === "admin";
+  const currentVersionConfig = getVersionConfig(appVersion || "v2");
 
   const [notifications] = useState([
     { id: 1, message: "Notifikasi 1" },
@@ -29,6 +33,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
   // State modal mobile
   const [notifModalOpen, setNotifModalOpen] = useState(false);
   const [yearModalOpen, setYearModalOpen] = useState(false);
+  const [versionModalOpen, setVersionModalOpen] = useState(false);
 
   // useEffect(() => {
   //   onMobileModeListener(notifModalOpen || yearModalOpen);
@@ -45,6 +50,99 @@ const Navbar = ({ renderChangeLevelModal }) => {
           <button onClick={() => toggleSidebar()} className="hidden lg:flex">
             <Menu className="hover:text-white" size={20} />
           </button>
+
+          {/* Versioning selection for admin */}
+          {isAdmin && (
+            <Popover className="relative">
+              {({ open, close }) => (
+                <>
+                  <Popover.Button
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium bg-white/95 hover:bg-white text-gray-800 border border-purple-200 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    title="Filter Menu Berdasarkan Versi Aplikasi"
+                  >
+                    <Layers size={16} className="text-purple-600 shrink-0" />
+                    <span className="font-semibold text-purple-900">
+                      {currentVersionConfig?.code?.toUpperCase() || "V2"}
+                    </span>
+                    <span className="hidden sm:inline text-gray-400">|</span>
+                    <span className="hidden sm:inline text-gray-700 text-xs">
+                      {currentVersionConfig?.tag || "Current"}
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      className={`text-gray-500 transition-transform duration-200 ${
+                        open ? "rotate-180" : ""
+                      }`}
+                    />
+                  </Popover.Button>
+
+                  <Popover.Panel className="absolute left-0 mt-2 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden divide-y divide-gray-100">
+                    <div className="px-3.5 py-2.5 bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                          <Layers size={13} className="text-purple-600" />
+                          Versi Aplikasi
+                        </span>
+                        <span className="text-[10px] bg-purple-200/80 text-purple-900 font-semibold px-2 py-0.5 rounded-full">
+                          Admin Filter
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-600 mt-1 leading-snug">
+                        Filter menu sidebar berdasarkan versi sistem & periode audit
+                      </p>
+                    </div>
+
+                    <div className="p-1.5 space-y-1 max-h-80 overflow-y-auto">
+                      {(APP_VERSIONS || []).map((item) => {
+                        const isSelected = (appVersion || "v2") === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              changeAppVersion(item.id);
+                              close();
+                            }}
+                            className={`w-full text-left p-2.5 rounded-lg transition-all flex items-start gap-2.5 ${
+                              isSelected
+                                ? "bg-purple-50 border border-purple-200 text-purple-950 font-medium"
+                                : "hover:bg-gray-50 text-gray-700 border border-transparent"
+                            }`}
+                          >
+                            <div className="mt-0.5 shrink-0">
+                              {isSelected ? (
+                                <div className="w-4 h-4 rounded-full bg-purple-600 text-white flex items-center justify-center">
+                                  <Check size={11} strokeWidth={3} />
+                                </div>
+                              ) : (
+                                <div className="w-4 h-4 rounded-full border border-gray-300" />
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span className="text-xs font-semibold">
+                                  {item.label}
+                                </span>
+                                <span
+                                  className={`text-[10px] px-1.5 py-0.2 rounded font-medium border shrink-0 ${item.tagColor}`}
+                                >
+                                  {item.tag}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-500 mt-0.5 leading-tight">
+                                {item.description}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Popover.Panel>
+                </>
+              )}
+            </Popover>
+          )}
 
           {/* Tahun selection (desktop only) - Disembunyikan untuk admin */}
           {!isAdmin && (
@@ -175,6 +273,21 @@ const Navbar = ({ renderChangeLevelModal }) => {
                   </button>
                 )}
 
+                {isAdmin && (
+                  <button
+                    className="sm:hidden w-full rounded text-left px-4 hover:bg-gray-100 flex justify-between items-center"
+                    onClick={() => setVersionModalOpen(true)}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Layers size={14} className="text-purple-600" />
+                      Versi Aplikasi
+                    </span>
+                    <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                      {currentVersionConfig?.code?.toUpperCase() || "V2"}
+                    </span>
+                  </button>
+                )}
+
                 <button className="w-full rounded text-left px-4 hover:bg-gray-100">
                   Settings
                 </button>
@@ -264,6 +377,70 @@ const Navbar = ({ renderChangeLevelModal }) => {
                 );
               })}
             </ul>
+          </div>
+        </div>
+      )}
+      {/* Versi Modal (Mobile) - Khusus admin */}
+      {isAdmin && versionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="flex justify-between items-center px-4 py-3 border-b bg-purple-50">
+              <div className="flex items-center gap-2">
+                <Layers size={18} className="text-purple-600" />
+                <h3 className="font-semibold text-gray-900 text-sm">Pilih Versi Aplikasi</h3>
+              </div>
+              <button
+                onClick={() => setVersionModalOpen(false)}
+                className="text-gray-500 hover:text-gray-800 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-2 space-y-1 max-h-80 overflow-y-auto">
+              {(APP_VERSIONS || []).map((item) => {
+                const isSelected = (appVersion || "v2") === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      changeAppVersion(item.id);
+                      setVersionModalOpen(false);
+                    }}
+                    className={`w-full text-left p-2.5 rounded-lg transition-all flex items-start gap-2.5 ${
+                      isSelected
+                        ? "bg-purple-50 border border-purple-200 text-purple-950 font-medium"
+                        : "hover:bg-gray-50 text-gray-700 border border-transparent"
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      {isSelected ? (
+                        <div className="w-4 h-4 rounded-full bg-purple-600 text-white flex items-center justify-center">
+                          <Check size={11} strokeWidth={3} />
+                        </div>
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border border-gray-300" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-xs font-semibold">
+                          {item.label}
+                        </span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded font-medium border shrink-0 ${item.tagColor}`}
+                        >
+                          {item.tag}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-0.5 leading-tight">
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

@@ -30,6 +30,7 @@ const AuditRenstraEditPage = () => {
   const [dataAudit, setDataAudit] = useState([]);
   const [dataTemplate, setDataTemplate] = useState([]);
   const [dataRenstra, setDataRenstra] = useState(null);
+  const [templateNotFound, setTemplateNotFound] = useState(false);
 
   // const [isMobileMode, setIsMobileMode] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -53,21 +54,61 @@ const AuditRenstraEditPage = () => {
     },
   });
 
+  const ensureGenerated = async (renstra) => {
+    if (!renstra?.Tahun || !renstra?.UUID || !renstra?.FakultasUnitUuid) return [];
+    const token = getValidToken();
+    if (isEmpty(token)) return [];
+
+    try {
+      const fd = new FormData();
+      fd.append("tahun", renstra.Tahun);
+      fd.append("renstra", renstra.UUID);
+      fd.append("fakultas_unit", renstra.FakultasUnitUuid);
+
+      const res = await fetch("http://localhost:3000/renstra/generate", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: fd,
+      });
+
+      if (res.ok) {
+        return await fetchDataAudit(renstra.UUID);
+      }
+    } catch (err) {
+      console.error("Auto generate renstra error:", err);
+    }
+    return [];
+  };
+
   const onSubmit = async (data) => {
     if (isEmpty(getValidToken())) return;
-    const audit = (dataAudit ?? []).find(
-      (item) => item.TemplateRenstraUUID == activeQuestion
+    let audit = (dataAudit ?? []).find(
+      (item) => item.TemplateRenstraUUID === activeQuestion
     );
 
+    if (!audit?.UUID && dataRenstra) {
+      setLoading(true);
+      const generatedList = await ensureGenerated(dataRenstra);
+      audit = (generatedList ?? []).find(
+        (item) => item.TemplateRenstraUUID === activeQuestion
+      );
+    }
+
     if (!audit?.UUID) {
-      addToast("error", "ada masalah pada audit bagian kode referensi");
+      addToast("error", "Ada masalah pada audit bagian kode referensi. Silakan coba kembali.");
+      setLoading(false);
       return;
     }
 
-    console.log(audit?.TahunIndikator, audit?.TahunRenstra, positionYear)
+    const targetTahun = dataRenstra?.Tahun || positionYear;
+
     if (
-      audit?.TahunIndikator !== positionYear ||
-      audit?.TahunRenstra !== positionYear
+      audit?.TahunIndikator &&
+      audit?.TahunRenstra &&
+      (String(audit.TahunIndikator) !== String(targetTahun) ||
+        String(audit.TahunRenstra) !== String(targetTahun))
     ) {
       addToast(
         "error",
@@ -76,24 +117,24 @@ const AuditRenstraEditPage = () => {
       return;
     }
 
-    const url = `http://localhost:3000/renstranilai/${positionYear}/${audit.UUID}`;
+    const url = `http://localhost:3000/renstranilai/${targetTahun}/${audit.UUID}`;
 
     const dataForm = new FormData();
-    dataForm.append("uuidRenstra", audit?.RenstraUUID ?? "");
+    dataForm.append("uuidRenstra", audit?.RenstraUUID ?? dataRenstra?.UUID ?? "");
     dataForm.append("mode", level);
 
-    if (level == "auditee") {
+    if (level === "auditee") {
       dataForm.append("capaian", data?.capaian ?? "");
       dataForm.append("catatan", data?.catatan ?? "");
       dataForm.append("linkBukti", data?.link_bukti ?? "");
-    } else if (level == "auditor1" || level == "auditor2") {
+    } else if (level === "auditor1" || level === "auditor2") {
       dataForm.append("capaianAuditor", data?.capaian_auditor ?? "");
       dataForm.append("catatanAuditor", data?.catatan_auditor ?? "");
     }
 
     try {
       setLoading(true);
-      await delay(1000);
+      await delay(500);
 
       const res = await fetch(url, {
         method: "PUT",
@@ -115,12 +156,12 @@ const AuditRenstraEditPage = () => {
         return prev.map((item) => {
           if (item.TemplateRenstraUUID !== activeQuestion) return item;
 
-          if (level == "auditee") {
+          if (level === "auditee") {
             return {
               ...item,
               CapaianAuditee: data.capaian,
               CatatanAuditee: data.catatan,
-              LinkBukti: data.LinkBukti,
+              LinkBukti: data.link_bukti,
             };
           }
 
@@ -139,18 +180,20 @@ const AuditRenstraEditPage = () => {
     } finally {
       setLoading(false);
     }
-
-    console.log(data);
   };
+
   useEffect(() => {
+    if (!uuidRenstra) return;
     (async () => {
-      await fetchDataAudit(uuidRenstra);
-      await fetchDataRenstra(uuidRenstra);
+      const auditList = await fetchDataAudit(uuidRenstra);
+      const renstraData = await fetchDataRenstra(uuidRenstra);
+      if (renstraData && (!auditList || auditList.length === 0)) {
+        await ensureGenerated(renstraData);
+      }
     })();
   }, [uuidRenstra]);
 
   useEffect(() => {
-    // console.log("dataRenstra", dataRenstra);
     if (!dataRenstra) return;
 
     (async () => {
@@ -163,12 +206,17 @@ const AuditRenstraEditPage = () => {
   }, [dataRenstra]);
 
   useEffect(() => {
-    console.log("dataAudit", dataAudit);
-  }, [dataAudit]);
+    if (!activeQuestion && dataTemplate && dataTemplate.length > 0) {
+      const firstQ = dataTemplate.find((item) => item.IsPertanyaan);
+      if (firstQ) {
+        setActiveQuestion(firstQ.UUID);
+      }
+    }
+  }, [dataTemplate, activeQuestion]);
 
   useEffect(() => {
     const data = (dataAudit ?? []).find(
-      (item) => item.TemplateRenstraUUID == activeQuestion
+      (item) => item.TemplateRenstraUUID === activeQuestion
     );
 
     reset({
@@ -178,7 +226,7 @@ const AuditRenstraEditPage = () => {
       capaian_auditor: data?.CapaianAuditor ?? "",
       catatan_auditor: data?.CatatanAuditor ?? "",
     });
-  }, [activeQuestion]);
+  }, [activeQuestion, dataAudit]);
 
   const fetchTemplateQuestion = async (
     tipe = "renstra",
@@ -198,6 +246,12 @@ const AuditRenstraEditPage = () => {
         }
       );
 
+      if (res.status === 404) {
+        setTemplateNotFound(true);
+        setDataTemplate([]);
+        return;
+      }
+
       if (!res.ok) {
         let errorMsg = `Layanan preview indikator renstra gagal (HTTP ${res.status})`;
         try {
@@ -209,7 +263,8 @@ const AuditRenstraEditPage = () => {
       }
 
       const json = await res.json();
-      setDataTemplate(json);
+      setTemplateNotFound(false);
+      setDataTemplate(Array.isArray(json) ? json : []);
     } catch (err) {
       console.error("Fetch Indikator renstra gagal:", err);
       addToast(
@@ -221,7 +276,7 @@ const AuditRenstraEditPage = () => {
 
   const fetchDataAudit = async (uuidRenstra) => {
     const token = getValidToken();
-    if (isEmpty(token)) return;
+    if (isEmpty(token)) return [];
 
     try {
       const res = await fetch(
@@ -241,7 +296,7 @@ const AuditRenstraEditPage = () => {
           if (jsonErr?.message) errorMsg = jsonErr.message;
         } catch (_) {}
         addToast("error", errorMsg);
-        return;
+        return [];
       }
 
       if (!res.body) {
@@ -282,18 +337,20 @@ const AuditRenstraEditPage = () => {
       }
 
       setDataAudit(result);
+      return result;
     } catch (err) {
       console.error("Fetch data audit gagal:", err);
       addToast(
         "error",
         `Gagal memuat data nilai audit renstra: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
       );
+      return [];
     }
   };
 
   const fetchDataRenstra = async (uuidRenstra) => {
     const token = getValidToken();
-    if (isEmpty(token)) return;
+    if (isEmpty(token)) return null;
 
     try {
       const res = await fetch(`http://localhost:3000/renstra/${uuidRenstra}`, {
@@ -309,17 +366,19 @@ const AuditRenstraEditPage = () => {
           if (jsonErr?.message) errorMsg = jsonErr.message;
         } catch (_) {}
         addToast("error", errorMsg);
-        return;
+        return null;
       }
 
       const json = await res.json();
       setDataRenstra(json);
+      return json;
     } catch (err) {
       console.error("Fetch data renstra gagal:", err);
       addToast(
         "error",
         `Gagal memuat data jadwal renstra: Gangguan koneksi ke service backend (${err.message || "Network Error"}). Pastikan service backend aktif.`
       );
+      return null;
     }
   };
 
@@ -619,129 +678,170 @@ const AuditRenstraEditPage = () => {
             onSubmit={handleSubmit(onSubmit)}
             className="flex-1 p-4 border rounded md:mr-4 overflow-y-auto h-screen"
           >
-            {!activeQuestion ? (
+            {templateNotFound ? (
+              <div className="h-full flex flex-col justify-center items-center p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 mb-3 text-lg font-bold">
+                  !
+                </div>
+                <h4 className="font-semibold text-gray-800 text-base mb-1">
+                  Template Renstra Belum Tersedia
+                </h4>
+                <p className="text-gray-500 text-sm max-w-md">
+                  Target audit ini tidak memiliki template indikator renstra untuk tahun {dataRenstra?.Tahun || positionYear}.
+                </p>
+              </div>
+            ) : !activeQuestion ? (
               <div className="h-full flex justify-center items-center">
                 <p className="text-gray-500">
                   Pilih nomor audit nya dulu baru bisa isi pertanyaan
                 </p>
               </div>
-            ) : (
-              (dataAudit ?? [])
-                .filter((q) => q.TemplateRenstraUUID === activeQuestion)
-                .map((q) => {
-                  if (
-                    q.TahunIndikator != positionYear ||
-                    q.TahunRenstra != positionYear
-                  ) {
-                    return (
-                      <div className="h-full flex justify-center items-center">
-                        <p className="text-gray-500">
-                          ada masalah pada audit karena tidak sinkron tahun
-                          pertanyaan dengan tahun audit
-                        </p>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div
-                      className="flex flex-col space-y-2"
-                      key={q.TemplateRenstraUUID}
-                      id={`q-${q.TemplateRenstraUUID}`}
-                    >
-                      <div className="flex flex-col">
-                        <p className="flex-1 font-bold text-lg">
-                          {q.NamaIndikator}
-                        </p>
-                        <small className="flex-1 italic text-sm">
-                          {q.NamaIndikator}
-                        </small>
-                      </div>
+            ) : (() => {
+              const currentTemplate = (dataTemplate ?? []).find(
+                (q) => q.UUID === activeQuestion
+              );
+              const currentAudit = (dataAudit ?? []).find(
+                (q) => q.TemplateRenstraUUID === activeQuestion
+              );
 
-                      <TextInput
-                        label="Capaian yg diharapkan"
-                        value={renderCapaian(q)}
+              if (!currentTemplate) {
+                return (
+                  <div className="h-full flex justify-center items-center">
+                    <p className="text-gray-500">
+                      Pertanyaan sedang dimuat atau tidak ditemukan...
+                    </p>
+                  </div>
+                );
+              }
+
+              const itemData = {
+                ...currentTemplate,
+                ...currentAudit,
+                Kategori: currentAudit?.Kategori || currentTemplate?.Kategori,
+                Target: currentAudit?.Target || currentTemplate?.Target,
+                TargetMin: currentAudit?.TargetMin || currentTemplate?.TargetMin,
+                TargetMax: currentAudit?.TargetMax || currentTemplate?.TargetMax,
+                Satuan: currentAudit?.Satuan || currentTemplate?.Satuan,
+                Operator: currentAudit?.Operator || currentTemplate?.Operator,
+                NamaIndikator: currentAudit?.NamaIndikator || currentTemplate?.Indikator,
+              };
+
+              return (
+                <div
+                  className="flex flex-col space-y-4"
+                  key={currentTemplate.UUID}
+                  id={`q-${currentTemplate.UUID}`}
+                >
+                  <div className="flex flex-col pb-3 border-b border-gray-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                        Point {currentTemplate.Pointing}
+                      </span>
+                      {currentTemplate.Klasifikasi && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          {currentTemplate.Klasifikasi}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-bold text-lg text-gray-800">
+                      {itemData.NamaIndikator}
+                    </h3>
+                  </div>
+
+                  <TextInput
+                    label="Capaian yg diharapkan"
+                    value={renderCapaian(itemData)}
+                    disabled
+                  />
+
+                  <TextInput label="Satuan" value={itemData.Satuan || "-"} disabled />
+
+                  {renderInputCapaian(itemData)}
+
+                  <div className="relative">
+                    <label className="block text-sm font-medium mb-1">
+                      Catatan Auditee
+                    </label>
+                    {level === "auditee" ? (
+                      <textarea
+                        value={watch("catatan")}
+                        {...register("catatan")}
+                        placeholder="Tulis catatan..."
+                        className="w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600"
+                        rows={5}
+                      />
+                    ) : (
+                      <textarea
+                        value={watch("catatan")}
+                        placeholder="Tulis catatan..."
+                        className="w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 bg-gray-50"
+                        rows={5}
                         disabled
                       />
+                    )}
+                  </div>
 
-                      <TextInput label="Satuan" value={q.Satuan} disabled />
+                  {level === "auditee" ? (
+                    <TextInput
+                      type="text"
+                      label="Link Bukti"
+                      placeholder="misal: drive.google.com"
+                      error={errors.link_bukti?.message}
+                      {...register("link_bukti", {
+                        required: "Link Bukti wajib diisi",
+                      })}
+                    />
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Link Bukti
+                      </label>
+                      {isEmpty(watch("link_bukti")) ? (
+                        <p className="text-sm text-gray-400 italic">Tidak ada link bukti</p>
+                      ) : (
+                        <a
+                          href={watch("link_bukti")?.startsWith("http") ? watch("link_bukti") : `https://${watch("link_bukti")}`}
+                          className="text-purple-600 hover:text-purple-800 underline text-sm break-all font-medium"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {watch("link_bukti")}
+                        </a>
+                      )}
+                    </div>
+                  )}
 
-                      {renderInputCapaian(q)}
+                  {(level === "auditor1" || level === "auditor2") && (
+                    <div className="space-y-4 pt-2 border-t border-gray-150">
+                      {renderInputCapaianAuditor(itemData)}
 
                       <div className="relative">
-                        <label class="block text-sm font-medium mb-1">
-                          Catatan Auditee
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Catatan Auditor
                         </label>
-                        {level == "auditee" ? (
-                          <textarea
-                            value={watch("catatan")}
-                            {...register("catatan")}
-                            placeholder="Tulis catatan..."
-                            className="w-full text-sm p-2 rounded border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600"
-                            rows={5}
-                          />
-                        ) : (
-                          <textarea
-                            value={watch("catatan")}
-                            placeholder="Tulis catatan..."
-                            className="w-full text-sm p-2 rounded border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600"
-                            rows={5}
-                            disabled
-                          />
-                        )}
+                        <textarea
+                          value={watch("catatan_auditor")}
+                          {...register("catatan_auditor")}
+                          placeholder="Tulis catatan..."
+                          className="w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+                          rows={4}
+                        />
                       </div>
-
-                      {level == "auditee" ? (
-                        <TextInput
-                          type="text"
-                          label="Link Bukti"
-                          placeholder="misal: drive.google.com"
-                          error={errors.link_bukti?.message}
-                          {...register("link_bukti", {
-                            required: "Link Bukti wajib diisi",
-                          })}
-                        />
-                      ) : (
-                        <TextInput
-                          type="text"
-                          label="Link Bukti"
-                          placeholder="misal: drive.google.com"
-                          value={watch("link_bukti")}
-                          disabled
-                        />
-                      )}
-
-                      {(level == "auditor1" || level == "auditor2") && (
-                        <>
-                          <hr className="my-3" />
-
-                          {renderInputCapaianAuditor(q)}
-
-                          <div className="relative">
-                            <label class="block text-sm font-medium mb-1">
-                              Catatan
-                            </label>
-                            <textarea
-                              value={watch("catatan_auditor")}
-                              {...register("catatan_auditor")}
-                              placeholder="Tulis catatan..."
-                              className="w-full text-sm p-2 rounded border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600"
-                              rows={5}
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      <button
-                        className="bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-sm text-white rounded py-2"
-                        disabled={loading}
-                        onClick={handleSubmit(onSubmit)}
-                      >
-                        Simpan
-                      </button>
                     </div>
-                  );
-                })
-            )}
+                  )}
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-sm font-medium text-white rounded-xl py-2.5 transition shadow-sm cursor-pointer"
+                    >
+                      {loading ? "Menyimpan..." : "Simpan"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </form>
         </div>
 
