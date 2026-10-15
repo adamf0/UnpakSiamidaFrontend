@@ -72,6 +72,21 @@ export const isNumeric = (val) => {
   return false;
 };
 
+export const get = (obj, path, defaultValue = undefined) => {
+  if (!obj || !path) return defaultValue;
+  const parts = Array.isArray(path)
+    ? path
+    : String(path)
+        .replace(/\[(\w+)\]/g, ".$1")
+        .split(".");
+  let current = obj;
+  for (const part of parts) {
+    if (current == null) return defaultValue;
+    current = current[part];
+  }
+  return current !== undefined ? current : defaultValue;
+};
+
 export function buildHeaders(old, token, isjson = true) {
   let latitude = old.lat;
   let longitude = old.lng;

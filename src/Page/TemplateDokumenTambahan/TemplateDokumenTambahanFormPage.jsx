@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import get from "lodash.get";
 
 import TextInput from "@/Components/TextInput";
 import RadioButton from "@/Components/RadioButton";
@@ -18,6 +17,7 @@ import {
   isValidationError,
   normalizeValidationMessage,
   throwIfResponseNotOk,
+  get,
 } from "@/Common/Utils";
 import RowClearAction from "@/Components/RowClearAction";
 import RowStatusAction from "@/Components/RowStatusAction";

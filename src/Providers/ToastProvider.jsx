@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import Toast from "@/Components/Toast";
-import { v4 as uuidv4 } from "uuid";
 
 const ToastContext = createContext();
 
@@ -11,7 +10,7 @@ export const ToastProvider = ({ children, className="top-20 right-5" }) => {
   const [toasts, setToasts] = useState([]);
 
   const addToast = (type, message, duration = 3000) => {
-    const id = uuidv4();
+    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
     setToasts(prev => [...prev, { id, type, message }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));

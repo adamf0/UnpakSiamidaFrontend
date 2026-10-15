@@ -12,8 +12,8 @@ import {
   isValidationError,
   normalizeValidationMessage,
   throwIfResponseNotOk,
+  get,
 } from "@/Common/Utils";
-import get from "lodash.get";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import ErrorSection from "@/Components/ErrorSection";
 import Shimmer from "@/Components/Shimmer";
