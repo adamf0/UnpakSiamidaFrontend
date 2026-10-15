@@ -1,7 +1,8 @@
 import axios from "axios";
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://dev-siamida.unpak.ac.id/api/v2";
+const rawBaseUrl =
+  import.meta.env.VITE_API_BASE_URL || "http://dev-siamida.unpak.ac.id/api/v2";
+export const API_BASE_URL = rawBaseUrl.replace(/\/+$/, "");
 
 // JWT decoder helper
 const decodeJWT = (jwt) => {
