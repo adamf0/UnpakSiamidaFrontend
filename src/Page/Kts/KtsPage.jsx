@@ -178,8 +178,8 @@ const KtsPage = () => {
     try {
       const infoPromise = (async () => {
         try {
-          const json = await apiClient.get(`/renstra/${uuidaudit}`);
-          setInfo(json);
+          const res = await apiClient.get(`/renstra/${uuidaudit}`);
+          setInfo(res?.data ?? res);
         } catch (err) {
           errors.push({
             url: `/renstra/${uuidaudit}`,

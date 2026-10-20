@@ -37,6 +37,7 @@ const ChangeLevelModal = ({
               <label key={lvl} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
+                  name="role-level"
                   checked={lvl === actualCurrentLevel}
                   onChange={() => handleSubmit(lvl)}
                 />
@@ -47,7 +48,7 @@ const ChangeLevelModal = ({
 
           <div className="mt-6 flex justify-end">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 bg-purple-500 text-sm text-white rounded"
             >
               Cancel

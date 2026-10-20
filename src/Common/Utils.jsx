@@ -128,19 +128,35 @@ export function buildHeaders(old, token, isjson = true) {
   return base;
 }
 export function mappedText(text) {
-  if (text == "admin") {
+  const low = String(text || "").toLowerCase();
+  if (low === "admin") {
     return "Admin";
   }
-  if (text == "auditee") {
+  if (low === "auditee") {
     return "Auditee";
   }
-  if (text == "auditor1") {
+  if (low === "auditor1") {
     return "Auditor Utama";
   }
-  if (text == "auditor2") {
-    return "Auditor Pedamping";
+  if (low === "auditor2") {
+    return "Auditor Pendamping";
   }
-  return "User";
+  if (low === "fakultas") {
+    return "Fakultas";
+  }
+  if (low === "upml") {
+    return "UPML (Unit Penjaminan Mutu Lembaga)";
+  }
+  if (low === "upmf") {
+    return "UPMF (Unit Penjaminan Mutu Fakultas)";
+  }
+  if (low === "upms") {
+    return "UPMS (Unit Penjaminan Mutu Sekolah)";
+  }
+  if (low === "user") {
+    return "User";
+  }
+  return text ? text.toUpperCase() : "User";
 }
 
 export function cn(...inputs) {

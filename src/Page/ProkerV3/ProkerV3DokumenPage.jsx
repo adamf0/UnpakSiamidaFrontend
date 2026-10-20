@@ -55,10 +55,18 @@ export default function ProkerV3DokumenPage() {
 
   const { getValidToken, user } = useAuth();
   const { addToast } = useToast();
-  const { level, setLevel, listLevel } = useContent();
+  const {
+    level,
+    setLevel,
+    listLevel,
+    openChangeLevel,
+    setOpenChangeLevel,
+    changeLevel,
+  } = useContent();
 
-  const isAdmin = level === "admin" || user?.level === "admin";
-  const [openChangeLevel, setOpenChangeLevel] = useState(false);
+  const curRole = String(level || sessionStorage.getItem("activeLevel") || user?.level || "").toLowerCase().trim();
+  const isAdmin = curRole === "admin";
+  const isAuditee = curRole === "auditee";
 
   // Data states
   const [loading, setLoading] = useState(true);
@@ -205,6 +213,7 @@ export default function ProkerV3DokumenPage() {
   // FORM ROWS MANAGEMENT (MULTIPLE DATA FORM)
   // ========================================================
   const addFormRow = (defaultJenis = "DOCUMENT PENDUKUNG") => {
+    if (!isAuditee) return;
     setFormRows((prev) => [
       ...prev,
       {
@@ -217,6 +226,7 @@ export default function ProkerV3DokumenPage() {
   };
 
   const removeFormRow = (rowId) => {
+    if (!isAuditee) return;
     if (formRows.length <= 1) {
       setFormRows([
         {
@@ -232,6 +242,7 @@ export default function ProkerV3DokumenPage() {
   };
 
   const updateFormRow = (rowId, updates) => {
+    if (!isAuditee) return;
     setFormRows((prev) =>
       prev.map((r) => (r.id === rowId ? { ...r, ...updates } : r))
     );
@@ -239,6 +250,7 @@ export default function ProkerV3DokumenPage() {
 
   // Shortcut to load all 4 mandatory document rows (SK, SOP, PROPOSAL/TOR, LAPORAN)
   const loadMandatoryTemplates = () => {
+    if (!isAuditee) return;
     setFormRows([
       { id: `form-sk-${Date.now()}`, jenisDokumen: "SK", file: null, keterangan: "" },
       { id: `form-sop-${Date.now() + 1}`, jenisDokumen: "SOP", file: null, keterangan: "" },
@@ -543,6 +555,10 @@ export default function ProkerV3DokumenPage() {
   // Submit all valid rows from form to the upload queue and start chunked upload
   const handleSubmitAllForms = (e) => {
     if (e) e.preventDefault();
+    if (!isAuditee) {
+      addToast("warning", "Hanya level auditee yang dapat mengunggah dokumen");
+      return;
+    }
 
     const filledRows = formRows.filter((r) => Boolean(r.file));
     if (filledRows.length === 0) {
@@ -649,6 +665,11 @@ export default function ProkerV3DokumenPage() {
   // DELETE DOCUMENT FROM GOLANG & DISK
   // ========================================================
   const handleDeleteDoc = async () => {
+    if (!isAuditee) {
+      addToast("warning", "Hanya level auditee yang dapat menghapus dokumen");
+      setDeleteDialog(false);
+      return;
+    }
     if (!docToDelete?.UUID) return;
     setDeleting(true);
     try {
@@ -693,8 +714,13 @@ export default function ProkerV3DokumenPage() {
             levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
-              setLevel(val);
-              setOpenChangeLevel(false);
+              if (typeof changeLevel === "function") {
+                changeLevel(val);
+              } else {
+                setLevel(val);
+                sessionStorage.setItem("activeLevel", val);
+                setOpenChangeLevel(false);
+              }
             }}
           />
         )}
@@ -897,7 +923,12 @@ export default function ProkerV3DokumenPage() {
               <button
                 type="button"
                 onClick={loadMandatoryTemplates}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition cursor-pointer"
+                disabled={!isAuditee}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
+                  !isAuditee
+                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                    : "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200 cursor-pointer"
+                }`}
                 title="Otomatis siapkan 4 baris form untuk SK, SOP, Proposal/TOR, dan Laporan"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -907,7 +938,12 @@ export default function ProkerV3DokumenPage() {
               <button
                 type="button"
                 onClick={() => addFormRow()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition cursor-pointer"
+                disabled={!isAuditee}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                  !isAuditee
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
+                }`}
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Tambah Baris Form</span>
@@ -915,12 +951,25 @@ export default function ProkerV3DokumenPage() {
             </div>
           </div>
 
+          {!isAuditee && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+              <Info className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>
+                Form unggah dokumen dinonaktifkan. Pengunggahan dokumen program kerja hanya dapat dilakukan pada level <b>Auditee</b>.
+              </span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmitAllForms} className="space-y-3">
             <div className="space-y-3">
               {formRows.map((row, index) => (
                 <div
                   key={row.id}
-                  className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-200/90 grid grid-cols-1 md:grid-cols-12 gap-3 items-center"
+                  className={`p-3.5 rounded-xl border grid grid-cols-1 md:grid-cols-12 gap-3 items-center ${
+                    !isAuditee
+                      ? "bg-gray-100/60 border-gray-200 opacity-80"
+                      : "bg-gray-50/70 border-gray-200/90"
+                  }`}
                 >
                   <div className="md:col-span-1 flex items-center gap-1 text-xs font-mono font-bold text-gray-500">
                     <span className="w-6 h-6 rounded-lg bg-gray-200 flex items-center justify-center text-gray-700 text-[11px]">
@@ -935,8 +984,13 @@ export default function ProkerV3DokumenPage() {
                     </label>
                     <select
                       value={row.jenisDokumen}
+                      disabled={!isAuditee}
                       onChange={(e) => updateFormRow(row.id, { jenisDokumen: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold text-gray-800 cursor-pointer"
+                      className={`w-full px-3 py-2 text-xs rounded-xl border font-semibold ${
+                        !isAuditee
+                          ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                          : "bg-white text-gray-800 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      }`}
                     >
                       {JENIS_DOKUMEN_PROKER.map((j) => (
                         <option key={j.id} value={j.id}>
@@ -953,11 +1007,16 @@ export default function ProkerV3DokumenPage() {
                     </label>
                     <input
                       type="file"
+                      disabled={!isAuditee}
                       onChange={(e) => {
                         const file = e.target.files?.[0] || null;
                         updateFormRow(row.id, { file });
                       }}
-                      className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 file:cursor-pointer cursor-pointer border border-gray-300 rounded-xl bg-white"
+                      className={`w-full text-xs border rounded-xl ${
+                        !isAuditee
+                          ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed file:cursor-not-allowed file:bg-gray-200 file:text-gray-400"
+                          : "bg-white text-gray-500 border-gray-300 cursor-pointer file:cursor-pointer file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                      } file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold`}
                     />
                     {row.file && (
                       <span className="text-[10px] text-gray-400 mt-0.5 block truncate">
@@ -973,10 +1032,15 @@ export default function ProkerV3DokumenPage() {
                     </label>
                     <input
                       type="text"
+                      disabled={!isAuditee}
                       placeholder="Contoh: SK Rektor penetapan..."
                       value={row.keterangan}
                       onChange={(e) => updateFormRow(row.id, { keterangan: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className={`w-full px-3 py-2 text-xs rounded-xl border ${
+                        !isAuditee
+                          ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                          : "bg-white text-gray-800 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      }`}
                     />
                   </div>
 
@@ -984,9 +1048,14 @@ export default function ProkerV3DokumenPage() {
                   <div className="md:col-span-1 flex justify-end">
                     <button
                       type="button"
+                      disabled={!isAuditee}
                       onClick={() => removeFormRow(row.id)}
-                      className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
-                      title="Hapus baris ini"
+                      className={`p-2 rounded-xl transition ${
+                        !isAuditee
+                          ? "text-gray-300 cursor-not-allowed"
+                          : "text-gray-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                      }`}
+                      title={!isAuditee ? "Hanya auditee yang dapat menghapus baris" : "Hapus baris ini"}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1004,15 +1073,25 @@ export default function ProkerV3DokumenPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  disabled={!isAuditee}
                   onClick={() => addFormRow()}
-                  className="px-4 py-2 text-xs font-bold rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer"
+                  className={`px-4 py-2 text-xs font-bold rounded-xl transition ${
+                    !isAuditee
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer"
+                  }`}
                 >
                   + Tambah Baris Form
                 </button>
 
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition flex items-center gap-2 cursor-pointer"
+                  disabled={!isAuditee}
+                  className={`px-5 py-2 text-xs font-bold rounded-xl transition flex items-center gap-2 ${
+                    !isAuditee
+                      ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs cursor-pointer"
+                  }`}
                 >
                   <Upload className="w-4 h-4" />
                   <span>Submit & Unggah Dokumen</span>
@@ -1522,18 +1601,20 @@ export default function ProkerV3DokumenPage() {
                         </Tooltip>
                       )}
 
-                      <Tooltip title="Hapus Dokumen Dari Server (Permanen)">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDocToDelete(doc);
-                            setDeleteDialog(true);
-                          }}
-                          className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </Tooltip>
+                      {isAuditee && (
+                        <Tooltip title="Hapus Dokumen Dari Server (Permanen)">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDocToDelete(doc);
+                              setDeleteDialog(true);
+                            }}
+                            className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </Tooltip>
+                      )}
                     </div>
                   </div>
                 );

@@ -32,6 +32,7 @@ import PelaporanDokumenPage from "./Page/PelaporanDokumen/PelaporanDokumenPage";
 import ReportPage from "./Page/Report/ReportPage";
 import AccountUserPage from "./Page/AccountUser/AccountUserPage";
 import UserMergePage from "./Page/AccountUser/UserMergePage";
+import UserAssignmentPage from "./Page/AccountUser/UserAssignmentPage";
 import SwotPage from "./Page/Swot/SwotPage";
 import RiskAssessmentPage from "./Page/RiskAssessment/RiskAssessmentPage";
 import ProkerV3Page from "./Page/ProkerV3/ProkerV3Page";
@@ -53,8 +54,18 @@ export default function App() {
                       <Route path="/dashboard" element={<DashboardPage />} />
                       <Route path="/users" element={<AccountUserPage />} />
                       <Route path="/users/merge" element={<UserMergePage />} />
+                      <Route path="/users/abac" element={<UserAssignmentPage />} />
+                      <Route path="/users/:userUuid/abac" element={<UserAssignmentPage />} />
+                      <Route path="/users/assignment" element={<UserAssignmentPage />} />
+                      <Route path="/users/:userUuid/assignment" element={<UserAssignmentPage />} />
+                      <Route path="/users/penugasan" element={<UserAssignmentPage />} />
                       <Route path="/account_user" element={<AccountUserPage />} />
                       <Route path="/account_user/merge" element={<UserMergePage />} />
+                      <Route path="/account_user/abac" element={<UserAssignmentPage />} />
+                      <Route path="/account_user/:userUuid/abac" element={<UserAssignmentPage />} />
+                      <Route path="/account_user/assignment" element={<UserAssignmentPage />} />
+                      <Route path="/account_user/:userUuid/assignment" element={<UserAssignmentPage />} />
+                      <Route path="/account_user/penugasan" element={<UserAssignmentPage />} />
                       <Route path="/master_tahun" element={<MasterTahunPage />} />
                       <Route path="/tahun_proker" element={<MasterTahunPage />} />
                       <Route path="/mata_program" element={<MataProgramPage />} />

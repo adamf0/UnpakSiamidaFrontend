@@ -475,7 +475,11 @@ const RemoteTable = forwardRef(function RemoteTable(
                     <td
                       key={c.key ? `${c.key}-${i}` : i}
                       className={`px-4 py-3 text-sm ${c.className || ""}`}
-                      style={c.width ? { width: c.width, maxWidth: c.maxWidth || c.width } : undefined}
+                      style={{
+                        ...(c.width ? { width: c.width } : {}),
+                        ...(c.minWidth ? { minWidth: c.minWidth } : {}),
+                        ...(c.maxWidth ? { maxWidth: c.maxWidth } : {}),
+                      }}
                     >
                       {c.renderKey ? c.renderKey(r) : r[c.key]}
                     </td>

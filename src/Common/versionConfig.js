@@ -75,8 +75,6 @@ export const V3_FEATURE_PATHS = [
   "/risk_assessment",
   "/analisis_resiko",
   "/analisis_risiko",
-  "/proker_v3",
-  "/proker",
 ];
 
 export const isV3FeaturePath = (path) => {

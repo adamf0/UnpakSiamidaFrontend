@@ -103,16 +103,54 @@ export function AuthProvider({ children }) {
       const res = await apiClient.get("/whoami");
       const data = res.data;
 
+      const rawExtra = data.ExtraRole || data.extra_role || [];
+      let extraRoles = Array.isArray(rawExtra) ? [...rawExtra] : [];
+
+      // Cek dan lengkapi dari user_abac untuk non-admin
+      if (data.UUID && data.Level !== "admin") {
+        try {
+          const abacRes = await apiClient.get(`/user-abac?user_uuid=${data.UUID}`);
+          const abacData = abacRes.data || [];
+          abacData.forEach((item) => {
+            const status = String(item.Status || item.status || "").toLowerCase();
+            if (status && status !== "active" && status !== "aktif") return;
+
+            const role = (item.ComputedRole || item.computed_role || item.Role || item.role || "").toLowerCase();
+            const tahun = String(item.Tahun || item.tahun || "");
+            const fuId = item.IdFakultasUnit || item.id_fakultas_unit;
+            const fuNama = item.NamaFakultasUnit || item.nama_fakultas_unit;
+            if (tahun && role) {
+              const already = extraRoles.some(
+                (r) => String(r.tahun ?? r.Tahun) === tahun && String(r.role ?? r.Role).toLowerCase() === role
+              );
+              if (!already) {
+                extraRoles.push({
+                  tahun,
+                  role,
+                  id_fakultas_unit: fuId,
+                  nama_fakultas_unit: fuNama,
+                });
+              }
+            }
+          });
+        } catch (e) {
+          console.warn("Fetch user-abac for whoami fallback:", e);
+        }
+      }
+
       setUser({
         uuid: data.UUID,
         name: data.Name,
         level: data.Level,
         email: data.Email,
         fakultas_unit: data.FakultasUnit,
-        extra_role: data.ExtraRole,
+        extra_role: extraRoles,
       });
 
-      return data;
+      return {
+        ...data,
+        ExtraRole: extraRoles,
+      };
     } catch (err) {
       setUser(null);
       setUserError("Session expired");

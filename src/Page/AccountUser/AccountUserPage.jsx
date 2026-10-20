@@ -1,5 +1,5 @@
 import RemoteTable from "@/Components/RemoteTable";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AccountUserFormModal from "./AccountUserFormModal";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
@@ -7,7 +7,7 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
-import { Plus, Users, Pencil, Trash2, GitMerge } from "lucide-react";
+import { Plus, Users, Pencil, Trash2, GitMerge, UserCheck, Building, GraduationCap, School } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
@@ -32,6 +32,36 @@ export default function AccountUserPage() {
   const [selectedRow, setSelectedRow] = useState(null);
   const { addToast } = useToast();
   const { getValidToken } = useAuth();
+
+  const [abacMap, setAbacMap] = useState({});
+
+  const fetchAbacMap = async () => {
+    try {
+      const res = await apiClient.get("/user-abac");
+      const list = res?.data ?? res ?? [];
+      const safe = Array.isArray(list) ? list : (list.data || []);
+      const map = {};
+      for (const item of safe) {
+        const uId = item.IdUser || item.id_user;
+        const uUuid = item.UserUuid || item.user_uuid;
+        if (uId) {
+          map[uId] = map[uId] || [];
+          map[uId].push(item);
+        }
+        if (uUuid) {
+          map[uUuid] = map[uUuid] || [];
+          map[uUuid].push(item);
+        }
+      }
+      setAbacMap(map);
+    } catch (err) {
+      console.error("Fetch abac for users table error:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAbacMap();
+  }, []);
 
   const {
     level,
@@ -196,6 +226,98 @@ export default function AccountUserPage() {
                   },
                 },
                 {
+                  key: "UserAbac",
+                  label: "Rule Tambahan (ABAC)",
+                  searchable: false,
+                  renderKey: (row) => {
+                    const uId = row?.ID || row?.id;
+                    const uUuid = row?.UUID || row?.uuid;
+                    const fromRow = row?.UserAbac || row?.user_abac;
+                    const abacs =
+                      Array.isArray(fromRow) && fromRow.length > 0
+                        ? fromRow
+                        : abacMap[uId] || abacMap[uUuid] || [];
+
+                    if (!abacs || abacs.length === 0) {
+                      return <span className="text-gray-400 text-xs italic">-</span>;
+                    }
+
+                    return (
+                      <div className="flex flex-wrap gap-1.5 max-w-sm items-center">
+                        {abacs.map((item, idx) => {
+                          const role = (
+                            item.ComputedRole ||
+                            item.computed_role ||
+                            item.Role ||
+                            item.role ||
+                            "upm"
+                          ).toUpperCase();
+                          const unit =
+                            item.NamaFakultasUnit || item.nama_fakultas_unit || "";
+                          const tahun = item.Tahun || item.tahun || "";
+                          const status = (
+                            item.Status ||
+                            item.status ||
+                            "active"
+                          ).toLowerCase();
+                          const isActive = status === "active";
+
+                          let badgeColor =
+                            "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
+                          let Icon = GraduationCap;
+                          if (role === "UPML") {
+                            badgeColor =
+                              "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100";
+                            Icon = Building;
+                          } else if (role === "UPMS") {
+                            badgeColor =
+                              "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100";
+                            Icon = School;
+                          }
+
+                          return (
+                            <span
+                              key={item.UUID || item.uuid || idx}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const targetUuid =
+                                  uUuid || item.UserUuid || item.user_uuid;
+                                navigate(
+                                  targetUuid
+                                    ? `/users/${targetUuid}/abac`
+                                    : "/users/abac",
+                                  {
+                                    state: { user: row },
+                                  }
+                                );
+                              }}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold border ${badgeColor} shadow-2xs cursor-pointer transition ${
+                                !isActive ? "opacity-50 line-through" : ""
+                              }`}
+                              title={`${role} • ${unit} (${tahun}) - Status: ${
+                                isActive ? "Aktif" : "Non-Aktif"
+                              }. Klik untuk kelola.`}
+                            >
+                              <Icon className="w-3.5 h-3.5 shrink-0" />
+                              <span className="font-bold">{role}</span>
+                              {unit && (
+                                <span className="font-normal opacity-90 truncate max-w-[120px]">
+                                  ({unit})
+                                </span>
+                              )}
+                              {tahun && (
+                                <span className="text-[10px] opacity-75 font-mono">
+                                  {tahun}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    );
+                  },
+                },
+                {
                   key: "IdUserMerge",
                   label: "Status Merge",
                   searchable: false,
@@ -230,6 +352,27 @@ export default function AccountUserPage() {
                 <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                    onClick={() => {
+                      const uUuid = row?.UUID || row?.uuid;
+                      navigate(uUuid ? `/users/${uUuid}/abac` : "/users/abac", {
+                        state: {
+                          user: row,
+                          user_uuid: uUuid,
+                          user_name: row?.Name || row?.name,
+                        },
+                      });
+                      close();
+                    }}
+                  >
+                    <UserCheck className="w-4 h-4 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span>Tugaskan</span>
+                  </button>
+
+                  <div className="my-1 border-t border-gray-150" />
+
+                  <button
+                    type="button"
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition-all cursor-pointer text-left group"
                     onClick={() => {
                       openEdit(row);
@@ -239,8 +382,6 @@ export default function AccountUserPage() {
                     <Pencil className="w-4 h-4 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
                     <span>Edit</span>
                   </button>
-
-                  <div className="my-1 border-t border-gray-150" />
 
                   <button
                     type="button"

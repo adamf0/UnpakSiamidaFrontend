@@ -101,12 +101,14 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
     try {
       await delay(3000);
 
-      const json = await apiClient.get(
+      const res = await apiClient.get(
         `/preview/audit/${type}/${tahun}/${fakultasUUID}`
       );
-      setTableData(json ?? []);
+      const data = res?.data ?? res ?? [];
+      setTableData(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error(e);
+      setTableData([]);
     } finally {
       setTableLoading(false);
     }

@@ -10,10 +10,10 @@ const ContentContext = createContext(null);
 //   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 
 export const ContentProvider = ({ children }) => {
-  const {user, getValidToken} = useAuth();
+  const { user } = useAuth();
   const [serverYears, setServerYears] = useState([]);
   const [positionYear, setPositionYear] = useState(() => {
-    return sessionStorage.getItem("positionYear");
+    return sessionStorage.getItem("positionYear") || "2026";
   });
 
   /* ================= VERSIONING ================= */
@@ -34,26 +34,98 @@ export const ContentProvider = ({ children }) => {
   };
 
   /* ================= YEAR ================= */
-  const activeYear = useMemo(
-    () => sessionStorage.getItem("positionYear") ?? serverYears.find((y) => y.Status === "active")?.Tahun ?? null,
-    [serverYears]
-  );
-
   const fetchYears = async () => {
     try {
-      const res = await apiClient.get("/tahunrenstras?mode=all");
-      setServerYears(res.data || []);
+      const [renstraRes, prokerRes] = await Promise.allSettled([
+        apiClient.get("/tahunrenstras?mode=all"),
+        apiClient.get("/mastertahuns?mode=all"),
+      ]);
+
+      const renstraList = renstraRes.status === "fulfilled" ? (renstraRes.value?.data || []) : [];
+      const prokerList = prokerRes.status === "fulfilled" ? (prokerRes.value?.data || []) : [];
+
+      const map = new Map();
+      [...prokerList, ...renstraList].forEach((item) => {
+        const y = String(item.Tahun ?? item.tahun ?? "").trim();
+        if (y && !map.has(y)) {
+          map.set(y, {
+            ...item,
+            Tahun: y,
+            tahun: y,
+            Status: item.Status || item.status || "no-active",
+            status: item.Status || item.status || "no-active",
+          });
+        }
+      });
+
+      setServerYears(Array.from(map.values()));
     } catch (err) {
-      console.error("Fetch tahunrenstras error:", err);
+      console.error("Fetch years error:", err);
     }
   };
 
   useEffect(() => {
     fetchYears();
-  }, []);
+  }, [user]);
+
+  // Gabungkan tahun dari server dan tahun dari penugasan ABAC (user.extra_role)
+  const availableYears = useMemo(() => {
+    const list = [...(serverYears || [])];
+    const existing = new Set(list.map((item) => String(item.Tahun ?? item.tahun)));
+
+    if (Array.isArray(user?.extra_role)) {
+      user.extra_role.forEach((r) => {
+        const y = String(r.tahun ?? r.Tahun ?? "").trim();
+        if (y && !existing.has(y)) {
+          existing.add(y);
+          list.push({
+            Tahun: y,
+            tahun: y,
+            Status: "active",
+            status: "active",
+            isExtraRole: true,
+          });
+        }
+      });
+    }
+
+    return list.sort((a, b) => {
+      const ya = parseInt(a.Tahun ?? a.tahun ?? 0, 10);
+      const yb = parseInt(b.Tahun ?? b.tahun ?? 0, 10);
+      return yb - ya;
+    });
+  }, [serverYears, user?.extra_role]);
+
+  const activeYear = useMemo(() => {
+    const stored = sessionStorage.getItem("positionYear");
+    if (stored) return stored;
+
+    // Prioritaskan tahun dari penugasan ABAC (extra_role)
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      const uYear = String(user.extra_role[0].tahun ?? user.extra_role[0].Tahun ?? "");
+      if (uYear) return uYear;
+    }
+
+    // Default ke tahun active dari list
+    const activeFromList = availableYears.find(
+      (y) => {
+        const s = String(y.Status || y.status || "").toLowerCase();
+        return s === "active" || s === "aktif";
+      }
+    );
+    if (activeFromList) return String(activeFromList.Tahun ?? activeFromList.tahun);
+
+    if (availableYears.length > 0) {
+      return String(availableYears[0].Tahun ?? availableYears[0].tahun);
+    }
+
+    return "2026";
+  }, [availableYears, user?.extra_role]);
 
   /* ================= LEVEL ================= */
-  const [level, setLevel] = useState(null);
+  const [level, setLevel] = useState(() => {
+    return sessionStorage.getItem("activeLevel") || null;
+  });
   const [listLevel, setListLevel] = useState([]);
 
   /* ================= MODAL ================= */
@@ -61,36 +133,56 @@ export const ContentProvider = ({ children }) => {
 
   /* ================= EFFECT ================= */
   useEffect(() => {
-    if(!user) return;
+    if (!user) return;
 
-    // === ADMIN ===
-    if (user?.level=="admin" || user?.level=="fakultas") {
+    // === ADMIN / FAKULTAS ===
+    if (user?.level === "admin" || user?.level === "fakultas") {
       setLevel(user.level);
       setListLevel([user.level]);
       return;
     }
 
-    // === ROLE BASED ON YEAR ===
-    const modes = (user?.extra_role ?? [])
-      .filter((m) => String(m.tahun) === String(positionYear))
-      .map((m) => m.role);
+    // === ROLE BASED ON YEAR (ABAC / Extra Roles) ===
+    const userBaseLevel = (user?.level || "user").toLowerCase();
+    
+    // Ambil semua role yang cocok dengan tahun yang sedang aktif (positionYear)
+    const matchingRoles = (user?.extra_role ?? [])
+      .filter((m) => String(m.tahun ?? m.Tahun) === String(positionYear))
+      .map((m) => String(m.role ?? m.Role).toLowerCase());
 
-    if (modes.length === 0) {
-      setLevel("user");
-      setListLevel(["user"]);
+    // Gabungkan level dasar pengguna ("user") dengan role penugasan ABAC
+    const allRoles = Array.from(new Set([userBaseLevel, ...matchingRoles])).filter(Boolean);
+
+    setListLevel(allRoles);
+
+    // Tentukan level yang aktif
+    const savedLevel = sessionStorage.getItem("activeLevel");
+    if (savedLevel && allRoles.includes(savedLevel)) {
+      setLevel(savedLevel);
+    } else if (matchingRoles.length > 0) {
+      // Prioritaskan role penugasan (UPML, UPMF, UPMS) agar langsung aktif
+      setLevel(matchingRoles[0]);
+      sessionStorage.setItem("activeLevel", matchingRoles[0]);
     } else {
-      setLevel(modes[0]);
-      setListLevel(modes);
+      setLevel(userBaseLevel);
+      sessionStorage.setItem("activeLevel", userBaseLevel);
     }
   }, [positionYear, user]);
 
   useEffect(() => {
     if (activeYear && !positionYear) {
       setPositionYear(String(activeYear));
+      sessionStorage.setItem("positionYear", String(activeYear));
+    } else if (positionYear && availableYears.length > 0 && user?.level !== "admin") {
+      const exists = availableYears.some((y) => String(y.Tahun ?? y.tahun) === String(positionYear));
+      if (!exists && activeYear) {
+        setPositionYear(String(activeYear));
+        sessionStorage.setItem("positionYear", String(activeYear));
+      }
     }
-  }, [activeYear, positionYear]);
+  }, [activeYear, positionYear, availableYears, user?.level]);
 
-  useEffect(() => { //jika sudah di set saat refresh gunakan defaulnya pakai sesionstorage bukan dari active year
+  useEffect(() => {
     if (positionYear) {
       sessionStorage.setItem("positionYear", positionYear);
     }
@@ -98,13 +190,14 @@ export const ContentProvider = ({ children }) => {
 
   /* ================= ACTIONS ================= */
   const changeYear = (year) => {
-    setPositionYear(year);
+    setPositionYear(String(year));
     sessionStorage.setItem("positionYear", String(year));
   };
 
   const changeLevel = (val) => {
     if (!listLevel.includes(val)) return;
     setLevel(val);
+    sessionStorage.setItem("activeLevel", val);
     setOpenChangeLevel(false);
   };
 
@@ -118,7 +211,8 @@ export const ContentProvider = ({ children }) => {
         APP_VERSIONS,
 
         // year
-        serverYears,
+        serverYears: availableYears,
+        availableYears,
         activeYear,
         positionYear,
         setPositionYear,

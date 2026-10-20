@@ -206,8 +206,8 @@ const BeritaAcaraPage = () => {
     }
 
     try {
-      const data = await apiClient.get(`/fakultasunit/${target}`);
-      setInfoTarget(data);
+      const res = await apiClient.get(`/fakultasunit/${target}`);
+      setInfoTarget(res?.data ?? res);
     } catch (err) {
       addToast("error", err?.message || "Data tidak ditemukan");
     }

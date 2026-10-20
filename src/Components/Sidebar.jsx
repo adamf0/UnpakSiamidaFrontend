@@ -28,7 +28,8 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
 
   const { level, appVersion } = useContent();
   const { user } = useAuth();
-  const isAdmin = level === "admin" || user?.level === "admin";
+  const currentLevel = String(level || "").toLowerCase().trim();
+  const isAdmin = currentLevel === "admin" || String(user?.level || "").toLowerCase().trim() === "admin";
   const currentVerConfig = getVersionConfig(appVersion || "v2");
   const hasFakultasUnit = !isEmpty(String(user?.fakultas_unit ?? ""));
   const [closedGroups, setClosedGroups] = useState({});
@@ -46,7 +47,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
   function getMenuGroups() {
     let groups = [];
 
-    if (level === "admin") {
+    if (currentLevel === "admin") {
       groups = [
         {
           group: null,
@@ -164,7 +165,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
           ],
         },
       ];
-    } else if (level === "fakultas") {
+    } else if (currentLevel === "fakultas") {
       groups = [
         {
           group: null,
@@ -233,9 +234,12 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
         },
       ];
     } else if (
-      level === "auditee" ||
-      level === "auditor1" ||
-      level === "auditor2"
+      currentLevel === "upml" ||
+      currentLevel === "upmf" ||
+      currentLevel === "upms" ||
+      currentLevel === "anggaran" ||
+      currentLevel === "keuangan" ||
+      currentLevel === "evaluator"
     ) {
       groups = [
         {
@@ -248,7 +252,34 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             },
           ],
         },
-        ...(level === "auditee" || hasFakultasUnit
+        {
+          group: "Proker",
+          items: [
+            {
+              name: "Program Kerja",
+              path: "/proker_v3",
+              icon: <HiOutlineClipboardList size={19} />,
+            },
+          ],
+        },
+      ];
+    } else if (
+      currentLevel === "auditee" ||
+      currentLevel === "auditor1" ||
+      currentLevel === "auditor2"
+    ) {
+      groups = [
+        {
+          group: null,
+          items: [
+            {
+              name: "Dashboard",
+              path: "/dashboard",
+              icon: <LiaHomeSolid size={22} />,
+            },
+          ],
+        },
+        ...(currentLevel === "auditee" || hasFakultasUnit
           ? [
               {
                 group: "Proker",

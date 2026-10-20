@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const rawBaseUrl =
-  import.meta.env.VITE_API_BASE_URL || "http://dev-siamida.unpak.ac.id/api/v2";
+  import.meta.env.VITE_API_BASE_URL || "https://dev-siamida.unpak.ac.id/api/v2";
 export const API_BASE_URL = rawBaseUrl.replace(/\/+$/, "");
 
 // JWT decoder helper
@@ -56,6 +56,16 @@ apiClient.interceptors.request.use(
     const token = getValidToken();
     if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    const activeLevel = sessionStorage.getItem("activeLevel");
+    if (activeLevel) {
+      config.headers["X-Active-Role"] = activeLevel;
+      config.headers["X-Level"] = activeLevel;
+    }
+    const posYear = sessionStorage.getItem("positionYear");
+    if (posYear) {
+      config.headers["X-Position-Year"] = posYear;
+      config.headers["X-Tahun"] = posYear;
     }
     return config;
   },

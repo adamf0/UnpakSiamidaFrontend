@@ -143,13 +143,13 @@ const AuditTambahanEditPage = () => {
   }, [uuidRenstra]);
 
   useEffect(() => {
-    if (!dataRenstra) return;
+    if (!dataRenstra?.Tahun || !dataRenstra?.FakultasUnitUuid) return;
 
     (async () => {
       await fetchTemplateQuestion(
         "dokumen_tambahan",
-        dataRenstra?.Tahun,
-        dataRenstra?.FakultasUnitUuid
+        dataRenstra.Tahun,
+        dataRenstra.FakultasUnitUuid
       );
     })();
   }, [dataRenstra]);
@@ -180,22 +180,35 @@ const AuditTambahanEditPage = () => {
     tahun,
     uuidfakultasunit
   ) => {
+    if (
+      !tahun ||
+      !uuidfakultasunit ||
+      tahun === "undefined" ||
+      uuidfakultasunit === "undefined"
+    ) {
+      return;
+    }
     const token = getValidToken();
     if (isEmpty(token)) return;
 
     try {
-      const json = await apiClient.get(
+      const res = await apiClient.get(
         `/preview/audit/${tipe}/${tahun}/${uuidfakultasunit}`
       );
+      const data = res?.data ?? res;
 
       let increment = 1;
-      const mapped = (Array.isArray(json) ? json : []).map((item) => ({
+      const mapped = (Array.isArray(data) ? data : []).map((item) => ({
         ...item,
         Pointing: increment++,
       }));
 
       setDataTemplate(mapped);
     } catch (err) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        setDataTemplate([]);
+        return;
+      }
       console.error("Fetch Indikator dokumen tambahan gagal:", err);
       addToast(
         "error",
@@ -280,9 +293,10 @@ const AuditTambahanEditPage = () => {
 
   const fetchDataRenstra = async (uuidRenstra) => {
     try {
-      const json = await apiClient.get(`/renstra/${uuidRenstra}`);
-      setDataRenstra(json);
-      return json;
+      const res = await apiClient.get(`/renstra/${uuidRenstra}`);
+      const data = res?.data ?? res;
+      setDataRenstra(data);
+      return data;
     } catch (err) {
       console.error("Fetch data renstra gagal:", err);
       addToast(

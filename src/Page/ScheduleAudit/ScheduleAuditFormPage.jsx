@@ -142,7 +142,7 @@ const ScheduleAuditFormPage = () => {
 
     try {
       const result = await apiClient.get(`/renstra/${uuid}`);
-      setData(result);
+      setData(result?.data ?? result);
     } catch (err) {
       console.error(err);
       setErr("detail", err?.message || "Gagal memuat data");

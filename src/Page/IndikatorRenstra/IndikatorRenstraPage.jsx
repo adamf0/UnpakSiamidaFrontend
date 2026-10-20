@@ -58,7 +58,8 @@ const IndikatorRenstraPage = () => {
         // 1. Fetch Tahun
         let years = [];
         try {
-          const data = await apiClient.get("/tahunrenstras?mode=all");
+          const res = await apiClient.get("/tahunrenstras?mode=all");
+          const data = res?.data ?? res;
           if (Array.isArray(data) && data.length > 0) {
             years = data;
           }
@@ -68,7 +69,8 @@ const IndikatorRenstraPage = () => {
 
         if (years.length === 0) {
           try {
-            const data = await apiClient.get("/tahunprokers?mode=all");
+            const res = await apiClient.get("/tahunprokers?mode=all");
+            const data = res?.data ?? res;
             if (Array.isArray(data)) {
               years = data;
             }
@@ -96,7 +98,8 @@ const IndikatorRenstraPage = () => {
         setTahunList(uniqueYears);
 
         // 2. Fetch Standar Renstra
-        const dataStandar = await apiClient.get("/standarrenstras?mode=all");
+        const resStandar = await apiClient.get("/standarrenstras?mode=all");
+        const dataStandar = resStandar?.data ?? resStandar;
         const list = Array.isArray(dataStandar) ? dataStandar : [];
         const mappedStandar = list.map((s) => ({
           id: s.UUID || s.Uuid || s.id,

@@ -19,10 +19,12 @@ import {
 const Tooltip = ({
   children,
   content,
+  title,
   placement = "top",
   delay = 100,
   disabled = false,
 }) => {
+  const tooltipText = content || title;
   const [isOpen, setIsOpen] = useState(false);
   const arrowRef = useRef(null);
 
@@ -57,7 +59,7 @@ const Tooltip = ({
   const childrenRef = isValidElement(children) ? (children.props?.ref || children.ref) : null;
   const referenceRef = useMergeRefs([refs.setReference, childrenRef]);
 
-  if (!content) return children;
+  if (!tooltipText) return children;
 
   return (
     <>
@@ -79,7 +81,7 @@ const Tooltip = ({
             {...getFloatingProps()}
             className="z-[9999] px-2.5 py-1 text-xs font-medium text-white bg-gray-900/90 backdrop-blur-xs rounded-md shadow-lg pointer-events-none transition-opacity duration-150 whitespace-nowrap"
           >
-            {content}
+            {tooltipText}
             <FloatingArrow
               ref={arrowRef}
               context={context}

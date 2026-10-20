@@ -17,9 +17,6 @@ const LEVEL_OPTIONS = [
   // { value: "auditor2", label: "Auditor 2" },
   { value: "anggaran", label: "Anggaran (Verifikator Form 13)" },
   { value: "evaluator", label: "Keuangan (Verifikator Form Proker)" },
-  { value: "upml", label: "UPML" },
-  { value: "upms", label: "UPMS" },
-  { value: "upmf", label: "UPMF" },
   { value: "user", label: "User (Pengguna Standar)" },
 ];
 

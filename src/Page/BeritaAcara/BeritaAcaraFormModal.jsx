@@ -81,7 +81,8 @@ export default function BeritaAcaraFormModal({
     setLoadingUsers(true);
     setErrorUsers(null);
     try {
-      const data = await apiClient.get("/user-options");
+      const res = await apiClient.get("/user-options");
+      const data = res?.data ?? res;
       const list = Array.isArray(data) ? data : [];
 
       const result = list

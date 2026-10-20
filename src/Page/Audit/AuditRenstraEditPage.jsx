@@ -171,13 +171,13 @@ const AuditRenstraEditPage = () => {
   }, [uuidRenstra]);
 
   useEffect(() => {
-    if (!dataRenstra) return;
+    if (!dataRenstra?.Tahun || !dataRenstra?.FakultasUnitUuid) return;
 
     (async () => {
       await fetchTemplateQuestion(
         "renstra",
-        dataRenstra?.Tahun,
-        dataRenstra?.FakultasUnitUuid
+        dataRenstra.Tahun,
+        dataRenstra.FakultasUnitUuid
       );
     })();
   }, [dataRenstra]);
@@ -210,17 +210,26 @@ const AuditRenstraEditPage = () => {
     tahun,
     uuidfakultasunit
   ) => {
+    if (
+      !tahun ||
+      !uuidfakultasunit ||
+      tahun === "undefined" ||
+      uuidfakultasunit === "undefined"
+    ) {
+      return;
+    }
     const token = getValidToken();
     if (isEmpty(token)) return;
 
     try {
-      const json = await apiClient.get(
+      const res = await apiClient.get(
         `/preview/audit/${tipe}/${tahun}/${uuidfakultasunit}`
       );
+      const data = res?.data ?? res;
       setTemplateNotFound(false);
-      setDataTemplate(Array.isArray(json) ? json : []);
+      setDataTemplate(Array.isArray(data) ? data : []);
     } catch (err) {
-      if (err?.response?.status === 404) {
+      if (err?.response?.status === 404 || err?.status === 404) {
         setTemplateNotFound(true);
         setDataTemplate([]);
         return;
@@ -309,9 +318,10 @@ const AuditRenstraEditPage = () => {
 
   const fetchDataRenstra = async (uuidRenstra) => {
     try {
-      const json = await apiClient.get(`/renstra/${uuidRenstra}`);
-      setDataRenstra(json);
-      return json;
+      const res = await apiClient.get(`/renstra/${uuidRenstra}`);
+      const data = res?.data ?? res;
+      setDataRenstra(data);
+      return data;
     } catch (err) {
       console.error("Fetch data renstra gagal:", err);
       addToast(

@@ -20,7 +20,7 @@ const getItemId = (obj) => {
 const getItemLabel = (obj) => {
   if (!obj) return "";
   if (typeof obj !== "object") return String(obj);
-  return obj.nama ?? obj.label ?? obj.text ?? obj.MataProgram ?? obj.mata_program ?? "";
+  return obj.label ?? obj.nama ?? obj.text ?? obj.MataProgram ?? obj.mata_program ?? "";
 };
 
 const isItemSelected = (item, selectedVal) => {
@@ -103,7 +103,15 @@ const SearchSelect = ({
         const lbl = getItemLabel(o).toLowerCase();
         const thn = o?.tahun ? String(o.tahun).toLowerCase() : "";
         const mp = o?.mata_program ? String(o.mata_program).toLowerCase() : "";
-        return lbl.includes(q) || thn.includes(q) || mp.includes(q);
+        const bdg = o?.badge ? String(o.badge).toLowerCase() : "";
+        const raw = o?.raw_nama ? String(o.raw_nama).toLowerCase() : "";
+        return (
+          lbl.includes(q) ||
+          thn.includes(q) ||
+          mp.includes(q) ||
+          bdg.includes(q) ||
+          raw.includes(q)
+        );
       })
     );
   }, [query, open, options]);
@@ -296,8 +304,22 @@ const SearchSelect = ({
                         {item.tahun}
                       </span>
                     ) : null}
+                    {item.badge ? (
+                      <span
+                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider shrink-0 ${
+                          item.badgeClass ||
+                          (String(item.badge).toLowerCase() === "fakultas"
+                            ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                            : String(item.badge).toLowerCase() === "unit"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-purple-50 text-purple-700 border border-purple-200")
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    ) : null}
                     <span className="truncate">
-                      {item.mata_program || getItemLabel(item)}
+                      {item.display_name || item.mata_program || getItemLabel(item)}
                     </span>
                   </div>
                   {selected && (

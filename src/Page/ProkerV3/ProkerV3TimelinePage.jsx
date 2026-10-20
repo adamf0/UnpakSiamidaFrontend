@@ -71,10 +71,16 @@ export default function ProkerV3TimelinePage() {
   const navigate = useNavigate();
   const { getValidToken, user } = useAuth();
   const { addToast } = useToast();
-  const { level, setLevel, listLevel } = useContent();
+  const {
+    level,
+    setLevel,
+    listLevel,
+    openChangeLevel,
+    setOpenChangeLevel,
+    changeLevel,
+  } = useContent();
 
   const isAdmin = level === "admin" || user?.level === "admin";
-  const [openChangeLevel, setOpenChangeLevel] = useState(false);
 
   // Data states
   const [loading, setLoading] = useState(true);
@@ -839,8 +845,13 @@ export default function ProkerV3TimelinePage() {
             levels={listLevel}
             currentLevel={level}
             onSubmit={(val) => {
-              setLevel(val);
-              setOpenChangeLevel(false);
+              if (typeof changeLevel === "function") {
+                changeLevel(val);
+              } else {
+                setLevel(val);
+                sessionStorage.setItem("activeLevel", val);
+                setOpenChangeLevel(false);
+              }
             }}
           />
         )}

@@ -6,6 +6,7 @@ import { useSidebar } from "@/Providers/SidebarProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { APP_VERSIONS, getVersionConfig } from "@/Common/versionConfig";
+import ChangeLevelModal from "@/Components/ChangeLevelModal";
 
 const Navbar = ({ renderChangeLevelModal }) => {
   const { toggleSidebar } = useSidebar();
@@ -15,9 +16,12 @@ const Navbar = ({ renderChangeLevelModal }) => {
     activeYear,
     positionYear,
     setPositionYear,
+    changeYear,
     level,
     listLevel,
+    openChangeLevel,
     setOpenChangeLevel,
+    changeLevel,
     appVersion,
     changeAppVersion,
   } = useContent();
@@ -147,51 +151,61 @@ const Navbar = ({ renderChangeLevelModal }) => {
           {/* Tahun selection (desktop only) - Disembunyikan untuk admin */}
           {!isAdmin && (
             <Popover className="relative hidden sm:block">
-              <Popover.Button className="flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm hover:bg-gray-100">
-                <Calendar size={16} />
-                <span>{positionYear}</span>
-                {positionYear === activeYear ? (
-                  <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                    Active
-                  </span>
-                ) : (
-                  <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                    Open Now
-                  </span>
-                )}
-              </Popover.Button>
+              {({ close }) => (
+                <>
+                  <Popover.Button className="flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm hover:bg-gray-100 cursor-pointer">
+                    <Calendar size={16} />
+                    <span>{positionYear || activeYear || "2026"}</span>
+                    {String(positionYear) === String(activeYear) ? (
+                      <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                        Open Now
+                      </span>
+                    )}
+                  </Popover.Button>
 
-              <Popover.Panel className="absolute left-0 mt-2 w-44 bg-white border rounded-md shadow-lg z-50">
-                <ul className="text-sm">
-                  {(serverYears ?? []).map((item) => {
-                    const year = item.Tahun;
-                    const isActive = item.Status === "active";
-                    const isPosition = year === positionYear;
+                  <Popover.Panel className="absolute left-0 mt-2 w-48 bg-white border rounded-md shadow-lg z-50">
+                    <ul className="text-sm max-h-64 overflow-y-auto">
+                      {(serverYears ?? []).map((item) => {
+                        const year = String(item.Tahun ?? item.tahun ?? "");
+                        const isActive =
+                          String(item.Status || item.status || "").toLowerCase() === "active" ||
+                          String(item.Status || item.status || "").toLowerCase() === "aktif";
+                        const isPosition = year === String(positionYear);
 
-                    return (
-                      <li
-                        key={year}
-                        onClick={() => setPositionYear(year)}
-                        className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center
-                          ${isPosition ? "bg-gray-100 font-medium" : ""}
-                        `}
-                      >
-                        <span>{year}</span>
-                        {isActive && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 rounded-full">
-                            Active
-                          </span>
-                        )}
-                        {!isActive && isPosition && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 rounded-full">
-                            Open
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </Popover.Panel>
+                        return (
+                          <li
+                            key={year}
+                            onClick={() => {
+                              if (changeYear) changeYear(year);
+                              else setPositionYear(year);
+                              close();
+                            }}
+                            className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center
+                              ${isPosition ? "bg-gray-100 font-medium" : ""}
+                            `}
+                          >
+                            <span>{year}</span>
+                            {isActive && (
+                              <span className="text-xs bg-green-100 text-green-700 px-2 rounded-full">
+                                Active
+                              </span>
+                            )}
+                            {!isActive && isPosition && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 rounded-full">
+                                Open
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </Popover.Panel>
+                </>
+              )}
             </Popover>
           )}
         </div>
@@ -303,7 +317,23 @@ const Navbar = ({ renderChangeLevelModal }) => {
         </div>
       </nav>
 
-      {renderChangeLevelModal?.()}
+      {renderChangeLevelModal ? (
+        renderChangeLevelModal()
+      ) : (
+        <ChangeLevelModal
+          open={openChangeLevel}
+          onClose={() => setOpenChangeLevel(false)}
+          levels={listLevel}
+          currentLevel={level}
+          onSubmit={(lvl) => {
+            if (typeof changeLevel === "function") {
+              changeLevel(lvl);
+            } else {
+              setOpenChangeLevel(false);
+            }
+          }}
+        />
+      )}
 
       {/* Notifications Modal */}
       {notifModalOpen && (
@@ -347,18 +377,19 @@ const Navbar = ({ renderChangeLevelModal }) => {
               </button>
             </div>
             <ul className="text-sm max-h-64 overflow-y-auto">
-              {serverYears.map((item) => {
-                const year = item.Tahun;
-                const isActive = item.Status === "active";
-                const isPosition = year === positionYear;
+              {(serverYears ?? []).map((item) => {
+                const year = String(item.Tahun ?? item.tahun ?? "");
+                const isActive = String(item.Status || item.status || "").toLowerCase() === "active" || String(item.Status || item.status || "").toLowerCase() === "aktif";
+                const isPosition = year === String(positionYear);
                 return (
                   <li
                     key={year}
                     onClick={() => {
-                      setPositionYear(year);
+                      if (changeYear) changeYear(year);
+                      else setPositionYear(year);
                       setYearModalOpen(false);
                     }}
-                    className={`px-3 py-1 cursor-pointer hover:bg-gray-100 flex justify-between items-center ${
+                    className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center ${
                       isPosition ? "bg-gray-100 font-medium" : ""
                     }`}
                   >
