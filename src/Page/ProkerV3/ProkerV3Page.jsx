@@ -993,7 +993,7 @@ export default function ProkerV3Page() {
           }
 
           return (
-            <div className="flex items-center gap-1.5 flex-nowrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
                 onClick={() => handleVerifyAnggaran(r)}
