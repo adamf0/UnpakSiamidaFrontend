@@ -328,22 +328,21 @@ export default function UserAssignmentModal({
 
     setIsSubmitting(true);
     try {
-      const payload = {
-        id_user: selectedUser.id_numeric || undefined,
-        user_uuid: selectedUser.uuid || undefined,
-        id_fakultas_unit: selectedFakultasUnit.id_numeric || undefined,
-        uuid_fakultas_unit: selectedFakultasUnit.uuid || undefined,
-        tahun: String(formValues.tahun).trim(),
-        role: getEffectiveRole(),
-        status: formValues.status || "active",
-      };
+      const fd = new FormData();
+      if (selectedUser.id_numeric) fd.append("id_user", String(selectedUser.id_numeric));
+      if (selectedUser.uuid) fd.append("user_uuid", selectedUser.uuid);
+      if (selectedFakultasUnit.id_numeric) fd.append("id_fakultas_unit", String(selectedFakultasUnit.id_numeric));
+      if (selectedFakultasUnit.uuid) fd.append("uuid_fakultas_unit", selectedFakultasUnit.uuid);
+      fd.append("tahun", String(formValues.tahun).trim());
+      fd.append("role", getEffectiveRole());
+      fd.append("status", formValues.status || "active");
 
       if (mode === "edit" && (data?.UUID || data?.uuid)) {
         const editUuid = data.UUID || data.uuid;
-        await apiClient.put(`/user-abac/${editUuid}`, payload);
+        await apiClient.put(`/user-abac/${editUuid}`, fd);
         addToast("success", "Penugasan pengguna berhasil diperbarui");
       } else {
-        await apiClient.post("/user-abac", payload);
+        await apiClient.post("/user-abac", fd);
         addToast("success", "Penugasan pengguna baru berhasil ditambahkan");
       }
 

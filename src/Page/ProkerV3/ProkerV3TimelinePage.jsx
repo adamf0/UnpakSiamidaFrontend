@@ -286,16 +286,15 @@ export default function ProkerV3TimelinePage() {
         realisasiForm.tanggal_r_awal,
         realisasiForm.tanggal_r_akhir
       );
-      const payload = {
-        tanggal_r_awal: realisasiForm.tanggal_r_awal || undefined,
-        tanggal_r_akhir: realisasiForm.tanggal_r_akhir || undefined,
-        jadwal_r: JSON.stringify(rSlotsGen),
-        status: realisasiForm.status || "Belum Terlaksana",
-      };
+      const fd = new FormData();
+      if (realisasiForm.tanggal_r_awal) fd.append("tanggal_r_awal", realisasiForm.tanggal_r_awal);
+      if (realisasiForm.tanggal_r_akhir) fd.append("tanggal_r_akhir", realisasiForm.tanggal_r_akhir);
+      fd.append("jadwal_r", JSON.stringify(rSlotsGen));
+      fd.append("status", realisasiForm.status || "Belum Terlaksana");
 
       const res = await apiClient.put(
         `/proker_v3/timeline/${selectedTimelineForRealisasi.UUID}`,
-        payload
+        fd
       );
 
       addToast("success", `Perkembangan realisasi "${selectedTimelineForRealisasi.NamaAktivitas}" berhasil disimpan`);
@@ -348,12 +347,13 @@ export default function ProkerV3TimelinePage() {
 
     // Persist new order to backend
     try {
-      const payload = reordered.map((item) => ({
+      const fd = new FormData();
+      fd.append("items", JSON.stringify(reordered.map((item) => ({
         uuid: item.UUID,
         no_aktivitas: item.NoAktivitas,
-      }));
+      }))));
 
-      await apiClient.put(`/proker_v3/aktivitas/${actUuid}/timeline/reorder`, payload);
+      await apiClient.put(`/proker_v3/aktivitas/${actUuid}/timeline/reorder`, fd);
 
       addToast("success", "Urutan nomor urut tahapan timeline berhasil diperbarui.");
     } catch (err) {
@@ -411,26 +411,25 @@ export default function ProkerV3TimelinePage() {
         formTimeline.tanggal_rk_akhir || "2026-12-31"
       );
 
-      const payload = {
-        no_aktivitas: targetNo,
-        nama_aktivitas: formTimeline.nama_aktivitas.trim(),
-        pic: formTimeline.pic.trim(),
-        titik_kontrol: formTimeline.titik_kontrol.trim(),
-        tanggal_rk_awal: formTimeline.tanggal_rk_awal || "2026-01-01",
-        tanggal_rk_akhir: formTimeline.tanggal_rk_akhir || "2026-12-31",
-        jadwal_rk: JSON.stringify(rkSlotsGen),
-        capaian: formTimeline.capaian.trim(),
-        masalah: formTimeline.masalah.trim(),
-        pemecahan_masalah: formTimeline.pemecahan_masalah.trim(),
-      };
+      const fd = new FormData();
+      fd.append("no_aktivitas", String(targetNo));
+      fd.append("nama_aktivitas", formTimeline.nama_aktivitas.trim());
+      fd.append("pic", formTimeline.pic.trim());
+      fd.append("titik_kontrol", formTimeline.titik_kontrol.trim());
+      fd.append("tanggal_rk_awal", formTimeline.tanggal_rk_awal || "2026-01-01");
+      fd.append("tanggal_rk_akhir", formTimeline.tanggal_rk_akhir || "2026-12-31");
+      fd.append("jadwal_rk", JSON.stringify(rkSlotsGen));
+      fd.append("capaian", formTimeline.capaian.trim());
+      fd.append("masalah", formTimeline.masalah.trim());
+      fd.append("pemecahan_masalah", formTimeline.pemecahan_masalah.trim());
 
       const url = editingTimelineUuid
         ? `/proker_v3/timeline/${editingTimelineUuid}`
         : `/proker_v3/aktivitas/${actUuid}/timeline`;
 
       const res = editingTimelineUuid
-        ? await apiClient.put(url, payload)
-        : await apiClient.post(url, payload);
+        ? await apiClient.put(url, fd)
+        : await apiClient.post(url, fd);
 
       const json = res.data;
 

@@ -411,39 +411,36 @@ export default function RiskAssessmentFormModal({
     setSubmitting(true);
 
     try {
-      const payload = {
-        tahun_uuid: formData.tahun?.UUID || formData.tahun?.id || "",
-        tahun: formData.tahun?.nama || formData.tahun?.Tahun || "",
-        id_master_tahun: formData.tahun?.rawId || formData.tahun?.ID || null,
+      const fd = new FormData();
+      if (formData.tahun?.UUID || formData.tahun?.id) fd.append("tahun_uuid", formData.tahun?.UUID || formData.tahun?.id);
+      if (formData.tahun?.nama || formData.tahun?.Tahun) fd.append("tahun", formData.tahun?.nama || formData.tahun?.Tahun);
+      if (formData.tahun?.rawId || formData.tahun?.ID) fd.append("id_master_tahun", String(formData.tahun?.rawId || formData.tahun?.ID));
 
-        fakultas_unit: formData.fakultas_unit?.UUID || formData.fakultas_unit?.id || "",
-        id_fakultas_unit: formData.fakultas_unit?.rawId || formData.fakultas_unit?.ID || null,
+      if (formData.fakultas_unit?.UUID || formData.fakultas_unit?.id) fd.append("fakultas_unit", formData.fakultas_unit?.UUID || formData.fakultas_unit?.id);
+      if (formData.fakultas_unit?.rawId || formData.fakultas_unit?.ID) fd.append("id_fakultas_unit", String(formData.fakultas_unit?.rawId || formData.fakultas_unit?.ID));
 
-        id_mata_program: formData.program?.id || formData.program?.rawId || null,
-        mata_program_uuid: formData.program?.UUID || formData.program?.uuid || "",
+      if (formData.program?.id || formData.program?.rawId) fd.append("id_mata_program", String(formData.program?.id || formData.program?.rawId));
+      if (formData.program?.UUID || formData.program?.uuid) fd.append("mata_program_uuid", formData.program?.UUID || formData.program?.uuid);
 
-        isu_internal_eksternal: formData.isu_internal_eksternal.trim(),
-        deskripsi_risiko: formData.deskripsi_risiko.trim(),
+      fd.append("isu_internal_eksternal", formData.isu_internal_eksternal.trim());
+      fd.append("deskripsi_risiko", formData.deskripsi_risiko.trim());
+      fd.append("kemungkinan_awal", String(parseInt(formData.kemungkinan_awal, 10)));
+      fd.append("dampak_awal", String(parseInt(formData.dampak_awal, 10)));
+      fd.append("tingkat_risiko_awal", awalAnalysis.kode);
 
-        kemungkinan_awal: parseInt(formData.kemungkinan_awal, 10),
-        dampak_awal: parseInt(formData.dampak_awal, 10),
-        tingkat_risiko_awal: awalAnalysis.kode,
-
-        tindakan_mitigasi: formData.tindakan_mitigasi.trim(),
-        peluang: formData.peluang?.trim() || "",
-
-        kenyataan_residu: formData.kenyataan_residu?.trim() || "",
-        kemungkinan_residu: formData.kemungkinan_residu ? parseInt(formData.kemungkinan_residu, 10) : null,
-        dampak_residu: formData.dampak_residu ? parseInt(formData.dampak_residu, 10) : null,
-        tingkat_risiko_residu: residuAnalysis.kode || null,
-        rencana_tindak_lanjut: formData.rencana_tindak_lanjut?.trim() || "",
-      };
+      fd.append("tindakan_mitigasi", formData.tindakan_mitigasi.trim());
+      if (formData.peluang) fd.append("peluang", formData.peluang.trim());
+      if (formData.kenyataan_residu) fd.append("kenyataan_residu", formData.kenyataan_residu.trim());
+      if (formData.kemungkinan_residu) fd.append("kemungkinan_residu", String(parseInt(formData.kemungkinan_residu, 10)));
+      if (formData.dampak_residu) fd.append("dampak_residu", String(parseInt(formData.dampak_residu, 10)));
+      if (residuAnalysis.kode) fd.append("tingkat_risiko_residu", residuAnalysis.kode);
+      if (formData.rencana_tindak_lanjut) fd.append("rencana_tindak_lanjut", formData.rencana_tindak_lanjut.trim());
 
       const isEdit = mode === "edit" && data?.UUID;
       if (isEdit) {
-        await apiClient.put(`/risk_assessment/${data.UUID}`, payload);
+        await apiClient.put(`/risk_assessment/${data.UUID}`, fd);
       } else {
-        await apiClient.post("/risk_assessment", payload);
+        await apiClient.post("/risk_assessment", fd);
       }
 
       addToast("success", isEdit ? "Analisis risiko berhasil diperbarui" : "Analisis risiko berhasil ditambahkan");

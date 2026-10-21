@@ -129,10 +129,10 @@ export default function ProkerV3DokumenPage() {
     if (!doc?.UUID) return;
     setUpdatingVerifikasi(true);
     try {
-      const res = await apiClient.put(`/proker_v3/dokumen/${doc.UUID}/verifikasi`, {
-        status_verifikasi: "terverifikasi",
-        catatan: "",
-      });
+      const fd = new FormData();
+      fd.append("status_verifikasi", "terverifikasi");
+      fd.append("catatan", "");
+      const res = await apiClient.put(`/proker_v3/dokumen/${doc.UUID}/verifikasi`, fd);
       const json = res.data;
       addToast("success", `Dokumen "${doc.NamaFile}" berhasil diverifikasi`);
       fetchData();
@@ -162,11 +162,11 @@ export default function ProkerV3DokumenPage() {
     if (!docToTolak?.UUID) return;
     setUpdatingVerifikasi(true);
     try {
-      await apiClient.put(`/proker_v3/dokumen/${docToTolak.UUID}/verifikasi`, {
-        status_verifikasi: "ditolak",
-        catatan_penolakan: catatanTolak.trim(),
-        catatan: catatanTolak.trim(),
-      });
+      const fd = new FormData();
+      fd.append("status_verifikasi", "ditolak");
+      fd.append("catatan_penolakan", catatanTolak.trim());
+      fd.append("catatan", catatanTolak.trim());
+      await apiClient.put(`/proker_v3/dokumen/${docToTolak.UUID}/verifikasi`, fd);
       addToast("warning", `Dokumen "${docToTolak.NamaFile}" ditolak`);
       setTolakModalOpen(false);
       setDocToTolak(null);

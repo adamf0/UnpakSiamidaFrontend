@@ -126,15 +126,14 @@ export default function ProkerV3AktivitasModal({
     if (!prokerUuid) return;
     setSavingAnggaran(true);
     try {
-      const payload = {
-        anggaran: Number(anggaranInput) || 0,
-        luaran_produk: luaranProdukInput.trim(),
-        dokumen_referensi: dokumenReferensiInput.trim(),
-      };
+      const fd = new FormData();
+      fd.append("anggaran", String(Number(anggaranInput) || 0));
+      fd.append("luaran_produk", luaranProdukInput.trim());
+      fd.append("dokumen_referensi", dokumenReferensiInput.trim());
 
       await apiClient.put(
-        `/proker_v3/${prokerUuid}/anggaran_luaran`,
-        payload
+        `/proker_v3/${prokerUuid}`,
+        fd
       );
 
       addToast("success", "Anggaran & Luaran Produk berhasil disimpan");
@@ -248,31 +247,29 @@ export default function ProkerV3AktivitasModal({
 
     setSavingTimeline(true);
     try {
-      const token = getValidToken();
-      const payload = {
-        no_aktivitas: Number(timelineNo) || 1,
-        nama_aktivitas: timelineNama.trim(),
-        pic: timelinePic.trim(),
-        titik_kontrol: timelineTitikKontrol,
-        tanggal_rk_awal: `${data?.Tahun || "2026"}-01-01`,
-        tanggal_rk_akhir: `${data?.Tahun || "2026"}-12-31`,
-        jadwal_rk: JSON.stringify(timelineJadwalRkSlots),
-        jadwal_r: JSON.stringify(timelineJadwalRSlots),
-        capaian: timelineCapaian.trim(),
-        masalah: timelineMasalah.trim(),
-        pemecahan_masalah: timelinePemecahanMasalah.trim(),
-        status: timelineStatus,
-      };
+      const fd = new FormData();
+      fd.append("no_aktivitas", String(Number(timelineNo) || 1));
+      fd.append("nama_aktivitas", timelineNama.trim());
+      fd.append("pic", timelinePic.trim());
+      fd.append("titik_kontrol", timelineTitikKontrol);
+      fd.append("tanggal_rk_awal", `${data?.Tahun || "2026"}-01-01`);
+      fd.append("tanggal_rk_akhir", `${data?.Tahun || "2026"}-12-31`);
+      fd.append("jadwal_rk", JSON.stringify(timelineJadwalRkSlots));
+      fd.append("jadwal_r", JSON.stringify(timelineJadwalRSlots));
+      fd.append("capaian", timelineCapaian.trim());
+      fd.append("masalah", timelineMasalah.trim());
+      fd.append("pemecahan_masalah", timelinePemecahanMasalah.trim());
+      fd.append("status", timelineStatus);
 
       if (editingTimelineUuid) {
         await apiClient.put(
           `/proker_v3/${prokerUuid}/timeline/${editingTimelineUuid}`,
-          payload
+          fd
         );
       } else {
         await apiClient.post(
           `/proker_v3/${prokerUuid}/timeline`,
-          payload
+          fd
         );
       }
 

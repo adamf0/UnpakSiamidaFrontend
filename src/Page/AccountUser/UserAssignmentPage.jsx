@@ -147,9 +147,9 @@ export default function UserAssignmentPage() {
     const uuid = item.UUID || item.uuid;
 
     try {
-      await apiClient.put(`/user-abac/${uuid}`, {
-        status: newStatus,
-      });
+      const fd = new FormData();
+      fd.append("status", newStatus);
+      await apiClient.put(`/user-abac/${uuid}`, fd);
 
       setAssignments((prev) =>
         prev.map((a) => {

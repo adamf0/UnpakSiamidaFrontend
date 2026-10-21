@@ -222,12 +222,13 @@ export default function UserMergePage() {
     if (!confirmUnmerge) return;
 
     try {
-      await apiClient.post("/users/merge", {
-        primary_id: user.ID,
-        primary_uuid: user.UUID,
-        secondary_ids: [],
-        secondary_uuids: [],
-      });
+      const fd = new FormData();
+      if (user.ID) fd.append("primary_id", String(user.ID));
+      if (user.UUID) fd.append("primary_uuid", String(user.UUID));
+      fd.append("secondary_ids", JSON.stringify([]));
+      fd.append("secondary_uuids", JSON.stringify([]));
+
+      await apiClient.post("/users/merge", fd);
       addToast("success", `Akun "${user.Name || user.Username}" berhasil di-unmerge.`);
       fetchUsers();
     } catch (err) {
@@ -263,14 +264,13 @@ export default function UserMergePage() {
 
     setIsSubmitting(true);
     try {
-      const payload = {
-        primary_id: primaryUser.ID,
-        primary_uuid: primaryUser.UUID,
-        secondary_ids: secondaryUsers.map((u) => u.ID),
-        secondary_uuids: secondaryUsers.map((u) => u.UUID),
-      };
+      const fd = new FormData();
+      if (primaryUser.ID) fd.append("primary_id", String(primaryUser.ID));
+      if (primaryUser.UUID) fd.append("primary_uuid", String(primaryUser.UUID));
+      fd.append("secondary_ids", JSON.stringify(secondaryUsers.map((u) => u.ID)));
+      fd.append("secondary_uuids", JSON.stringify(secondaryUsers.map((u) => u.UUID)));
 
-      await apiClient.post("/users/merge", payload);
+      await apiClient.post("/users/merge", fd);
 
       addToast(
         "success",

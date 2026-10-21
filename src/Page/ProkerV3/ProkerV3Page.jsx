@@ -543,7 +543,9 @@ export default function ProkerV3Page() {
   // Update Status Proker Handler (Button / Action in table)
   const handleUpdateStatus = async (row, nextStatus) => {
     try {
-      await apiClient.put(`/proker_v3/${row.UUID}/status`, { status: nextStatus });
+      const fd = new FormData();
+      fd.append("status", nextStatus);
+      await apiClient.put(`/proker_v3/${row.UUID}/status`, fd);
       addToast(
         "success",
         `Status program kerja berhasil diubah menjadi: ${nextStatus.toUpperCase()}`
@@ -557,9 +559,9 @@ export default function ProkerV3Page() {
   // Verifikator (UPM / Evaluator) Verification Handler
   const handleVerifyVerifikator = async (row) => {
     try {
-      await apiClient.put(`/proker_v3/${row.UUID}/status`, {
-        status: "terima_verifikator",
-      });
+      const fd = new FormData();
+      fd.append("status", "terima_verifikator");
+      await apiClient.put(`/proker_v3/${row.UUID}/status`, fd);
       addToast(
         "success",
         `Program kerja "${row.NamaProgram}" berhasil disetujui (Terima Verifikator)`
@@ -576,9 +578,9 @@ export default function ProkerV3Page() {
   // Anggaran Verification Handlers
   const handleVerifyAnggaran = async (row) => {
     try {
-      await apiClient.put(`/proker_v3/${row.UUID}/status`, {
-        status: "terima_anggaran",
-      });
+      const fd = new FormData();
+      fd.append("status", "terima_anggaran");
+      await apiClient.put(`/proker_v3/${row.UUID}/status`, fd);
       addToast(
         "success",
         `Program kerja "${row.NamaProgram}" berhasil disetujui (Terima Anggaran)`
@@ -602,10 +604,10 @@ export default function ProkerV3Page() {
     }
     try {
       setIsSubmittingReject(true);
-      await apiClient.put(`/proker_v3/${rejectingRow.UUID}/status`, {
-        status: "ditolak",
-        catatan_penolakan: alasanPenolakan.trim(),
-      });
+      const fd = new FormData();
+      fd.append("status", "ditolak");
+      fd.append("catatan_penolakan", alasanPenolakan.trim());
+      await apiClient.put(`/proker_v3/${rejectingRow.UUID}/status`, fd);
       addToast("success", `Program kerja "${rejectingRow.NamaProgram}" berhasil ditolak`);
       setRejectModalOpen(false);
       setRejectingRow(null);

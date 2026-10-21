@@ -299,30 +299,29 @@ export default function ProkerV3FormModal({
     try {
       const token = getValidToken();
 
-      // FULL DATA PAYLOAD from all 3 steps
-      const payload = {
-        no_proker: Number(noProker) || 1,
-        nama_program: namaProgram.trim(),
-        id_fakultas_unit: currentUnitId ? Number(currentUnitId) : null,
-        fakultas_unit: currentUnitUuid,
-        id_mata_program: initialData?.IdMataProgram || null,
-        id_indikator: selectedIndikator?.id || initialData?.IdIndikator || null,
-        tahun: String(currentTahun),
-        standar_sub_standar: standarSubStandar.trim(),
-        indikator_kinerja: indikatorKinerja.trim(),
-        target_unpak: targetUnpak.trim(),
-        capaian_unit_lalu: capaianUnitLalu.trim(),
-        target_unit: targetUnit.trim(),
-        output: output.trim(),
-        outcome: outcome.trim(),
-        pic: pic.trim(),
-      };
+      const fd = new FormData();
+      fd.append("no_proker", String(Number(noProker) || 1));
+      fd.append("nama_program", namaProgram.trim());
+      if (currentUnitId) fd.append("id_fakultas_unit", String(currentUnitId));
+      if (currentUnitUuid) fd.append("fakultas_unit", currentUnitUuid);
+      if (initialData?.IdMataProgram) fd.append("id_mata_program", String(initialData.IdMataProgram));
+      const effIdIndikator = selectedIndikator?.id || initialData?.IdIndikator;
+      if (effIdIndikator) fd.append("id_indikator", String(effIdIndikator));
+      fd.append("tahun", String(currentTahun));
+      fd.append("standar_sub_standar", standarSubStandar.trim());
+      fd.append("indikator_kinerja", indikatorKinerja.trim());
+      fd.append("target_unpak", targetUnpak.trim());
+      fd.append("capaian_unit_lalu", capaianUnitLalu.trim());
+      fd.append("target_unit", targetUnit.trim());
+      fd.append("output", output.trim());
+      fd.append("outcome", outcome.trim());
+      fd.append("pic", pic.trim());
 
       let res;
       if (mode === "edit") {
-        res = await apiClient.put(`/proker_v3/${initialData.UUID}`, payload);
+        res = await apiClient.put(`/proker_v3/${initialData.UUID}`, fd);
       } else {
-        res = await apiClient.post("/proker_v3", payload);
+        res = await apiClient.post("/proker_v3", fd);
       }
       const data = res.data;
 

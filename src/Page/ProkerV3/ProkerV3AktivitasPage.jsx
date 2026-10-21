@@ -235,15 +235,14 @@ export default function ProkerV3AktivitasPage() {
     setSavingAct(true);
     try {
       const token = getValidToken();
-      const payload = {
-        aktivitas: actNama.trim(),
-        pic: actPic.trim(),
-        anggaran: Number(actAnggaran) || 0,
-        status: actStatus,
-        capaian: actCapaian.trim(),
-        masalah: actMasalah.trim(),
-        pemecahan_masalah: actPemecahan.trim(),
-      };
+      const fd = new FormData();
+      fd.append("aktivitas", actName.trim());
+      fd.append("pic", actPic.trim());
+      fd.append("anggaran", String(Number(actAnggaran) || 0));
+      fd.append("status", actStatus);
+      fd.append("capaian", actCapaian.trim());
+      fd.append("masalah", actMasalah.trim());
+      fd.append("pemecahan_masalah", actPemecahan.trim());
 
       const url =
         actModalMode === "edit"
@@ -252,8 +251,8 @@ export default function ProkerV3AktivitasPage() {
 
       const res =
         actModalMode === "edit"
-          ? await apiClient.put(url, payload)
-          : await apiClient.post(url, payload);
+          ? await apiClient.put(url, fd)
+          : await apiClient.post(url, fd);
 
       const json = res.data;
 
@@ -291,11 +290,11 @@ export default function ProkerV3AktivitasPage() {
 
   const handleUpdateStatusActivity = async (act, nextStatus) => {
     try {
+      const fd = new FormData();
+      fd.append("status", nextStatus);
       const res = await apiClient.put(
         `/proker_v3/aktivitas/${act.UUID}/status`,
-        {
-          status: nextStatus,
-        },
+        fd,
       );
       const json = res.data;
       addToast(
@@ -391,9 +390,9 @@ export default function ProkerV3AktivitasPage() {
   const handleTerimaProker = async () => {
     try {
       setIsVerifying(true);
-      await apiClient.put(`/proker_v3/${prokerUuid}/verifikasi`, {
-        status: nextVerifyStatus,
-      });
+      const fd = new FormData();
+      fd.append("status", nextVerifyStatus);
+      await apiClient.put(`/proker_v3/${prokerUuid}/verifikasi`, fd);
 
       addToast(
         "success",
@@ -420,10 +419,10 @@ export default function ProkerV3AktivitasPage() {
 
     try {
       setIsSubmittingReject(true);
-      await apiClient.put(`/proker_v3/${prokerUuid}/verifikasi`, {
-        status: "ditolak",
-        catatan_penolakan: alasanPenolakan.trim(),
-      });
+      const fd = new FormData();
+      fd.append("status", "ditolak");
+      fd.append("catatan_penolakan", alasanPenolakan.trim());
+      await apiClient.put(`/proker_v3/${prokerUuid}/verifikasi`, fd);
 
       addToast("success", "Program kerja berhasil ditolak.");
       setRejectModalOpen(false);
@@ -466,10 +465,10 @@ export default function ProkerV3AktivitasPage() {
 
     const promises = selectedActUuids.map(async (uuid) => {
       try {
-        await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, {
-          status: "disetujui",
-          role: curRole,
-        });
+        const fd = new FormData();
+        fd.append("status", "disetujui");
+        fd.append("role", curRole);
+        await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, fd);
         return { uuid, success: true };
       } catch (err) {
         const msg =
@@ -544,11 +543,11 @@ export default function ProkerV3AktivitasPage() {
     const reason = batchRejectReason.trim();
     const promises = selectedActUuids.map(async (uuid) => {
       try {
-        await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, {
-          status: "ditolak",
-          role: curRole,
-          catatan_penolakan: reason,
-        });
+        const fd = new FormData();
+        fd.append("status", "ditolak");
+        fd.append("role", curRole);
+        fd.append("catatan_penolakan", reason);
+        await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, fd);
         return { uuid, success: true };
       } catch (err) {
         const msg =
@@ -615,10 +614,10 @@ export default function ProkerV3AktivitasPage() {
     });
 
     try {
-      await apiClient.put(`/proker_v3/aktivitas/${act.UUID}/status`, {
-        status: "disetujui",
-        role: roleToUse,
-      });
+      const fd = new FormData();
+      fd.append("status", "disetujui");
+      fd.append("role", roleToUse);
+      await apiClient.put(`/proker_v3/aktivitas/${act.UUID}/status`, fd);
       addToast(
         "success",
         `Aktivitas berhasil disetujui (${roleToUse.toUpperCase()})`,
@@ -660,11 +659,11 @@ export default function ProkerV3AktivitasPage() {
     });
 
     try {
-      await apiClient.put(`/proker_v3/aktivitas/${actToReject.UUID}/status`, {
-        status: "ditolak",
-        role: rejectRole || curRole,
-        catatan_penolakan: singleRejectReason.trim(),
-      });
+      const fd = new FormData();
+      fd.append("status", "ditolak");
+      fd.append("role", rejectRole || curRole);
+      fd.append("catatan_penolakan", singleRejectReason.trim());
+      await apiClient.put(`/proker_v3/aktivitas/${actToReject.UUID}/status`, fd);
       addToast(
         "success",
         `Aktivitas "${actToReject.Aktivitas}" berhasil ditolak`,
