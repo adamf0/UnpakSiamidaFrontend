@@ -28,7 +28,7 @@ const nowInSeconds = () => Math.floor(Date.now() / 1000);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => sessionStorage.getItem("token"));
+  const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState(null);
 
@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
   };
 
   const isTokenExpired = (rawToken) => {
-    const token = cleanTokenString(rawToken ?? sessionStorage.getItem("token"));
+    const token = cleanTokenString(rawToken ?? localStorage.getItem("token"));
     if (!token) return true;
 
     const payload = decodeJWT(token);
@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
   };
 
   const isRefreshExpired = (rawRefresh) => {
-    const refresh = cleanTokenString(rawRefresh ?? sessionStorage.getItem("refresh"));
+    const refresh = cleanTokenString(rawRefresh ?? localStorage.getItem("refresh"));
     if (!refresh) return true;
 
     const payload = decodeJWT(refresh);
@@ -74,10 +74,10 @@ export function AuthProvider({ children }) {
    * ====================== */
 
   const getValidToken = () => {
-    const rawToken = cleanTokenString(sessionStorage.getItem("token"));
+    const rawToken = cleanTokenString(localStorage.getItem("token"));
     if (rawToken && !isTokenExpired(rawToken)) return rawToken;
 
-    const rawRefresh = cleanTokenString(sessionStorage.getItem("refresh"));
+    const rawRefresh = cleanTokenString(localStorage.getItem("refresh"));
     if (rawRefresh && !isRefreshExpired(rawRefresh)) return rawRefresh;
 
     // Fallback: if rawToken exists and has valid 3-part structure, return it
@@ -165,9 +165,9 @@ export function AuthProvider({ children }) {
    * ====================== */
 
   const logout = () => {
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("refresh");
-    sessionStorage.removeItem("positionYear");
+    localStorage.removeItem("token");
+    localStorage.removeItem("refresh");
+    localStorage.removeItem("positionYear");
     setUser(null);
     setToken(null);
   };

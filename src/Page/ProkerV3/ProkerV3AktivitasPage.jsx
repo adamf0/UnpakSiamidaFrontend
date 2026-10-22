@@ -72,7 +72,7 @@ export default function ProkerV3AktivitasPage() {
   } = useContent();
 
   const isAdmin = level === "admin" || user?.level === "admin";
-  const curRole = String(level || sessionStorage.getItem("activeLevel") || "")
+  const curRole = String(level || localStorage.getItem("activeLevel") || "")
     .toLowerCase()
     .trim();
   const isVerifier = ["upml", "upmf", "upms", "evaluator"].includes(curRole);
@@ -765,7 +765,7 @@ export default function ProkerV3AktivitasPage() {
                 changeLevel(val);
               } else {
                 setLevel(val);
-                sessionStorage.setItem("activeLevel", val);
+                localStorage.setItem("activeLevel", val);
                 setOpenChangeLevel(false);
               }
             }}

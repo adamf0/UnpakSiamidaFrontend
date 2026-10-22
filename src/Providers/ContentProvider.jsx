@@ -13,23 +13,23 @@ export const ContentProvider = ({ children }) => {
   const { user } = useAuth();
   const [serverYears, setServerYears] = useState([]);
   const [positionYear, setPositionYear] = useState(() => {
-    return sessionStorage.getItem("positionYear") || "2026";
+    return localStorage.getItem("positionYear") || "2026";
   });
 
   /* ================= VERSIONING ================= */
   const [appVersion, setAppVersion] = useState(() => {
-    return sessionStorage.getItem("appVersion") || "v2";
+    return localStorage.getItem("appVersion") || "v2";
   });
 
   const changeAppVersion = (verId) => {
     setAppVersion(verId);
-    sessionStorage.setItem("appVersion", verId);
+    localStorage.setItem("appVersion", verId);
 
     // Otomatis sesuaikan tahun jika relevan dengan versi
     const cfg = getVersionConfig(verId);
     if (cfg?.defaultYear) {
       setPositionYear(cfg.defaultYear);
-      sessionStorage.setItem("positionYear", cfg.defaultYear);
+      localStorage.setItem("positionYear", cfg.defaultYear);
     }
   };
 
@@ -97,7 +97,7 @@ export const ContentProvider = ({ children }) => {
   }, [serverYears, user?.extra_role]);
 
   const activeYear = useMemo(() => {
-    const stored = sessionStorage.getItem("positionYear");
+    const stored = localStorage.getItem("positionYear");
     if (stored) return stored;
 
     // Prioritaskan tahun dari penugasan ABAC (extra_role)
@@ -124,7 +124,7 @@ export const ContentProvider = ({ children }) => {
 
   /* ================= LEVEL ================= */
   const [level, setLevel] = useState(() => {
-    return sessionStorage.getItem("activeLevel") || null;
+    return localStorage.getItem("activeLevel") || null;
   });
   const [listLevel, setListLevel] = useState([]);
 
@@ -156,48 +156,48 @@ export const ContentProvider = ({ children }) => {
     setListLevel(allRoles);
 
     // Tentukan level yang aktif
-    const savedLevel = sessionStorage.getItem("activeLevel");
+    const savedLevel = localStorage.getItem("activeLevel");
     if (savedLevel && allRoles.includes(savedLevel)) {
       setLevel(savedLevel);
     } else if (matchingRoles.length > 0) {
       // Prioritaskan role penugasan (UPML, UPMF, UPMS) agar langsung aktif
       setLevel(matchingRoles[0]);
-      sessionStorage.setItem("activeLevel", matchingRoles[0]);
+      localStorage.setItem("activeLevel", matchingRoles[0]);
     } else {
       setLevel(userBaseLevel);
-      sessionStorage.setItem("activeLevel", userBaseLevel);
+      localStorage.setItem("activeLevel", userBaseLevel);
     }
   }, [positionYear, user]);
 
   useEffect(() => {
     if (activeYear && !positionYear) {
       setPositionYear(String(activeYear));
-      sessionStorage.setItem("positionYear", String(activeYear));
+      localStorage.setItem("positionYear", String(activeYear));
     } else if (positionYear && availableYears.length > 0 && user?.level !== "admin") {
       const exists = availableYears.some((y) => String(y.Tahun ?? y.tahun) === String(positionYear));
       if (!exists && activeYear) {
         setPositionYear(String(activeYear));
-        sessionStorage.setItem("positionYear", String(activeYear));
+        localStorage.setItem("positionYear", String(activeYear));
       }
     }
   }, [activeYear, positionYear, availableYears, user?.level]);
 
   useEffect(() => {
     if (positionYear) {
-      sessionStorage.setItem("positionYear", positionYear);
+      localStorage.setItem("positionYear", positionYear);
     }
   }, [positionYear]);
 
   /* ================= ACTIONS ================= */
   const changeYear = (year) => {
     setPositionYear(String(year));
-    sessionStorage.setItem("positionYear", String(year));
+    localStorage.setItem("positionYear", String(year));
   };
 
   const changeLevel = (val) => {
     if (!listLevel.includes(val)) return;
     setLevel(val);
-    sessionStorage.setItem("activeLevel", val);
+    localStorage.setItem("activeLevel", val);
     setOpenChangeLevel(false);
   };
 

@@ -5,7 +5,7 @@ import { Navigate, Outlet } from "react-router-dom";
 export default function ProtectedRoute() {
   const { expired } = useAuth();
 
-  if (expired || !sessionStorage.getItem("token")) {
+  if (expired || !localStorage.getItem("token")) {
     return <Navigate to="/" replace />;
   }
 

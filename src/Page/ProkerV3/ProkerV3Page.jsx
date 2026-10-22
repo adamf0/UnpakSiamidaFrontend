@@ -100,7 +100,7 @@ export default function ProkerV3Page() {
     }
   }, [positionYear]);
 
-  const curRole = String(level || sessionStorage.getItem("activeLevel") || user?.level || "").toLowerCase().trim();
+  const curRole = String(level || localStorage.getItem("activeLevel") || user?.level || "").toLowerCase().trim();
   const isVerifier = ["upml", "upmf", "upms", "evaluator"].includes(curRole);
   const isAnggaran = ["anggaran", "keuangan"].includes(curRole);
   const isAuditee = curRole === "auditee";
@@ -1158,7 +1158,7 @@ export default function ProkerV3Page() {
                 changeLevel(val);
               } else {
                 setLevel(val);
-                sessionStorage.setItem("activeLevel", val);
+                localStorage.setItem("activeLevel", val);
                 setOpenChangeLevel(false);
               }
             }}

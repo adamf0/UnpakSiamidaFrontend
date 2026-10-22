@@ -848,7 +848,7 @@ export default function ProkerV3TimelinePage() {
                 changeLevel(val);
               } else {
                 setLevel(val);
-                sessionStorage.setItem("activeLevel", val);
+                localStorage.setItem("activeLevel", val);
                 setOpenChangeLevel(false);
               }
             }}

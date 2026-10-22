@@ -64,7 +64,7 @@ export default function ProkerV3DokumenPage() {
     changeLevel,
   } = useContent();
 
-  const curRole = String(level || sessionStorage.getItem("activeLevel") || user?.level || "").toLowerCase().trim();
+  const curRole = String(level || localStorage.getItem("activeLevel") || user?.level || "").toLowerCase().trim();
   const isAdmin = curRole === "admin";
   const isAuditee = curRole === "auditee";
 
@@ -718,7 +718,7 @@ export default function ProkerV3DokumenPage() {
                 changeLevel(val);
               } else {
                 setLevel(val);
-                sessionStorage.setItem("activeLevel", val);
+                localStorage.setItem("activeLevel", val);
                 setOpenChangeLevel(false);
               }
             }}

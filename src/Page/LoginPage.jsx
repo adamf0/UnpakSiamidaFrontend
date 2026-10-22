@@ -78,8 +78,8 @@ function LoginContent() {
         addToast("error", body.error);
         // setErrorMessage(body.error);
       } else {
-        sessionStorage.setItem("token", body.access_token);
-        sessionStorage.setItem("refresh", body.refresh_token);
+        localStorage.setItem("token", body.access_token);
+        localStorage.setItem("refresh", body.refresh_token);
 
         navigate("/dashboard");
       }

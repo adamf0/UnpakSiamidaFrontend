@@ -37,7 +37,7 @@ const decodeJWT = (jwt) => {
 };
 
 const getSID = () => {
-  const token = sessionStorage.getItem("token") || sessionStorage.getItem("refresh");
+  const token = localStorage.getItem("token") || localStorage.getItem("refresh");
   if (!token) return null;
 
   const clean = token.startsWith("Bearer ") ? token.slice(7).trim() : token.trim();

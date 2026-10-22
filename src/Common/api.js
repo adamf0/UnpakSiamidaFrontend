@@ -20,7 +20,7 @@ const decodeJWT = (jwt) => {
   }
 };
 
-// Retrieve valid token from sessionStorage
+// Retrieve valid token from localStorage
 export const getValidToken = () => {
   const clean = (t) => {
     if (!t || typeof t !== "string") return "";
@@ -28,13 +28,13 @@ export const getValidToken = () => {
   };
   const now = Math.floor(Date.now() / 1000);
 
-  const rawToken = clean(sessionStorage.getItem("token"));
+  const rawToken = clean(localStorage.getItem("token"));
   if (rawToken) {
     const payload = decodeJWT(rawToken);
     if (!payload?.exp || payload.exp > now) return rawToken;
   }
 
-  const rawRefresh = clean(sessionStorage.getItem("refresh"));
+  const rawRefresh = clean(localStorage.getItem("refresh"));
   if (rawRefresh) {
     const payload = decodeJWT(rawRefresh);
     if (!payload?.exp || payload.exp > now) return rawRefresh;
@@ -57,12 +57,12 @@ apiClient.interceptors.request.use(
     if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    const activeLevel = sessionStorage.getItem("activeLevel");
+    const activeLevel = localStorage.getItem("activeLevel");
     if (activeLevel) {
       config.headers["X-Active-Role"] = activeLevel;
       config.headers["X-Level"] = activeLevel;
     }
-    const posYear = sessionStorage.getItem("positionYear");
+    const posYear = localStorage.getItem("positionYear");
     if (posYear) {
       config.headers["X-Position-Year"] = posYear;
       config.headers["X-Tahun"] = posYear;
