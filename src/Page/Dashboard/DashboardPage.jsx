@@ -4,6 +4,7 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useContent } from "@/Providers/ContentProvider";
 import ProkerAnnouncementCard from "./ProkerAnnouncementCard";
 import MonitoringTableCard from "./MonitoringTableCard";
+import PemetaanChartCard from "./PemetaanChartCard";
 import { isDashboardProkerVisibleForVersion } from "@/Common/versionConfig";
 import { Sparkles, Calendar, Layers, ShieldCheck, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -23,6 +24,7 @@ const DashboardContent = () => {
   } = useContent();
 
   const showProkerMonitoring = isDashboardProkerVisibleForVersion(appVersion || "v2");
+  const showPemetaanChart = (appVersion || "v2") === "v2" || (appVersion || "v2") === "v3";
 
   return (
     <>
@@ -49,6 +51,9 @@ const DashboardContent = () => {
               status="Ditutup"
               closedAt="25 Januari 2026, 23:59 WIB"
             />
+
+            {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN (Hanya muncul di V2 dan V3) */}
+            {showPemetaanChart && <PemetaanChartCard />}
 
             {/* TABLE CARD (Hanya untuk versi V1 & V2) */}
             <MonitoringTableCard />
@@ -121,6 +126,9 @@ const DashboardContent = () => {
                 </Link>
               </div>
             </div>
+
+            {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN */}
+            <PemetaanChartCard />
           </div>
         )}
       </main>

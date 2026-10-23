@@ -75,6 +75,7 @@ export const V3_FEATURE_PATHS = [
   "/risk_assessment",
   "/analisis_resiko",
   "/analisis_risiko",
+  "/proker_v3",
 ];
 
 export const isV3FeaturePath = (path) => {
@@ -113,10 +114,10 @@ export const isMenuVisibleForVersion = (path, versionId = "v2") => {
 };
 
 /**
- * Menentukan apakah Banner Pelaporan dan Monitoring Dokumen Proker tampil di Dashboard
- * Hanya aktif pada versi v1 & v2 (tidak pada v3)
+ * Menentukan apakah Monitoring Dokumen Proker tampil di Dashboard
+ * Aktif pada seluruh versi (v1, v2, dan v3 dengan sumber matrix_proker_dokumen)
  */
 export const isDashboardProkerVisibleForVersion = (versionId = "v2") => {
-  return versionId === "v1" || versionId === "v2";
+  return versionId === "v1" || versionId === "v2" || versionId === "v3";
 };
 

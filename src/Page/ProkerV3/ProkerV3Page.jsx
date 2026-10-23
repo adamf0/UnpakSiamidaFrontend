@@ -1101,7 +1101,7 @@ export default function ProkerV3Page() {
               </>
             )}
 
-            {!isAdmin && sMain === "draft" && (
+            {!isAdmin && (sMain === "draft" || sMain === "ditolak") && (
               <>
                 <button
                   type="button"

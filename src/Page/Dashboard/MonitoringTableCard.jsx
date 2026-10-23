@@ -14,6 +14,20 @@ import { useContent } from "@/Providers/ContentProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BsFilter } from "react-icons/bs";
+import Dossier3DStackView from "./MonitoringProker3D/Dossier3DStackView";
+import AdminKeyRack from "./MonitoringProker3D/AdminKeyRack";
+import ArchiveCabinetView from "./MonitoringProker3D/ArchiveCabinetView";
+import { aggregateMataProgramDossiers } from "./MonitoringProker3D/monitoringProkerData";
+import {
+  Layers,
+  Table as TableIcon,
+  Sparkles,
+  Key,
+  Lock,
+  Unlock,
+  Calendar,
+  ChevronDown,
+} from "lucide-react";
 
 export default function MonitoringTableCard() {
   const { user, getValidToken } = useAuth();
@@ -24,11 +38,13 @@ export default function MonitoringTableCard() {
      LOCAL STATE
   ========================= */
   const [rawData, setRawData] = useState([]);
+  const [realDocs, setRealDocs] = useState([]);
+  const [viewMode, setViewMode] = useState("3d"); // "3d" | "table"
   const [filters, setFilters] = useState([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [tahun, setTahun] = useState(null);
   const [fakultasunit, setFakultasUnit] = useState(null);
+  const [unlockedUnit, setUnlockedUnit] = useState(null); // Unit yang sedang dibuka oleh kunci admin
   const [dataFakultasUnit, setDataFakultasUnit] = useState([]);
   const [dataTahun, setDataTahun] = useState([]);
   const [loadingTahun, setLoadingTahun] = useState(false);
@@ -105,12 +121,30 @@ export default function MonitoringTableCard() {
 
       setLoading(true);
       try {
-        const res = await apiClient.get(`/monitoringproker/${tahunUuid}/${unitUuid}?mode=all`);
-        const json = res.data;
-        setRawData(Array.isArray(json) ? json : []);
+        const [resMonitoring, resRealDocs] = await Promise.allSettled([
+          apiClient.get(`/monitoringproker/${tahunUuid}/${unitUuid}?mode=all`),
+          apiClient.get(`/pelaporandokumens?mode=all&target=${unitUuid}`),
+        ]);
+
+        if (resMonitoring.status === "fulfilled") {
+          const json = resMonitoring.value?.data;
+          setRawData(Array.isArray(json) ? json : []);
+        } else {
+          setRawData([]);
+        }
+
+        if (resRealDocs.status === "fulfilled") {
+          const docsJson = resRealDocs.value?.data;
+          setRealDocs(Array.isArray(docsJson) ? docsJson : []);
+        } else {
+          setRealDocs([]);
+        }
       } catch (err) {
         console.error("Fetch monitoring proker gagal:", err);
-        addToast("errors", "Gagal memuat data monitoring dokumen program kerja");
+        addToast(
+          "errors",
+          "Gagal memuat data monitoring dokumen program kerja",
+        );
       } finally {
         setLoading(false);
       }
@@ -146,11 +180,14 @@ export default function MonitoringTableCard() {
 
       // 1. Tentukan tahun default
       const targetYearStr = String(positionYear ?? activeYear ?? "2025");
-      let matchedTahun = listTahun.find((t) => String(t.Tahun) === targetYearStr);
+      let matchedTahun = listTahun.find(
+        (t) => String(t.Tahun) === targetYearStr,
+      );
       if (!matchedTahun) {
         matchedTahun =
-          listTahun.find((t) => t.Status === "aktif" || t.Status === "active") ||
-          listTahun[0];
+          listTahun.find(
+            (t) => t.Status === "aktif" || t.Status === "active",
+          ) || listTahun[0];
       }
 
       // 2. Tentukan unit default (prioritas auditee unit)
@@ -165,22 +202,27 @@ export default function MonitoringTableCard() {
       if (!matchedUnit && user?.name?.toLowerCase().includes("bpsi")) {
         matchedUnit = listUnit.find((u) => u.Nama?.toLowerCase() === "bpsi");
       }
-      // Jika bukan auditee, default ke unit pertama agar tabel tidak kosong
-      if (!matchedUnit && !isAuditee && listUnit.length > 0) {
-        matchedUnit = listUnit[0];
-      }
 
       if (matchedTahun) {
         setTahun(matchedTahun);
         upsertFilter("tahun", matchedTahun);
       }
-      if (matchedUnit) {
-        setFakultasUnit(matchedUnit);
-        upsertFilter("fakultasunit", matchedUnit);
-      }
 
-      if (matchedTahun && matchedUnit) {
-        await fetchMonitoringProker(matchedTahun, matchedUnit);
+      // Jika user auditee, langsung buka lemari miliknya
+      if (isAuditee && matchedUnit) {
+        setFakultasUnit(matchedUnit);
+        setUnlockedUnit(matchedUnit);
+        upsertFilter("fakultasunit", matchedUnit);
+        if (matchedTahun) {
+          await fetchMonitoringProker(matchedTahun, matchedUnit);
+        }
+      } else {
+        // Posisi Admin: biarkan unlockedUnit = null agar Rak Kunci Unik tampil terlebih dahulu
+        setUnlockedUnit(null);
+        // Tetapkan fallback fakultasunit untuk tabel matriks jika dibutuhkan
+        if (listUnit.length > 0) {
+          setFakultasUnit(listUnit[0]);
+        }
       }
     })();
 
@@ -188,6 +230,39 @@ export default function MonitoringTableCard() {
       isMounted = false;
     };
   }, [user]);
+
+  /* =========================
+     KEY SELECTION & RETURN HANDLERS
+  ========================= */
+  const handleSelectUnitKey = useCallback(
+    async (unit) => {
+      setFakultasUnit(unit);
+      setUnlockedUnit(unit);
+      upsertFilter("fakultasunit", unit);
+      if (tahun) {
+        await fetchMonitoringProker(tahun, unit);
+      }
+    },
+    [tahun, fetchMonitoringProker],
+  );
+
+  const handleLockAndReturn = useCallback(() => {
+    setUnlockedUnit(null);
+    setFilters((prev) => prev.filter((f) => f.key !== "fakultasunit"));
+  }, []);
+
+  const handleTahunChange = useCallback(
+    async (selectedTahun) => {
+      if (!selectedTahun) return;
+      setTahun(selectedTahun);
+      upsertFilter("tahun", selectedTahun);
+      const targetUnit = unlockedUnit || fakultasunit;
+      if (targetUnit) {
+        await fetchMonitoringProker(selectedTahun, targetUnit);
+      }
+    },
+    [unlockedUnit, fakultasunit, fetchMonitoringProker],
+  );
 
   // Update jika positionYear di navbar berubah
   useEffect(() => {
@@ -282,169 +357,216 @@ export default function MonitoringTableCard() {
     }));
   }, [rawData]);
 
+  const dossiers = useMemo(() => {
+    return aggregateMataProgramDossiers(rawData, realDocs, fakultasunit, tahun);
+  }, [rawData, realDocs, fakultasunit, tahun]);
+
   /* =========================
      RENDER
   ========================= */
   return (
     <>
-      <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+      <div className="rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden transition-all duration-300">
         {/* HEADER */}
-        <div className="flex justify-between items-center px-5 py-4 border-b bg-gray-50">
-          <div>
-            <h4 className="text-lg font-semibold text-gray-800">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-6 py-5 border-b bg-gradient-to-r from-stone-50/80 via-white to-stone-50/60">
+          <div className="space-y-1">
+            <h4 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
               Monitoring Dokumen Program Kerja
             </h4>
-            <p className="text-sm text-gray-500">
-              Status kelengkapan dan verifikasi dokumen per mata program
-              {fakultasunit?.nama ? ` — ${fakultasunit.nama}` : ""}
+            <p className="text-xs sm:text-sm text-gray-600">
+              {unlockedUnit
+                ? `Status kelengkapan dan verifikasi dokumen per mata program — ${unlockedUnit.Nama || unlockedUnit.nama}`
+                : "Pilih Kunci Unik Fakultas, Program Studi, atau Unit Kerja untuk membuka lemari berkas"}
             </p>
           </div>
 
-          <button
-            onClick={() => setDrawerOpen(true)}
-            title="Filter Monitoring Dokumen Proker"
-            className="flex items-center gap-1.5 px-3 py-2 border rounded-lg text-sm bg-purple-600 text-white hover:bg-purple-700 transition shadow-sm"
-          >
-            <BsFilter size={18} />
-            <span className="hidden sm:inline">Filter</span>
-          </button>
+          {viewMode === "3d" && unlockedUnit && (
+            <button
+              type="button"
+              onClick={handleLockAndReturn}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition shadow-2xs cursor-pointer active:scale-95"
+              title="Kunci kembali lemari dan kembali ke rak gantungan kunci admin"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-700" />
+              <span>Ganti</span>
+            </button>
+          )}
         </div>
 
-        {/* LEGEND */}
-        <div className="px-5 py-3 border-b bg-gray-50">
-          <div className="flex flex-wrap gap-4">
-            {Object.values(STATUS_LEGEND).map((item, idx) => (
-              <div
-                key={idx}
-                className="flex items-center gap-2 text-sm text-gray-600"
-              >
-                <span className={`w-3.5 h-3.5 rounded-sm ${item.color}`} />
-                <span>{item.label}</span>
+        {/* FILTER BADGES & DROPDOWN TAHUN */}
+        {(unlockedUnit || tahun) && (
+          <div className="px-6 py-2.5 flex flex-wrap items-center gap-2.5 border-b bg-gray-50/40">
+            <span className="text-xs text-gray-500 font-medium">
+              Filter Aktif:
+            </span>
+
+            {/* DROPDOWN TAHUN */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-900 border border-blue-200 shadow-2xs hover:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-500 transition text-xs font-bold">
+              <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <label htmlFor="filter-tahun-monitoring" className="text-blue-800 font-bold">
+                Tahun:
+              </label>
+              <div className="relative inline-flex items-center">
+                <select
+                  id="filter-tahun-monitoring"
+                  aria-label="Filter Tahun Monitoring Program Kerja"
+                  value={tahun?.UUID || tahun?.id || tahun?.Tahun || ""}
+                  onChange={(e) => {
+                    const selectedVal = e.target.value;
+                    const selected = dataTahun.find(
+                      (t) =>
+                        String(t.UUID) === selectedVal ||
+                        String(t.id) === selectedVal ||
+                        String(t.Tahun) === selectedVal,
+                    );
+                    if (selected) {
+                      handleTahunChange(selected);
+                    }
+                  }}
+                  disabled={loading || loadingTahun}
+                  className="bg-transparent text-blue-950 font-black focus:outline-none cursor-pointer pr-4 appearance-none py-0 text-xs disabled:opacity-50"
+                  title="Pilih Tahun Program Kerja"
+                >
+                  {dataTahun.length === 0 ? (
+                    <option value="">{tahun?.Tahun || tahun?.nama || "Pilih Tahun"}</option>
+                  ) : (
+                    dataTahun.map((t) => (
+                      <option
+                        key={t.UUID || t.id || t.Tahun}
+                        value={t.UUID || t.id || t.Tahun}
+                        className="text-gray-900 font-semibold bg-white"
+                      >
+                        {t.Tahun || t.nama}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-blue-600 pointer-events-none absolute right-0" />
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {/* FILTER BADGES */}
-        {filters.some((f) => f.val != null) && (
-          <div className="px-5 py-2.5 flex flex-wrap items-center gap-2 border-b bg-gray-50/50">
-            <span className="text-xs text-gray-500 font-medium">Filter Aktif:</span>
-            {filters.map(
-              (f, i) =>
-                f.val != null && (
-                  <span
-                    key={i}
-                    className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-medium"
-                  >
-                    {f.key === "tahun" ? "Tahun" : "Unit"}:{" "}
-                    {typeof f.val === "object"
-                      ? f.val?.nama || f.val?.label || f.val?.Tahun
-                      : f.val}
-                  </span>
-                ),
+            {/* BADGE UNIT (JIKA UNIT TELAH DIBUKA / DIPILIH) */}
+            {unlockedUnit && (
+              <span className="bg-blue-50 text-blue-800 border border-blue-200 text-xs px-2.5 py-1 rounded-full font-bold">
+                Unit: {unlockedUnit.Nama || unlockedUnit.nama}
+              </span>
             )}
           </div>
         )}
 
-        {/* TABLE */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-100/70 text-sm text-gray-700 border-t">
-                <th className="px-4 py-3 font-semibold">Mata Program</th>
-                <th className="px-4 py-3 w-28 text-center font-semibold">SK</th>
-                <th className="px-4 py-3 w-28 text-center font-semibold">SOP</th>
-                <th className="px-4 py-3 w-32 text-center font-semibold">Proposal/TOR</th>
-                <th className="px-4 py-3 w-28 text-center font-semibold">Laporan</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <>
-                  {[1, 2, 3].map((n) => (
-                    <tr key={n} className="border-t animate-pulse">
-                      <td className="px-4 py-3">
-                        <div className="h-4 bg-gray-200 rounded w-3/4" />
+        {/* BODY WORKSPACE */}
+        {viewMode === "3d" ? (
+          /* ================= 1. TAMPILAN 3D KUNCI UNIK & LEMARI BERKAS INTERAKTIF ================= */
+          <>
+          {!unlockedUnit ? (
+              /* A. RAK GANTUNGAN KUNCI MASTER ADMIN */
+              <AdminKeyRack
+                units={dataFakultasUnit}
+                tahun={tahun?.nama || tahun?.Tahun}
+                onSelectUnitKey={handleSelectUnitKey}
+              />
+            ) : (
+              /* B. LEMARI ARSIP BERKAS YANG DIBUKA OLEH KUNCI TERPILIH */
+              <ArchiveCabinetView
+                dossiers={dossiers}
+                unit={unlockedUnit}
+                tahun={tahun?.nama || tahun?.Tahun}
+                loading={loading}
+                onLockAndReturn={handleLockAndReturn}
+              />
+            )}
+          </>
+        ) : (
+          /* ================= 2. TAMPILAN TABEL MATRIKS KLASIK ================= */
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-100/70 text-sm text-gray-700 border-t">
+                  <th className="px-4 py-3 font-semibold">Mata Program</th>
+                  <th className="px-4 py-3 w-28 text-center font-semibold">
+                    SK
+                  </th>
+                  <th className="px-4 py-3 w-28 text-center font-semibold">
+                    SOP
+                  </th>
+                  <th className="px-4 py-3 w-32 text-center font-semibold">
+                    Proposal/TOR
+                  </th>
+                  <th className="px-4 py-3 w-28 text-center font-semibold">
+                    Laporan
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <>
+                    {[1, 2, 3].map((n) => (
+                      <tr key={n} className="border-t animate-pulse">
+                        <td className="px-4 py-3">
+                          <div className="h-4 bg-gray-200 rounded w-3/4" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-6 bg-gray-200 rounded w-full" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-6 bg-gray-200 rounded w-full" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-6 bg-gray-200 rounded w-full" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-6 bg-gray-200 rounded w-full" />
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+
+                {!loading && tableData.length === 0 && (
+                  <tr className="border-t">
+                    <td
+                      colSpan={5}
+                      className="py-10 text-center text-gray-400 text-sm"
+                    >
+                      {tahun && fakultasunit
+                        ? `Belum ada dokumen program kerja untuk ${fakultasunit.nama || "unit ini"} pada tahun ${tahun.nama || tahun.Tahun}.`
+                        : "Pilih tahun dan unit melalui tombol filter untuk menampilkan data."}
+                    </td>
+                  </tr>
+                )}
+
+                {!loading &&
+                  tableData.map((row, idx) => (
+                    <tr
+                      key={idx}
+                      className="border-t hover:bg-gray-50/60 transition"
+                    >
+                      <td className="px-4 py-3 text-sm text-gray-800 font-medium">
+                        {row.MataProgram}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="h-6 bg-gray-200 rounded w-full" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-6 bg-gray-200 rounded w-full" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-6 bg-gray-200 rounded w-full" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-6 bg-gray-200 rounded w-full" />
-                      </td>
+                      <td
+                        title={row.sktooltip}
+                        className={`px-4 py-3 cursor-help border-l border-white/20 transition-opacity hover:opacity-90 ${row.skstyle}`}
+                      />
+                      <td
+                        title={row.soptooltip}
+                        className={`px-4 py-3 cursor-help border-l border-white/20 transition-opacity hover:opacity-90 ${row.sopstyle}`}
+                      />
+                      <td
+                        title={row.proposaltooltip}
+                        className={`px-4 py-3 cursor-help border-l border-white/20 transition-opacity hover:opacity-90 ${row.proposalstyle}`}
+                      />
+                      <td
+                        title={row.laporantooltip}
+                        className={`px-4 py-3 cursor-help border-l border-white/20 transition-opacity hover:opacity-90 ${row.laporanstyle}`}
+                      />
                     </tr>
                   ))}
-                </>
-              )}
-
-              {!loading && tableData.length === 0 && (
-                <tr className="border-t">
-                  <td colSpan={5} className="py-10 text-center text-gray-400 text-sm">
-                    {tahun && fakultasunit
-                      ? `Belum ada dokumen program kerja untuk ${fakultasunit.nama || "unit ini"} pada tahun ${tahun.nama || tahun.Tahun}.`
-                      : "Pilih tahun dan unit melalui tombol filter untuk menampilkan data."}
-                  </td>
-                </tr>
-              )}
-
-              {!loading &&
-                tableData.map((row, idx) => (
-                  <tr key={idx} className="border-t hover:bg-gray-50/60 transition">
-                    <td className="px-4 py-3 text-sm text-gray-800 font-medium">
-                      {row.MataProgram}
-                    </td>
-                    <td
-                      title={row.sktooltip}
-                      className={`px-4 py-3 cursor-help border-l border-white/20 transition-opacity hover:opacity-90 ${row.skstyle}`}
-                    />
-                    <td
-                      title={row.soptooltip}
-                      className={`px-4 py-3 cursor-help border-l border-white/20 transition-opacity hover:opacity-90 ${row.sopstyle}`}
-                    />
-                    <td
-                      title={row.proposaltooltip}
-                      className={`px-4 py-3 cursor-help border-l border-white/20 transition-opacity hover:opacity-90 ${row.proposalstyle}`}
-                    />
-                    <td
-                      title={row.laporantooltip}
-                      className={`px-4 py-3 cursor-help border-l border-white/20 transition-opacity hover:opacity-90 ${row.laporanstyle}`}
-                    />
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-
-      {/* FILTER DRAWER */}
-      <MonitoringFilterDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        tahun={tahun}
-        setTahun={setTahun}
-        dataTahun={dataTahun}
-        loadingTahun={loadingTahun}
-        errorTahun={errorTahun}
-        onRetryTahun={fetchDataTahun}
-        fakultasunit={fakultasunit}
-        setFakultasUnit={setFakultasUnit}
-        dataFakultasUnit={dataFakultasUnit}
-        loadingFakultasUnit={loadingFakultasUnit}
-        errorFakultasUnit={errorFakultasUnit}
-        onRetryFakultasUnit={fetchDataFakultasUnit}
-        upsertFilter={upsertFilter}
-        onApply={(t, u) => {
-          fetchMonitoringProker(t, u);
-          setDrawerOpen(false);
-        }}
-        isAuditee={isAuditee}
-      />
     </>
   );
 }
@@ -473,7 +595,10 @@ export function MonitoringFilterDrawer({
   return (
     <Portal>
       <div className="fixed inset-0 z-50 flex">
-        <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+        <div
+          className="flex-1 bg-black/40 backdrop-blur-sm"
+          onClick={onClose}
+        />
 
         <div className="w-[420px] bg-white h-full shadow-2xl p-5 overflow-y-auto flex flex-col justify-between">
           <div className="space-y-5">
@@ -524,7 +649,8 @@ export function MonitoringFilterDrawer({
                 />
                 {isAuditee && (
                   <p className="text-xs text-blue-600 italic">
-                    * Akun Auditee terikat ke unit Anda sendiri ({fakultasunit?.nama || "BPSI"}).
+                    * Akun Auditee terikat ke unit Anda sendiri (
+                    {fakultasunit?.nama || "BPSI"}).
                   </p>
                 )}
               </div>

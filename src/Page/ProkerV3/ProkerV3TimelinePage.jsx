@@ -97,6 +97,7 @@ export default function ProkerV3TimelinePage() {
     nama_aktivitas: "",
     pic: "",
     titik_kontrol: "",
+    anggaran: 0,
     tanggal_rk_awal: "2026-01-01",
     tanggal_rk_akhir: "2026-12-31",
     capaian: "",
@@ -105,6 +106,37 @@ export default function ProkerV3TimelinePage() {
   };
 
   const [formTimeline, setFormTimeline] = useState(initialFormState);
+  const [anggaranInputStr, setAnggaranInputStr] = useState("");
+
+  // Batas maksimal anggaran yang diizinkan untuk tahapan timeline (mengikuti anggaran realisasi)
+  const maxAnggaran = useMemo(() => {
+    if (!aktivitas) return 0;
+    if (hasRealisasiAnggaran(aktivitas)) {
+      return Number(getRealisasiAnggaran(aktivitas)) || 0;
+    }
+    return Number(aktivitas?.Anggaran ?? aktivitas?.anggaran ?? 0);
+  }, [aktivitas]);
+
+  const isAnggaranOverLimit = maxAnggaran > 0 && formTimeline.anggaran > maxAnggaran;
+
+  const handleAnggaranChange = (e) => {
+    const rawValue = e.target.value;
+    const digitsOnly = rawValue.replace(/\D/g, "");
+    if (!digitsOnly) {
+      setFormTimeline((prev) => ({ ...prev, anggaran: 0 }));
+      setAnggaranInputStr("");
+      return;
+    }
+    const numericVal = Number(digitsOnly);
+    setFormTimeline((prev) => ({ ...prev, anggaran: numericVal }));
+    setAnggaranInputStr(new Intl.NumberFormat("id-ID").format(numericVal));
+  };
+
+  const handleSetMaxAnggaran = () => {
+    if (maxAnggaran <= 0) return;
+    setFormTimeline((prev) => ({ ...prev, anggaran: maxAnggaran }));
+    setAnggaranInputStr(new Intl.NumberFormat("id-ID").format(maxAnggaran));
+  };
 
   // Perkembangan Realisasi Modal State (Modal 3 input: Tgl R Awal, Tgl R Akhir, Status Pelaksanaan)
   const [realisasiModalOpen, setRealisasiModalOpen] = useState(false);
@@ -369,23 +401,30 @@ export default function ProkerV3TimelinePage() {
       no_aktivitas: timelines.length + 1,
       nama_aktivitas: "",
       pic: aktivitas?.PIC || "",
+      anggaran: 0,
     });
+    setAnggaranInputStr("");
   };
 
   // Start editing a timeline row
   const startEditTimeline = (tl) => {
     setEditingTimelineUuid(tl.UUID);
+    const tlAnggaran = Number(tl.Anggaran ?? tl.anggaran ?? 0);
     setFormTimeline({
       no_aktivitas: tl.NoAktivitas || 1,
       nama_aktivitas: tl.NamaAktivitas || "",
       pic: tl.PIC || "",
       titik_kontrol: tl.TitikKontrol || "",
+      anggaran: tlAnggaran,
       tanggal_rk_awal: tl.TanggalRkAwal ? tl.TanggalRkAwal.slice(0, 10) : "2026-01-01",
       tanggal_rk_akhir: tl.TanggalRkAkhir ? tl.TanggalRkAkhir.slice(0, 10) : "2026-12-31",
       capaian: tl.Capaian || "",
       masalah: tl.Masalah || "",
       pemecahan_masalah: tl.PemecahanMasalah || "",
     });
+    setAnggaranInputStr(
+      tlAnggaran > 0 ? new Intl.NumberFormat("id-ID").format(tlAnggaran) : ""
+    );
     // Scroll to form smoothly
     const el = document.getElementById("form-timeline-section");
     if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -396,6 +435,19 @@ export default function ProkerV3TimelinePage() {
     e.preventDefault();
     if (!formTimeline.nama_aktivitas.trim()) {
       addToast("warning", "Nama aktivitas / tahapan wajib diisi");
+      return;
+    }
+
+    const nominalAnggaran = Number(formTimeline.anggaran) || 0;
+    if (nominalAnggaran < 0) {
+      addToast("warning", "Nominal anggaran tidak boleh bernilai negatif");
+      return;
+    }
+    if (maxAnggaran > 0 && nominalAnggaran > maxAnggaran) {
+      addToast(
+        "warning",
+        `Nominal anggaran (${formatRupiah(nominalAnggaran)}) tidak boleh melebihi batas anggaran realisasi kegiatan (${formatRupiah(maxAnggaran)})`
+      );
       return;
     }
 
@@ -416,6 +468,7 @@ export default function ProkerV3TimelinePage() {
       fd.append("nama_aktivitas", formTimeline.nama_aktivitas.trim());
       fd.append("pic", formTimeline.pic.trim());
       fd.append("titik_kontrol", formTimeline.titik_kontrol.trim());
+      fd.append("anggaran", String(nominalAnggaran));
       fd.append("tanggal_rk_awal", formTimeline.tanggal_rk_awal || "2026-01-01");
       fd.append("tanggal_rk_akhir", formTimeline.tanggal_rk_akhir || "2026-12-31");
       fd.append("jadwal_rk", JSON.stringify(rkSlotsGen));
@@ -1011,10 +1064,10 @@ export default function ProkerV3TimelinePage() {
           </div>
 
           <form onSubmit={handleSubmitTimeline} className="space-y-4">
-            {/* Grid 1: Kolom Inti Identitas Timeline (Nama Tahapan & Titik Kontrol Textarea) */}
+            {/* Grid 1: Kolom Inti Identitas Timeline (Nama Tahapan, Titik Kontrol, Nominal Anggaran) */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
               {/* Nama Tahapan / Aktivitas */}
-              <div className="sm:col-span-7">
+              <div className="sm:col-span-5">
                 <label className="block text-[11px] font-bold text-gray-700 mb-1">
                   Nama Tahapan / Aktivitas <span className="text-rose-500">*</span>
                 </label>
@@ -1030,20 +1083,81 @@ export default function ProkerV3TimelinePage() {
                 />
               </div>
 
-              {/* Titik Kontrol (Textarea) */}
-              <div className="sm:col-span-5">
+              {/* Titik Kontrol */}
+              <div className="sm:col-span-3">
                 <label className="block text-[11px] font-bold text-gray-700 mb-1">
                   Titik Kontrol
                 </label>
-                <textarea
-                  rows={2}
+                <input
+                  type="text"
                   placeholder="Contoh: RK / R / Persiapan / Evaluasi..."
                   value={formTimeline.titik_kontrol}
                   onChange={(e) =>
                     setFormTimeline({ ...formTimeline, titik_kontrol: e.target.value })
                   }
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium resize-none"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
                 />
+              </div>
+
+              {/* Nominal Anggaran (Rp) */}
+              <div className="sm:col-span-4">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold text-gray-700">
+                    Nominal Anggaran (Rp)
+                  </label>
+                  {maxAnggaran > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleSetMaxAnggaran}
+                      className="text-[10px] text-purple-600 hover:text-purple-800 font-semibold cursor-pointer underline"
+                      title={`Set ke anggaran realisasi kegiatan (${formatRupiah(maxAnggaran)})`}
+                    >
+                      Maks Realisasi
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500 font-bold text-xs font-mono">
+                    Rp
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={anggaranInputStr}
+                    onChange={handleAnggaranChange}
+                    className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border bg-white focus:outline-none focus:ring-2 font-mono font-bold transition shadow-2xs ${
+                      isAnggaranOverLimit
+                        ? "border-rose-400 focus:ring-rose-500 text-rose-700 bg-rose-50/30"
+                        : "border-gray-300 focus:ring-purple-500 text-gray-900"
+                    }`}
+                  />
+                </div>
+                <div className="mt-1 text-[10px]">
+                  {isAnggaranOverLimit ? (
+                    <p className="text-rose-600 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>
+                        Melebihi anggaran realisasi kegiatan ({formatRupiah(maxAnggaran)})
+                      </span>
+                    </p>
+                  ) : formTimeline.anggaran > 0 ? (
+                    <p className="text-emerald-700 font-mono font-medium truncate">
+                      Terbilang: {formatRupiah(formTimeline.anggaran)}
+                      {maxAnggaran > 0 && (
+                        <span className="text-gray-400 ml-1">
+                          (Batas: {formatRupiah(maxAnggaran)})
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-gray-400">
+                      {maxAnggaran > 0
+                        ? `Batas realisasi: ${formatRupiah(maxAnggaran)} (tidak boleh negatif)`
+                        : "Tidak boleh bernilai negatif"}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1156,8 +1270,8 @@ export default function ProkerV3TimelinePage() {
 
               <button
                 type="submit"
-                disabled={submittingTimeline}
-                className="px-5 py-2 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-200 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                disabled={submittingTimeline || isAnggaranOverLimit || formTimeline.anggaran < 0}
+                className="px-5 py-2 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-200 transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save className="w-4 h-4" />
                 <span>
@@ -1457,7 +1571,7 @@ export default function ProkerV3TimelinePage() {
                         </span>
 
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <h4 className="font-bold text-gray-900 text-sm">
                               {tl.NamaAktivitas}
                             </h4>
@@ -1477,9 +1591,17 @@ export default function ProkerV3TimelinePage() {
                             >
                               {tl.Status || "Belum Terlaksana"}
                             </span>
+                            <span
+                              className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1"
+                              title="Nominal Anggaran Tahapan Timeline"
+                            >
+                              <span>Anggaran:</span>
+                              <span className="font-extrabold">{formatRupiah(tl.Anggaran || tl.anggaran || 0)}</span>
+                            </span>
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5">
-                            PIC Tahapan: <b className="text-gray-700">{tl.PIC || "-"}</b> • Tanggal RK:{" "}
+                            PIC Tahapan: <b className="text-gray-700">{tl.PIC || "-"}</b> • Anggaran:{" "}
+                            <b className="text-emerald-800 font-mono">{formatRupiah(tl.Anggaran || tl.anggaran || 0)}</b> • Tanggal RK:{" "}
                             <span className="font-semibold text-gray-800">
                               {tl.TanggalRkAwal ? formatDateIndoWithDay(tl.TanggalRkAwal) : "-"} s/d{" "}
                               {tl.TanggalRkAkhir ? formatDateIndoWithDay(tl.TanggalRkAkhir) : "-"}
