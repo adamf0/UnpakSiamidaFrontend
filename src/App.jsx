@@ -21,8 +21,8 @@ import { ContentProvider } from "./Providers/ContentProvider";
 import KtsPage from "./Page/Kts/KtsPage";
 import PusatKtsPage from "./Page/PusatKts/PusatKtsPage";
 import AuditRenstraEditPage from "./Page/Audit/AuditRenstraEditPage";
-
 import AuditTambahanEditPage from "./Page/Audit/AuditTambahanEditPage";
+import AuditHistoryPage from "./Page/Audit/AuditHistoryPage";
 import BeritaAcaraPage from "./Page/BeritaAcara/BeritaAcaraPage";
 import MasterTahunPage from "./Page/MasterTahun/MasterTahunPage";
 import MataProgramPage from "./Page/MataProgram/MataProgramPage";
@@ -108,6 +108,7 @@ export default function App() {
                       <Route path="/audit" element={<AuditPage />} />
                       <Route path="/audit/renstra/:uuidRenstra" element={<AuditRenstraEditPage />} />
                       <Route path="/audit/tambahan/:uuidRenstra" element={<AuditTambahanEditPage />} />
+                      <Route path="/audit/history/:uuidRenstra" element={<AuditHistoryPage />} />
 
                       <Route path="/kts/:tahun/:target/:uuidaudit" element={<KtsPage />} />
                       <Route path="/pusat_kts/:uuidRenstra" element={<PusatKtsPage />} />

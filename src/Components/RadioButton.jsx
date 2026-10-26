@@ -8,19 +8,21 @@ const RadioButton = ({
   onChange,
   checked,
   text,
+  disabled = false,
 }) => {
   return (
     <label
       htmlFor={id}
-      className="cursor-pointer text-sm"
+      className={clsx(disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer", "text-sm")}
     >
       <input
         type="radio"
         name={name}
         id={id}
         value={value}
-        onChange={onChange}
+        onChange={disabled ? undefined : onChange}
         checked={checked}
+        disabled={disabled}
         className="peer sr-only m-0"
       />
 

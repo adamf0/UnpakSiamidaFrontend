@@ -144,6 +144,7 @@ export function AuthProvider({ children }) {
         level: data.Level,
         email: data.Email,
         fakultas_unit: data.FakultasUnit,
+        nama_fakultas_unit: data.NamaFakultasUnit || data.nama_fakultas_unit || "",
         extra_role: extraRoles,
       });
 
@@ -168,6 +169,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("token");
     localStorage.removeItem("refresh");
     localStorage.removeItem("positionYear");
+    localStorage.removeItem("activeLevel");
+    localStorage.removeItem("activeLevelYear");
     setUser(null);
     setToken(null);
   };

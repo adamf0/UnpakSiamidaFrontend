@@ -12,13 +12,25 @@ import {
   Building2,
   UserCheck,
 } from "lucide-react";
+import { useAuth } from "@/Providers/AuthProvider";
+import { useContent } from "@/Providers/ContentProvider";
+import { formatProdiWithJenjang } from "@/Common/Utils";
 
 export default function DupeIncidentModal({
   open,
   onClose,
   incidents = [],
   tahun,
+  isAdmin: propIsAdmin,
 }) {
+  const { user } = useAuth();
+  const { level } = useContent();
+  const currentLevel = String(level || user?.level || "").toLowerCase().trim();
+  const isAdmin =
+    propIsAdmin !== undefined
+      ? Boolean(propIsAdmin)
+      : currentLevel === "admin";
+
   const [search, setSearch] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -167,19 +179,21 @@ WHERE t1.tahun = '${tahun || "2025"}';`;
                 />
               </div>
 
-              <button
-                type="button"
-                onClick={handleCopySql}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
-                  copied
-                    ? "bg-emerald-600 text-white"
-                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                }`}
-                title="Salin query SQL pembersihan ke clipboard"
-              >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? "Query SQL Berhasil Disalin!" : "Salin Query SQL Cleanup"}</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
+                    copied
+                      ? "bg-emerald-600 text-white"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  }`}
+                  title="Salin query SQL pembersihan ke clipboard"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? "Query SQL Berhasil Disalin!" : "Salin Query SQL Cleanup"}</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -246,7 +260,11 @@ WHERE t1.tahun = '${tahun || "2025"}';`;
                       </td>
                       <td className="py-3 px-3.5">
                         <span className="font-semibold text-gray-800">
-                          {inc.unitNama || inc.target || "-"}
+                          {formatProdiWithJenjang(
+                            inc.unitNama || inc.target,
+                            inc.unitJenjang,
+                            inc.unitType
+                          )}
                         </span>
                         {inc.reason && (
                           <p className="text-[10px] text-amber-700 mt-0.5 font-medium">

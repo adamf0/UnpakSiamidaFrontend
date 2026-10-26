@@ -22,6 +22,7 @@ import {
   Info,
   Maximize2,
 } from "lucide-react";
+import { formatProdiWithJenjang } from "@/Common/Utils";
 
 /**
  * Komponen Perbandingan (Compare) Pemetaan Instrumen Antara Dua Target Stakeholder
@@ -108,9 +109,17 @@ export default function PemetaanCompareSection({
     const mapped = allUnits.filter((u) => !u.isUnmapped && u.totalPemetaan > 0);
     if (mapped.length >= 2) {
       return [
-        { label: `${mapped[0].nama} vs ${mapped[1].nama}`, t1: mapped[0], t2: mapped[1] },
+        {
+          label: `${formatProdiWithJenjang(mapped[0].nama, mapped[0].jenjang, mapped[0].type)} vs ${formatProdiWithJenjang(mapped[1].nama, mapped[1].jenjang, mapped[1].type)}`,
+          t1: mapped[0],
+          t2: mapped[1],
+        },
         mapped.length >= 4
-          ? { label: `${mapped[2].nama} vs ${mapped[3].nama}`, t1: mapped[2], t2: mapped[3] }
+          ? {
+              label: `${formatProdiWithJenjang(mapped[2].nama, mapped[2].jenjang, mapped[2].type)} vs ${formatProdiWithJenjang(mapped[3].nama, mapped[3].jenjang, mapped[3].type)}`,
+              t1: mapped[2],
+              t2: mapped[3],
+            }
           : null,
       ].filter(Boolean);
     }
@@ -446,7 +455,11 @@ export default function PemetaanCompareSection({
                   <span className="text-xs font-semibold text-gray-500">instrumen</span>
                 </p>
                 <p className="text-[11px] text-gray-500 truncate mt-0.5 font-medium">
-                  {target1.nama}
+                  {formatProdiWithJenjang(
+                    target1.nama,
+                    target1.jenjang,
+                    target1.type
+                  )}
                 </p>
               </div>
 
@@ -508,7 +521,11 @@ export default function PemetaanCompareSection({
                   <span className="text-xs font-semibold text-gray-500">instrumen</span>
                 </p>
                 <p className="text-[11px] text-gray-500 truncate mt-0.5 font-medium">
-                  {target2.nama}
+                  {formatProdiWithJenjang(
+                    target2.nama,
+                    target2.jenjang,
+                    target2.type
+                  )}
                 </p>
               </div>
             </div>
@@ -657,7 +674,7 @@ export default function PemetaanCompareSection({
               {/* STATUS INDIKATOR DRAG AKTIF */}
               {(isOverDrop1 || isHoveringDrop1) && draggedUnit ? (
                 <div className="mb-3 p-2 bg-emerald-100 border border-emerald-300 rounded-xl text-center text-xs font-black text-emerald-800 animate-bounce shadow-xs">
-                  ✨ Lepaskan untuk memilih {draggedUnit.nama} sebagai Target 1!
+                  ✨ Lepaskan untuk memilih {formatProdiWithJenjang(draggedUnit.nama, draggedUnit.jenjang, draggedUnit.type)} sebagai Target 1!
                 </div>
               ) : draggedUnit && !target1 ? (
                 <div className="mb-3 p-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-[11px] font-bold text-emerald-700 animate-pulse">
@@ -702,7 +719,11 @@ export default function PemetaanCompareSection({
                         </span>
                       </div>
                       <h4 className="text-sm font-extrabold text-gray-900 mt-0.5 leading-snug">
-                        {target1.nama}
+                        {formatProdiWithJenjang(
+                          target1.nama,
+                          target1.jenjang,
+                          target1.type
+                        )}
                       </h4>
                     </div>
                   </div>
@@ -1078,7 +1099,7 @@ export default function PemetaanCompareSection({
               {/* STATUS INDIKATOR DRAG AKTIF */}
               {(isOverDrop2 || isHoveringDrop2) && draggedUnit ? (
                 <div className="mb-3 p-2 bg-blue-100 border border-blue-300 rounded-xl text-center text-xs font-black text-blue-800 animate-bounce shadow-xs">
-                  ✨ Lepaskan untuk memilih {draggedUnit.nama} sebagai Target 2!
+                  ✨ Lepaskan untuk memilih {formatProdiWithJenjang(draggedUnit.nama, draggedUnit.jenjang, draggedUnit.type)} sebagai Target 2!
                 </div>
               ) : draggedUnit && !target2 ? (
                 <div className="mb-3 p-1.5 bg-blue-50 border border-blue-200 rounded-xl text-center text-[11px] font-bold text-blue-700 animate-pulse">
@@ -1130,7 +1151,11 @@ export default function PemetaanCompareSection({
                         </span>
                       </div>
                       <h4 className="text-sm font-extrabold text-gray-900 mt-0.5 leading-snug">
-                        {target2.nama}
+                        {formatProdiWithJenjang(
+                          target2.nama,
+                          target2.jenjang,
+                          target2.type
+                        )}
                       </h4>
                     </div>
                   </div>
@@ -1294,7 +1319,7 @@ function SelectionModal({ title, search, setSearch, allUnits, onSelect, onClose 
                   ></span>
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-gray-800 truncate">
-                      {u.nama}
+                      {formatProdiWithJenjang(u.nama, u.jenjang, u.type)}
                     </p>
                     <p className="text-[10px] text-gray-500 truncate">
                       {u.fakultas} {u.jenjang ? `• ${u.jenjang}` : ""}

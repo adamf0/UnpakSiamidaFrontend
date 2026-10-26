@@ -1,5 +1,5 @@
 import RemoteTable from "@/Components/RemoteTable";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import PelaporanDokumenFormModal from "./PelaporanDokumenFormModal";
 import PelaporanDokumenVerifikasiModal from "./PelaporanDokumenVerifikasiModal";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
@@ -27,8 +27,14 @@ const PelaporanDokumenPage = () => {
 
   const { addToast } = useToast();
   const { user, getValidToken } = useAuth();
-  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } =
-    useContent();
+  const {
+    level,
+    listLevel,
+    setLevel,
+    openChangeLevel,
+    setOpenChangeLevel,
+    positionYear,
+  } = useContent();
 
   const isAdmin = level === "admin" || user?.level === "admin" || user?.Level === "admin";
   const isFakultas = level === "fakultas" || user?.level === "fakultas" || user?.Level === "fakultas";
@@ -37,7 +43,41 @@ const PelaporanDokumenPage = () => {
   const canManage = !isAdmin && !isFakultas;
   const canVerify = isAdmin || isFakultas;
 
-  const endpoint = "/pelaporandokumens";
+  const isAuditee =
+    level === "auditee" ||
+    user?.level === "auditee" ||
+    user?.Level === "auditee";
+
+  const auditeeUnit = useMemo(() => {
+    if (!isAuditee) return null;
+    let userFU = user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit;
+    if (Array.isArray(user?.extra_role)) {
+      const match =
+        user.extra_role.find(
+          (r) =>
+            String(r.role ?? r.Role).toLowerCase() === "auditee" &&
+            (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear))
+        ) ||
+        user.extra_role.find(
+          (r) => String(r.role ?? r.Role).toLowerCase() === "auditee"
+        );
+      if (match?.id_fakultas_unit || match?.IdFakultasUnit) {
+        userFU = match.id_fakultas_unit || match.IdFakultasUnit;
+      }
+    }
+    return userFU ? String(userFU) : null;
+  }, [isAuditee, user, positionYear]);
+
+  const endpoint = useMemo(() => {
+    const params = new URLSearchParams();
+    if (isAuditee && auditeeUnit) {
+      params.append("target", auditeeUnit);
+      params.append("id_fakultas_unit", auditeeUnit);
+      params.append("filter_fakultas_unit", auditeeUnit);
+    }
+    const qs = params.toString();
+    return `/pelaporandokumens${qs ? `?${qs}` : ""}`;
+  }, [isAuditee, auditeeUnit]);
 
   const openNew = () => {
     setModalMode("new");
@@ -95,7 +135,7 @@ const PelaporanDokumenPage = () => {
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <RemoteTable
-            key={`${level}-${userFakultasUnit || "all"}`}
+            key={`${level}-${auditeeUnit || userFakultasUnit || "all"}`}
             ref={tableRef}
             endpoint={endpoint}
             mode="paging"
@@ -125,21 +165,17 @@ const PelaporanDokumenPage = () => {
                 renderKey: (row) => row.Tahun || "-",
               },
               {
+                key: "FakultasUnit",
+                label: "Fakultas / Prodi / Unit",
+                searchable: true,
+                renderKey: (row) => renderLabelFakultasUnit(row),
+              },
+              {
                 key: "MataProgram",
                 label: "Mata Program",
                 searchable: true,
                 renderKey: (row) => row.MataProgram || "-",
               },
-              ...(isAdmin || isFakultas
-                ? [
-                    {
-                      key: "FakultasUnit",
-                      label: "Fakultas / Unit",
-                      searchable: true,
-                      renderKey: (row) => renderLabelFakultasUnit(row),
-                    },
-                  ]
-                : []),
               {
                 key: "JenisDokumen",
                 label: "Jenis Dokumen",

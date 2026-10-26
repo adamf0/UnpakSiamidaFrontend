@@ -75,7 +75,6 @@ export const V3_FEATURE_PATHS = [
   "/risk_assessment",
   "/analisis_resiko",
   "/analisis_risiko",
-  "/proker_v3",
 ];
 
 export const isV3FeaturePath = (path) => {
@@ -91,6 +90,11 @@ export const getVersionConfig = (versionId = "v2") => {
  */
 export const isMenuVisibleForVersion = (path, versionId = "v2") => {
   if (!versionId || versionId === "all") return true;
+
+  // Program Kerja V3 aktif di versi v2 (mulai 2026) dan v3 (2027)
+  if (path === "/proker_v3" || path.startsWith("/proker_v3/")) {
+    return versionId === "v2" || versionId === "v3";
+  }
 
   // Fitur eksklusif V3: Analisis SWOT & Analisis Risiko HANYA muncul di v3
   if (isV3FeaturePath(path)) {

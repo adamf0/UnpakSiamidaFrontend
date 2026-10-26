@@ -1,5 +1,6 @@
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { apiClient } from "@/Common/api";
 
 export function formatDate(dateString) {
   const date = new Date(dateString);
@@ -177,8 +178,8 @@ export function buildHeaders(old, token, isjson = true) {
 
   return base;
 }
-export function mappedText(text) {
-  const low = String(text || "").toLowerCase();
+export function mappedText(text, user, positionYear, unitOptions = []) {
+  const low = String(text || "").toLowerCase().trim();
   if (low === "admin") {
     return "Admin";
   }
@@ -203,8 +204,66 @@ export function mappedText(text) {
   if (low === "upms") {
     return "UPMS (Unit Penjaminan Mutu Sekolah)";
   }
+  if (low === "anggaran" || low === "keuangan") {
+    return "Tim Anggaran";
+  }
+  if (low === "evaluator") {
+    return "Evaluator";
+  }
   if (low === "user") {
-    return "User";
+    let targetName = "";
+    if (user) {
+      if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+        const match =
+          user.extra_role.find(
+            (r) =>
+              String(r.role || "").toLowerCase() === "user" &&
+              (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear)) &&
+              (r.nama_fakultas_unit || r.NamaFakultasUnit)
+          ) ||
+          user.extra_role.find(
+            (r) =>
+              String(r.role || "").toLowerCase() === "user" &&
+              (r.nama_fakultas_unit || r.NamaFakultasUnit)
+          );
+        if (match?.nama_fakultas_unit || match?.NamaFakultasUnit) {
+          targetName = match.nama_fakultas_unit || match.NamaFakultasUnit;
+        }
+      }
+
+      if (!targetName) {
+        const rawFu = user?.fakultas_unit ?? user?.id_fakultas_unit ?? user?.FakultasUnit;
+        const fuStr = String(rawFu ?? "").trim();
+        const hasValidFu = fuStr !== "" && fuStr !== "0" && fuStr !== "null" && fuStr !== "undefined";
+
+        if (hasValidFu) {
+          const rawFuName = user?.nama_fakultas_unit || user?.NamaFakultasUnit;
+          if (
+            rawFuName &&
+            String(rawFuName).trim() !== "" &&
+            String(rawFuName).trim() !== "null" &&
+            String(rawFuName).trim() !== "-"
+          ) {
+            targetName = rawFuName;
+          } else if (Array.isArray(unitOptions) && unitOptions.length > 0) {
+            const found = unitOptions.find((u) => {
+              const uid = String(u.id ?? u.Id ?? "").trim();
+              const uuid = String(u.uuid ?? u.UUID ?? "").trim().toLowerCase();
+              const uName = String(u.Nama ?? u.nama ?? u.nama_fak_prod_unit ?? "").trim().toLowerCase();
+              return (
+                (uid !== "" && uid === fuStr) ||
+                (uuid !== "" && uuid === fuStr.toLowerCase()) ||
+                (uName !== "" && uName === fuStr.toLowerCase())
+              );
+            });
+            if (found) {
+              targetName = renderLabelFakultasUnit(found);
+            }
+          }
+        }
+      }
+    }
+    return targetName ? `User (${targetName})` : "User";
   }
   return text ? text.toUpperCase() : "User";
 }
@@ -270,18 +329,136 @@ export function getStatusText({ r0 = 0, r1 = 0, r2 = 0, r3 = 0 } = {}) {
   return STATUS_LEGEND.kosong.label;
 }
 
+export function cleanDuplicateJenjang(str) {
+  if (!str) return "";
+  let res = String(str).trim();
+  // Tangani duplikasi berulang seperti "(S1) (S1)", "(s1) (S1)", "(D3) (D3)", dll
+  res = res.replace(/(\((?:S1|S2|S3|D3|D4|Profesi)\))\s*(?:\1)+/gi, "$1");
+  // Tangani duplikasi kurung apapun yang berulang seperti "(XXX) (XXX)"
+  res = res.replace(/(\([^)]+\))\s*(?:\1)+/gi, "$1");
+  return res.trim();
+}
+
+export function formatProdiWithJenjang(nama, jenjang, type) {
+  if (!nama) return "-";
+  let strNama = cleanDuplicateJenjang(String(nama).trim());
+  const strJenjang = String(jenjang || "").trim().toUpperCase();
+  const strType = String(type || "").trim().toLowerCase();
+
+  // Jika bertipe prodi atau memiliki jenjang, dan nama belum mengandung jenjang
+  if ((strType === "prodi" || strJenjang) && strJenjang) {
+    const regex = new RegExp(`\\(${strJenjang}\\)|\\b${strJenjang}\\b`, "i");
+    if (!regex.test(strNama)) {
+      strNama = `${strNama} (${strJenjang})`;
+    }
+  }
+  return cleanDuplicateJenjang(strNama);
+}
+
 export function renderLabelFakultasUnit(row) {
-  let label = row?.FakultasUnit ?? row?.Nama;
-  if (row?.Type == "prodi") {
-    label = `${label} (${row?.Jenjang})`;
-  } else if (row?.Type == "fakultas") {
-    label = `${label} (fakultas)`;
-  } else if (row?.Type == "unit") {
-    label = `${label} (unit)`;
+  if (!row) return "-";
+  if (typeof row === "string") return row;
+
+  const label =
+    row?.NamaFakultasUnit ??
+    row?.nama_fak_prod_unit ??
+    row?.nama_fakultas_unit ??
+    row?.FakultasUnit ??
+    row?.TargetAudit ??
+    row?.target_audit ??
+    row?.Nama ??
+    row?.nama;
+
+  if (!label || label === "-") {
+    const role = String(
+      row?.Role || row?.role || row?.ComputedRole || row?.computed_role || ""
+    ).toLowerCase();
+    if (role === "upms") {
+      return "Seluruh Unit (Tingkat Universitas / Sekolah)";
+    }
+    return "-";
   }
 
-  return label;
+  const jenjang =
+    row?.Jenjang ??
+    row?.jenjang ??
+    row?.KodeJenjang ??
+    row?.kode_jenjang ??
+    row?.JenjangFakultasUnit ??
+    row?.jenjang_fakultas_unit;
+
+  const type =
+    row?.Type ??
+    row?.type ??
+    row?.TypeFakultasUnit ??
+    row?.type_fakultas_unit;
+
+  return formatProdiWithJenjang(label, jenjang, type);
 }
+
+/**
+ * Format satu item fakultas / prodi / unit untuk SearchSelect dropdown options.
+ * Menghasilkan badge fu.Type.toUpperCase() di samping kiri nama item.
+ */
+export const formatFakultasUnitOption = (f) => {
+  if (!f) return null;
+  const type = String(f.type || f.Type || "unit").toLowerCase().trim();
+  const rawBaseName = f.Nama || f.nama_fak_prod_unit || f.nama || "";
+  const baseName = cleanDuplicateJenjang(rawBaseName);
+  const jenjang = f.Jenjang || f.jenjang || f.KodeJenjang || f.kode_jenjang || "";
+
+  let label = baseName;
+  if (type === "prodi") {
+    label = formatProdiWithJenjang(baseName, jenjang);
+  } else {
+    label = baseName;
+  }
+
+  // fu.Type.toUpperCase() untuk badge di samping kiri nama item
+  const rawType = String(
+    f.Type || f.type || (type === "prodi" ? "PRODI" : type === "fakultas" ? "FAKULTAS" : "UNIT")
+  ).toUpperCase().trim();
+  const badgeText = rawType || "UNIT";
+
+  let badgeClass = "bg-purple-50 text-purple-700 border border-purple-200";
+  if (type === "fakultas" || badgeText === "FAKULTAS" || type === "sekolah") {
+    badgeClass = "bg-indigo-50 text-indigo-700 border border-indigo-200";
+  } else if (type === "unit" || badgeText === "UNIT" || badgeText.includes("LEMBAGA")) {
+    badgeClass = "bg-emerald-50 text-emerald-700 border border-emerald-200";
+  }
+
+  const uuid = f.UUID || f.uuid;
+  const numericId = f.ID || f.id;
+
+  return {
+    ...f,
+    id: uuid || numericId,
+    uuid: uuid,
+    rawId: numericId,
+    id_numeric: numericId,
+    nama: label,
+    label: label,
+    display_name: label,
+    pureName: baseName,
+    type: type,
+    badge: badgeText,
+    badgeClass: badgeClass,
+  };
+};
+
+/**
+ * Single refactored function untuk mengambil master fakultas, prodi, dan unit
+ * dari API /fakultasunits?mode=all dengan format badge di samping kiri nama item.
+ */
+export const fetchFakultasUnits = async () => {
+  const res = await apiClient.get("/fakultasunits?mode=all");
+  const list = res?.data ?? res ?? [];
+  const safe = Array.isArray(list) ? list : (list.data || []);
+  return safe.map(formatFakultasUnitOption).filter(Boolean);
+};
+
+export const fetchFakultas = fetchFakultasUnits;
+export const fetchFakultasUnitOptions = fetchFakultasUnits;
 
 export async function throwIfResponseNotOk(
   res,

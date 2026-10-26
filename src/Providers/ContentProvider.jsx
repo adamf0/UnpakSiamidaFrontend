@@ -18,6 +18,11 @@ export const ContentProvider = ({ children }) => {
 
   /* ================= VERSIONING ================= */
   const [appVersion, setAppVersion] = useState(() => {
+    const savedYear = localStorage.getItem("positionYear");
+    const yNum = parseInt(savedYear, 10);
+    if (!isNaN(yNum)) {
+      return yNum >= 2027 ? "v3" : yNum <= 2023 ? "v1" : "v2";
+    }
     return localStorage.getItem("appVersion") || "v2";
   });
 
@@ -150,22 +155,26 @@ export const ContentProvider = ({ children }) => {
       .filter((m) => String(m.tahun ?? m.Tahun) === String(positionYear))
       .map((m) => String(m.role ?? m.Role).toLowerCase());
 
-    // Gabungkan level dasar pengguna ("user") dengan role penugasan ABAC
-    const allRoles = Array.from(new Set([userBaseLevel, ...matchingRoles])).filter(Boolean);
+    // Gabungkan level dasar pengguna ("user") dengan role penugasan ABAC (prioritaskan penugasan)
+    const allRoles = Array.from(new Set([...matchingRoles, userBaseLevel])).filter(Boolean);
 
     setListLevel(allRoles);
 
     // Tentukan level yang aktif
     const savedLevel = localStorage.getItem("activeLevel");
-    if (savedLevel && allRoles.includes(savedLevel)) {
+    const savedLevelYear = localStorage.getItem("activeLevelYear");
+
+    if (savedLevel && savedLevelYear === String(positionYear) && allRoles.includes(savedLevel)) {
       setLevel(savedLevel);
     } else if (matchingRoles.length > 0) {
-      // Prioritaskan role penugasan (UPML, UPMF, UPMS) agar langsung aktif
+      // Prioritaskan role penugasan (auditee, auditor1, auditor2, dll.) agar langsung aktif
       setLevel(matchingRoles[0]);
       localStorage.setItem("activeLevel", matchingRoles[0]);
+      localStorage.setItem("activeLevelYear", String(positionYear));
     } else {
       setLevel(userBaseLevel);
       localStorage.setItem("activeLevel", userBaseLevel);
+      localStorage.setItem("activeLevelYear", String(positionYear));
     }
   }, [positionYear, user]);
 
@@ -185,19 +194,38 @@ export const ContentProvider = ({ children }) => {
   useEffect(() => {
     if (positionYear) {
       localStorage.setItem("positionYear", positionYear);
+      const yNum = parseInt(positionYear, 10);
+      if (!isNaN(yNum) && user?.level !== "admin") {
+        const targetVer = yNum >= 2027 ? "v3" : yNum <= 2023 ? "v1" : "v2";
+        setAppVersion(targetVer);
+        localStorage.setItem("appVersion", targetVer);
+      }
     }
-  }, [positionYear]);
+  }, [positionYear, user?.level]);
 
   /* ================= ACTIONS ================= */
   const changeYear = (year) => {
-    setPositionYear(String(year));
-    localStorage.setItem("positionYear", String(year));
+    const yStr = String(year);
+    setPositionYear(yStr);
+    localStorage.setItem("positionYear", yStr);
+    localStorage.removeItem("activeLevel");
+    localStorage.removeItem("activeLevelYear");
+
+    const yNum = parseInt(yStr, 10);
+    if (!isNaN(yNum) && user?.level !== "admin") {
+      const targetVer = yNum >= 2027 ? "v3" : yNum <= 2023 ? "v1" : "v2";
+      setAppVersion(targetVer);
+      localStorage.setItem("appVersion", targetVer);
+    }
   };
 
   const changeLevel = (val) => {
     if (!listLevel.includes(val)) return;
     setLevel(val);
     localStorage.setItem("activeLevel", val);
+    if (positionYear) {
+      localStorage.setItem("activeLevelYear", String(positionYear));
+    }
     setOpenChangeLevel(false);
   };
 

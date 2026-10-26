@@ -121,6 +121,14 @@ export function getRealisasiAnggaran(item) {
   return val !== null && val !== undefined && val !== "" && !isNaN(Number(val)) ? Number(val) : null;
 }
 
+export function isAnggaranRevised(item) {
+  if (!item || !hasRealisasiAnggaran(item)) return false;
+  const ang = Number(item.Anggaran !== undefined ? item.Anggaran : item.anggaran) || 0;
+  const real = getRealisasiAnggaran(item);
+  if (real === null || real === undefined) return false;
+  return ang !== Number(real);
+}
+
 export const JENIS_DOKUMEN_PROKER = [
   {
     id: "SK",

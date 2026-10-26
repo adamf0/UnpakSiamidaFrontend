@@ -15,6 +15,7 @@ import {
   formatRupiah,
   hasRealisasiAnggaran,
   getRealisasiAnggaran,
+  isAnggaranRevised,
 } from "./prokerConstants";
 import {
   ArrowLeft,
@@ -859,7 +860,7 @@ export default function ProkerV3DokumenPage() {
                     {currentAktivitas.Anggaran !== undefined && currentAktivitas.Anggaran !== null && (
                       <span className="inline-flex items-center gap-1">
                         <span>Anggaran:</span>{" "}
-                        {hasRealisasiAnggaran(currentAktivitas) ? (
+                        {isAnggaranRevised(currentAktivitas) ? (
                           <span className="inline-flex items-center gap-1 font-mono">
                             <span
                               className="line-through text-gray-400 font-normal decoration-rose-500 decoration-1"
@@ -876,7 +877,7 @@ export default function ProkerV3DokumenPage() {
                           </span>
                         ) : (
                           <b className="text-emerald-700 font-bold font-mono">
-                            {formatRupiah(currentAktivitas.Anggaran)}
+                            {formatRupiah(hasRealisasiAnggaran(currentAktivitas) ? getRealisasiAnggaran(currentAktivitas) : currentAktivitas.Anggaran)}
                           </b>
                         )}
                       </span>

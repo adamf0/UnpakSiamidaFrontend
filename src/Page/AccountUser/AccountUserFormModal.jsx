@@ -5,7 +5,7 @@ import TextInput from "@/Components/TextInput";
 import SearchSelect from "@/Components/SearchSelect";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
-import { isEmpty } from "@/Common/Utils";
+import { isEmpty, fetchFakultasUnits } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import { Eye, EyeOff, Shield, Building2, User, KeyRound, Mail } from "lucide-react";
 
@@ -55,25 +55,15 @@ export default function AccountUserFormModal({
 
   const watchLevel = watch("level");
 
-  // Fetch daftar Fakultas / Unit
+  // Fetch daftar Fakultas / Unit menggunakan fungsi tunggal terpadu
   useEffect(() => {
     let isMounted = true;
-    const fetchFakultas = async () => {
+    const loadFakultas = async () => {
       try {
         setLoadingFakultas(true);
-        const res = await apiClient.get("/fakultasunits?mode=all");
-        const list = res.data;
+        const opts = await fetchFakultasUnits();
         if (isMounted) {
-          const mapped = (Array.isArray(list) ? list : []).map((fu) => ({
-            id: fu.UUID,
-            uuid: fu.UUID,
-            rawId: fu.ID,
-            nama: `${fu.Nama || ""}${fu.Jenjang ? ` (${fu.Jenjang})` : ""}${
-              fu.Type ? ` [${fu.Type.toUpperCase()}]` : ""
-            }`.trim(),
-            pureName: fu.Nama,
-          }));
-          setFakultasOptions(mapped);
+          setFakultasOptions(opts);
         }
       } catch (err) {
         console.error("Error fetching fakultas units:", err);
@@ -83,12 +73,20 @@ export default function AccountUserFormModal({
     };
 
     if (open) {
-      fetchFakultas();
+      loadFakultas();
     }
     return () => {
       isMounted = false;
     };
   }, [open]);
+
+  // Auto clear fakultas unit if level is admin
+  useEffect(() => {
+    if (watchLevel === "admin") {
+      setSelectedFakultasUnit(null);
+      setFakultasError("");
+    }
+  }, [watchLevel]);
 
   // Sync data saat modal dibuka atau mode berubah
   useEffect(() => {
@@ -96,31 +94,43 @@ export default function AccountUserFormModal({
     setFakultasError("");
 
     if (mode === "edit" && data) {
+      let rawLvl = String(data.Level || data.level || "user").toLowerCase();
+      if (rawLvl === "users") rawLvl = "user";
+
       reset({
-        username: data.Username || "",
-        name: data.Name || "",
-        email: data.Email || "",
-        level: data.Level || "user",
+        username: data.Username || data.nidn_username || "",
+        name: data.Name || data.name || "",
+        email: data.Email || data.email || "",
+        level: rawLvl,
         password: "",
       });
 
       // Match selected fakultas unit
-      if (data.UuidFakultasUnit) {
-        setSelectedFakultasUnit({
-          id: data.UuidFakultasUnit,
-          uuid: data.UuidFakultasUnit,
-          nama: data.NamaFakultasUnit || "Unit Terpilih",
-        });
-      } else if (data.NamaFakultasUnit) {
+      const fuUuid = data.UuidFakultasUnit || data.uuid_fakultas_unit;
+      const fuNama = data.NamaFakultasUnit || data.nama_fak_prod_unit;
+
+      if (fuUuid) {
         const found = fakultasOptions.find(
-          (f) =>
-            f.pureName === data.NamaFakultasUnit ||
-            f.nama.includes(data.NamaFakultasUnit)
+          (f) => String(f.uuid || f.id) === String(fuUuid)
         );
         setSelectedFakultasUnit(
           found || {
-            id: data.UuidFakultasUnit || "",
-            nama: data.NamaFakultasUnit,
+            id: fuUuid,
+            uuid: fuUuid,
+            nama: fuNama || "Unit Terpilih",
+          }
+        );
+      } else if (fuNama) {
+        const found = fakultasOptions.find(
+          (f) =>
+            f.pureName === fuNama ||
+            f.nama.includes(fuNama) ||
+            fuNama.includes(f.pureName)
+        );
+        setSelectedFakultasUnit(
+          found || {
+            id: fuUuid || "",
+            nama: fuNama,
           }
         );
       } else {
@@ -159,18 +169,25 @@ export default function AccountUserFormModal({
       fd.append("username", form.username.trim());
       fd.append("name", form.name.trim());
       fd.append("email", form.email.trim());
-      fd.append("level", form.level);
+      fd.append("level", form.level === "users" ? "user" : form.level);
 
-      if (selectedFakultasUnit?.id) {
+      // Jangan kirim FakultasUnit jika admin
+      if (form.level !== "admin" && selectedFakultasUnit?.id) {
         fd.append("FakultasUnit", selectedFakultasUnit.id);
+      } else {
+        fd.append("FakultasUnit", "");
       }
 
       if (form.password && form.password.trim() !== "") {
         fd.append("password", form.password.trim());
       }
 
+      const userUuid = data?.UUID || data?.uuid;
       if (mode === "edit") {
-        await apiClient.put(`/user/${data.UUID}`, fd);
+        if (!userUuid) {
+          throw new Error("UUID user tidak ditemukan");
+        }
+        await apiClient.put(`/user/${userUuid}`, fd);
       } else {
         await apiClient.post("/user", fd);
       }
@@ -185,7 +202,18 @@ export default function AccountUserFormModal({
       onClose();
     } catch (err) {
       console.error("Submit user error:", err);
-      addToast("error", "Gagal terhubung ke server");
+      const resData = err?.response?.data || err?.data;
+      let errMsg = "Gagal menyimpan akun user";
+      if (resData?.message) {
+        if (typeof resData.message === "object") {
+          errMsg = Object.values(resData.message).join(", ");
+        } else {
+          errMsg = String(resData.message);
+        }
+      } else if (err?.message) {
+        errMsg = err.message;
+      }
+      addToast("error", errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -313,12 +341,19 @@ export default function AccountUserFormModal({
                 <div>
                   <SearchSelect
                     label="Fakultas / Unit / Target Kerja"
-                    placeholder="Pilih atau cari Fakultas, Unit, atau Prodi..."
+                    placeholder={
+                      watchLevel === "admin"
+                        ? "Tidak berlaku untuk Administrator Sistem (LPM)"
+                        : "Pilih atau cari Fakultas, Unit, atau Prodi..."
+                    }
                     options={fakultasOptions}
                     value={selectedFakultasUnit}
+                    disabled={watchLevel === "admin"}
                     onChange={(val) => {
-                      setSelectedFakultasUnit(val);
-                      setFakultasError("");
+                      if (watchLevel !== "admin") {
+                        setSelectedFakultasUnit(val);
+                        setFakultasError("");
+                      }
                     }}
                     loading={loadingFakultas}
                     required={watchLevel === "fakultas"}
@@ -327,7 +362,9 @@ export default function AccountUserFormModal({
                   <span className="text-[11px] text-gray-500 mt-0.5 block">
                     {watchLevel === "fakultas"
                       ? "Wajib diisi untuk level Verifikator Fakultas"
-                      : "Opsional jika user terkait dengan unit/prodi tertentu"}
+                      : watchLevel === "admin"
+                        ? "Administrator Sistem memiliki hak akses penuh ke seluruh unit (tidak terikat unit)"
+                        : "Opsional jika akun berafiliasi / bertugas pada unit atau prodi tertentu"}
                   </span>
                 </div>
 

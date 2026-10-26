@@ -7,6 +7,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { APP_VERSIONS, getVersionConfig } from "@/Common/versionConfig";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
+import { apiClient } from "@/Common/api";
 
 const Navbar = ({ renderChangeLevelModal }) => {
   const { toggleSidebar } = useSidebar();
@@ -33,6 +34,23 @@ const Navbar = ({ renderChangeLevelModal }) => {
     { id: 1, message: "Notifikasi 1" },
     { id: 2, message: "Notifikasi 2" },
   ]);
+
+  const [unitOptions, setUnitOptions] = useState([]);
+
+  useEffect(() => {
+    let cancel = false;
+    apiClient
+      .get("/fakultasunits?mode=all")
+      .then((res) => {
+        if (!cancel && Array.isArray(res.data)) {
+          setUnitOptions(res.data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   // State modal mobile
   const [notifModalOpen, setNotifModalOpen] = useState(false);
@@ -213,7 +231,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
         {/* RIGHT */}
         <div className="flex items-center gap-4">
           {/* Desktop: notifications */}
-          <Popover className="relative hidden sm:block">
+          {/* <Popover className="relative hidden sm:block">
             <Popover.Button
               className={`p-2 rounded-full hover:bg-gray-100 ${
                 notifications.length ? "border-2 border-black" : ""
@@ -236,7 +254,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
                 </ul>
               )}
             </Popover.Panel>
-          </Popover>
+          </Popover> */}
 
           {/* User menu */}
           <Popover className="relative">
@@ -245,15 +263,20 @@ const Navbar = ({ renderChangeLevelModal }) => {
               <span className="hidden lg:inline text-sm">{user?.name ?? "-"}</span>
             </Popover.Button>
 
-            <Popover.Panel className="z-50 absolute right-0 mt-2 w-62 bg-[#f6f6f6] border rounded-md shadow-lg p-4 text-sm">
+            <Popover.Panel className="z-50 absolute right-0 mt-2 w-64 bg-[#f6f6f6] border rounded-md shadow-lg p-4 text-sm">
               <div className="border-b pb-2 mb-2">
                 <div className="text-sm font-medium">{user?.name ?? "-"}</div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>{mappedText(level)}</span>
+                <div className="flex justify-between items-center gap-2 text-xs text-gray-500 mt-0.5">
+                  <span
+                    className="font-semibold text-purple-900 truncate"
+                    title={mappedText(level, user, positionYear, unitOptions)}
+                  >
+                    {mappedText(level, user, positionYear, unitOptions)}
+                  </span>
                   {listLevel.length > 0 && (
                     <button
                       onClick={() => setOpenChangeLevel(true)}
-                      className="text-blue-500 hover:underline"
+                      className="text-blue-500 hover:underline shrink-0 text-xs"
                     >
                       Change Level
                     </button>
@@ -263,7 +286,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
 
               {/* MENU */}
               <div className="py-1 text-sm space-y-2">
-                <button
+                {/* <button
                   className="sm:hidden w-full rounded text-left px-4 hover:bg-gray-100 flex justify-between items-center"
                   onClick={() => setNotifModalOpen(true)}
                 >
@@ -273,7 +296,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
                       {notifications.length}
                     </span>
                   )}
-                </button>
+                </button> */}
 
                 {!isAdmin && (
                   <button
@@ -325,6 +348,9 @@ const Navbar = ({ renderChangeLevelModal }) => {
           onClose={() => setOpenChangeLevel(false)}
           levels={listLevel}
           currentLevel={level}
+          user={user}
+          positionYear={positionYear}
+          unitOptions={unitOptions}
           onSubmit={(lvl) => {
             if (typeof changeLevel === "function") {
               changeLevel(lvl);

@@ -10,7 +10,7 @@ import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
 import Tooltip from "@/Components/Tooltip";
-import { isEmpty } from "@/Common/Utils";
+import { isEmpty, renderLabelFakultasUnit } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import {
   Plus,
@@ -40,9 +40,14 @@ const RiskAssessmentPage = () => {
     setLevel,
     openChangeLevel,
     setOpenChangeLevel,
+    positionYear,
   } = useContent();
 
-  const isAdmin = level === "admin" || user?.level === "admin";
+  const curRole = String(
+    localStorage.getItem("activeLevel") || level || user?.level || ""
+  ).toLowerCase().trim();
+  const isLevelUser = curRole === "user";
+  const isAdmin = curRole === "admin";
 
   // Filter States
   const [selectedTahun, setSelectedTahun] = useState("");
@@ -59,6 +64,33 @@ const RiskAssessmentPage = () => {
   const [programList, setProgramList] = useState([]);
   const [riskLevels, setRiskLevels] = useState([]);
   const [userUnitData, setUserUnitData] = useState(null);
+
+  // Cek apakah user memiliki fakultas_unit yang ditugaskan
+  const hasFakultasUnit = useMemo(() => {
+    if (userUnitData?.id || userUnitData?.UUID) return true;
+    if (
+      user?.fakultas_unit ||
+      user?.id_fakultas_unit ||
+      user?.FakultasUnit ||
+      user?.uuid_fakultas_unit
+    ) {
+      return true;
+    }
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      const posYear = localStorage.getItem("positionYear") || positionYear;
+      return user.extra_role.some((r) => {
+        const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
+        const yearOk = !posYear || !rYear || rYear === String(posYear);
+        return yearOk && (rRole === "user" || !rRole) && Boolean(uId);
+      });
+    }
+    return false;
+  }, [user, userUnitData, positionYear]);
+
+  // Tombol tambah, edit, hapus hanya muncul jika level user yang memiliki fakultas_unit
+  const canManage = isLevelUser && hasFakultasUnit;
 
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
@@ -94,31 +126,65 @@ const RiskAssessmentPage = () => {
         const list = Array.isArray(jsonFu) ? jsonFu : [];
         setFakultasList(list);
 
-          // Cari unit milik akun auditee
-          if (user?.fakultas_unit) {
-            const myUnit = list.find(
-              (u) =>
-                u.UUID === user.fakultas_unit ||
-                String(u.ID) === String(user.fakultas_unit)
-            );
-            if (myUnit) {
-              setUserUnitData({
-                id: myUnit.UUID,
-                UUID: myUnit.UUID,
-                rawId: myUnit.ID,
-                nama: `${myUnit.Nama || ""}${
-                  myUnit.Jenjang ? ` (${myUnit.Jenjang})` : ""
-                }`.trim(),
-              });
+        // Cari unit milik user
+        let myFuId =
+          user?.fakultas_unit ||
+          user?.id_fakultas_unit ||
+          user?.FakultasUnit ||
+          user?.uuid_fakultas_unit;
+
+        if (!myFuId && Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+          const posYear = localStorage.getItem("positionYear") || positionYear;
+          const matchYear = user.extra_role.find((r) => {
+            const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+            const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+            const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
+            return (!posYear || rYear === String(posYear)) && (rRole === "user" || !rRole) && Boolean(uId);
+          });
+          if (matchYear) {
+            myFuId = matchYear.id_fakultas_unit ?? matchYear.IdFakultasUnit ?? matchYear.uuid_fakultas_unit;
+          } else {
+            const anyMatch = user.extra_role.find((r) => {
+              const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+              const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
+              return (rRole === "user" || !rRole) && Boolean(uId);
+            });
+            if (anyMatch) {
+              myFuId = anyMatch.id_fakultas_unit ?? anyMatch.IdFakultasUnit ?? anyMatch.uuid_fakultas_unit;
             }
           }
+        }
+
+        if (myFuId) {
+          const myUnit = list.find(
+            (u) =>
+              u.UUID === myFuId ||
+              String(u.ID) === String(myFuId)
+          );
+          if (myUnit) {
+            setUserUnitData({
+              id: myUnit.UUID,
+              UUID: myUnit.UUID,
+              rawId: myUnit.ID,
+              nama: `${myUnit.Nama || ""}${
+                myUnit.Jenjang ? ` (${myUnit.Jenjang})` : ""
+              }`.trim(),
+            });
+          } else {
+            setUserUnitData({
+              id: myFuId,
+              UUID: myFuId,
+              nama: user?.nama_fakultas_unit || user?.NamaFakultasUnit || `Unit #${myFuId}`,
+            });
+          }
+        }
       } catch (err) {
         console.error("Gagal mengambil master data filter risiko:", err);
       }
     };
 
     fetchMetadata();
-  }, [getValidToken, user?.fakultas_unit]);
+  }, [getValidToken, user?.fakultas_unit, user?.extra_role, positionYear]);
 
   // Mapped Options for SearchSelect Filters
   const tahunOptions = useMemo(() => {
@@ -198,29 +264,51 @@ const RiskAssessmentPage = () => {
         params.append("filter_fakultas_unit", selectedFakultas);
       }
     } else {
-      // Auditee: mutlak terkunci ke unit kerja sendiri
-      if (user?.fakultas_unit) {
-        params.append("filter_fakultas_unit", String(user.fakultas_unit));
+      // Non-admin: kunci ke unit kerja sendiri
+      const fu = userUnitData?.UUID || userUnitData?.id || user?.fakultas_unit;
+      if (fu) {
+        params.append("filter_fakultas_unit", String(fu));
       }
     }
 
     const qs = params.toString();
     return `/risk_assessments${qs ? `?${qs}` : ""}`;
-  }, [selectedTahun, selectedLevel, selectedProgram, selectedFakultas, isAdmin, user?.fakultas_unit]);
+  }, [selectedTahun, selectedLevel, selectedProgram, selectedFakultas, isAdmin, user?.fakultas_unit, userUnitData]);
 
   const openNew = () => {
+    if (!canManage) {
+      addToast(
+        "warning",
+        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat menambah data"
+      );
+      return;
+    }
     setModalMode("new");
     setSelectedRow(null);
     setModalOpen(true);
   };
 
   const openEdit = (row) => {
+    if (!canManage) {
+      addToast(
+        "warning",
+        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat mengedit data"
+      );
+      return;
+    }
     setModalMode("edit");
     setSelectedRow(row);
     setModalOpen(true);
   };
 
   const handleDelete = async () => {
+    if (!canManage) {
+      addToast(
+        "warning",
+        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat menghapus data"
+      );
+      return;
+    }
     if (!selectedRow?.UUID) return;
 
     try {
@@ -268,197 +356,204 @@ const RiskAssessmentPage = () => {
   };
 
   // Columns definition for RemoteTable matching FORM EXCEL sheet ANALISIS RISIKO
-  const listColumns = [
-    {
-      key: "Tahun",
-      label: "Tahun",
-      width: "80px",
-      renderKey: (r) => (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
-          {r.Tahun || "-"}
-        </span>
-      ),
-    },
-    {
-      key: "program",
-      label: "Program Kerja",
-      minWidth: "220px",
-      renderKey: (r) => (
-        <div className="space-y-1">
-          <div className="text-xs font-bold text-gray-900 leading-snug">
-            {r.MataProgram || <span className="text-gray-400 italic">Program Kerja Terdaftar</span>}
-          </div>
-          {r.NamaFakultasUnit && (
-            <div className="flex items-center gap-1 text-[11px] text-gray-500">
-              <Building2 className="w-3 h-3 text-gray-400 shrink-0" />
-              <span className="line-clamp-1">{r.NamaFakultasUnit}</span>
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "isu_internal_eksternal",
-      label: "Internal / External Issue",
-      minWidth: "220px",
-      searchable: true,
-      renderKey: (r) => (
-        <div className="text-xs text-gray-700 leading-relaxed line-clamp-3">
-          {r.IsuInternalEksternal || r.Penyebab || <span className="text-gray-400 italic">-</span>}
-        </div>
-      ),
-    },
-    {
-      key: "deskripsi_risiko",
-      label: "Risiko (Potensi Risiko)",
-      minWidth: "220px",
-      searchable: true,
-      renderKey: (r) => (
-        <div className="text-xs text-gray-900 font-medium leading-relaxed line-clamp-3">
-          {r.DeskripsiRisiko || r.PernyataanRisiko || <span className="text-gray-400 italic">-</span>}
-        </div>
-      ),
-    },
-    {
-      key: "matriks_awal",
-      label: "Nilai Risiko Awal (K × D = T)",
-      width: "140px",
-      minWidth: "140px",
-      renderKey: (r) => {
-        const k = r.KemungkinanAwal ?? r.Kemungkinan ?? "-";
-        const d = r.DampakAwal ?? r.Keparahan ?? "-";
-        const t = r.TotalSkorAwal ?? (typeof k === "number" && typeof d === "number" ? k * d : "-");
-        return (
-          <div className="text-xs space-y-0.5 bg-purple-50/50 p-2 rounded-lg border border-purple-100">
-            <div className="text-gray-600 flex items-center justify-between text-[11px]">
-              <span>K: <b>{k}</b></span>
-              <span>D: <b>{d}</b></span>
-            </div>
-            <div className="text-purple-900 flex items-center justify-between font-bold pt-1 border-t border-purple-200">
-              <span>Total:</span>
-              <span className="text-sm font-black text-purple-700">{t}</span>
-            </div>
-          </div>
-        );
+  const listColumns = useMemo(() => {
+    const cols = [
+      {
+        key: "Tahun",
+        label: "Tahun",
+        width: "80px",
+        renderKey: (r) => (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+            {r.Tahun || "-"}
+          </span>
+        ),
       },
-    },
-    {
-      key: "tingkat_risiko_awal",
-      label: "Tingkat Risiko Awal",
-      width: "150px",
-      minWidth: "150px",
-      renderKey: (r) => renderLevelBadge(r.TingkatRisikoAwal || r.LevelRisiko, r.NamaTingkatAwal),
-    },
-    {
-      key: "tindakan_mitigasi",
-      label: "Tindakan Untuk Mengatasi Risiko",
-      minWidth: "240px",
-      searchable: true,
-      renderKey: (r) => (
-        <div className="text-xs text-gray-800 leading-relaxed line-clamp-3 whitespace-pre-line">
-          {r.TindakanMitigasi || r.RencanaMitigasi || <span className="text-gray-400 italic">-</span>}
-        </div>
-      ),
-    },
-    {
-      key: "peluang",
-      label: "Peluang (Opportunity)",
-      minWidth: "180px",
-      renderKey: (r) => (
-        <div className="text-xs text-emerald-800 leading-relaxed line-clamp-2">
-          {r.Peluang || <span className="text-gray-400 italic">-</span>}
-        </div>
-      ),
-    },
-    {
-      key: "kenyataan_residu",
-      label: "Kenyataan Residu & RTL",
-      minWidth: "200px",
-      renderKey: (r) => (
-        <div className="text-xs text-gray-700 leading-relaxed line-clamp-2">
-          {r.KenyataanResidu || <span className="text-gray-400 italic">-</span>}
-        </div>
-      ),
-    },
-    {
-      key: "matriks_residu",
-      label: "Nilai Residu (K × D = T)",
-      width: "140px",
-      minWidth: "140px",
-      renderKey: (r) => {
-        if (!r.KemungkinanResidu && !r.DampakResidu) {
-          return <span className="text-xs text-gray-400 italic">-</span>;
-        }
-        const k = r.KemungkinanResidu ?? "-";
-        const d = r.DampakResidu ?? "-";
-        const t = r.TotalSkorResidu ?? (typeof k === "number" && typeof d === "number" ? k * d : "-");
-        return (
-          <div className="text-xs space-y-0.5 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
-            <div className="text-gray-600 flex items-center justify-between text-[11px]">
-              <span>K: <b>{k}</b></span>
-              <span>D: <b>{d}</b></span>
+      {
+        key: "program",
+        label: "Program Kerja",
+        minWidth: "220px",
+        renderKey: (r) => (
+          <div className="space-y-1">
+            <div className="text-xs font-bold text-gray-900 leading-snug">
+              {r.MataProgram || <span className="text-gray-400 italic">Program Kerja Terdaftar</span>}
             </div>
-            <div className="text-amber-900 flex items-center justify-between font-bold pt-1 border-t border-amber-200">
-              <span>Total:</span>
-              <span className="text-sm font-black text-amber-700">{t}</span>
-            </div>
+            {r.NamaFakultasUnit && (
+              <div className="flex items-center gap-1 text-[11px] text-gray-500">
+                <Building2 className="w-3 h-3 text-gray-400 shrink-0" />
+                <span className="line-clamp-1">{renderLabelFakultasUnit(r) || r.NamaFakultasUnit}</span>
+              </div>
+            )}
           </div>
-        );
+        ),
       },
-    },
-    {
-      key: "tingkat_risiko_residu",
-      label: "Tingkat Residu",
-      width: "150px",
-      minWidth: "150px",
-      renderKey: (r) => {
-        if (!r.TingkatRisikoResidu) {
-          return <span className="text-xs text-gray-400 italic">-</span>;
-        }
-        return renderLevelBadge(r.TingkatRisikoResidu, r.NamaTingkatResidu);
+      {
+        key: "isu_internal_eksternal",
+        label: "Internal / External Issue",
+        minWidth: "220px",
+        searchable: true,
+        renderKey: (r) => (
+          <div className="text-xs text-gray-700 leading-relaxed line-clamp-3">
+            {r.IsuInternalEksternal || r.Penyebab || <span className="text-gray-400 italic">-</span>}
+          </div>
+        ),
       },
-    },
-    {
-      key: "rencana_tindak_lanjut",
-      label: "Tindak Lanjut (Follow-Up)",
-      minWidth: "180px",
-      renderKey: (r) => (
-        <div className="text-xs text-gray-700 leading-relaxed line-clamp-2">
-          {r.RencanaTindakLanjut || <span className="text-gray-400 italic">-</span>}
-        </div>
-      ),
-    },
-    {
-      key: "actions",
-      label: "Aksi",
-      width: "100px",
-      renderKey: (r) => (
-        <div className="flex items-center gap-1">
-          <Tooltip title="Edit Analisis Risiko">
-            <button
-              type="button"
-              onClick={() => openEdit(r)}
-              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 hover:text-amber-700 transition"
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
-          </Tooltip>
-          <Tooltip title="Hapus Analisis Risiko">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedRow(r);
-                setConfirmDelete(true);
-              }}
-              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </Tooltip>
-        </div>
-      ),
-    },
-  ];
+      {
+        key: "deskripsi_risiko",
+        label: "Risiko (Potensi Risiko)",
+        minWidth: "220px",
+        searchable: true,
+        renderKey: (r) => (
+          <div className="text-xs text-gray-900 font-medium leading-relaxed line-clamp-3">
+            {r.DeskripsiRisiko || r.PernyataanRisiko || <span className="text-gray-400 italic">-</span>}
+          </div>
+        ),
+      },
+      {
+        key: "matriks_awal",
+        label: "Nilai Risiko Awal (K × D = T)",
+        width: "140px",
+        minWidth: "140px",
+        renderKey: (r) => {
+          const k = r.KemungkinanAwal ?? r.Kemungkinan ?? "-";
+          const d = r.DampakAwal ?? r.Keparahan ?? "-";
+          const t = r.TotalSkorAwal ?? (typeof k === "number" && typeof d === "number" ? k * d : "-");
+          return (
+            <div className="text-xs space-y-0.5 bg-purple-50/50 p-2 rounded-lg border border-purple-100">
+              <div className="text-gray-600 flex items-center justify-between text-[11px]">
+                <span>K: <b>{k}</b></span>
+                <span>D: <b>{d}</b></span>
+              </div>
+              <div className="text-purple-900 flex items-center justify-between font-bold pt-1 border-t border-purple-200">
+                <span>Total:</span>
+                <span className="text-sm font-black text-purple-700">{t}</span>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: "tingkat_risiko_awal",
+        label: "Tingkat Risiko Awal",
+        width: "150px",
+        minWidth: "150px",
+        renderKey: (r) => renderLevelBadge(r.TingkatRisikoAwal || r.LevelRisiko, r.NamaTingkatAwal),
+      },
+      {
+        key: "tindakan_mitigasi",
+        label: "Tindakan Untuk Mengatasi Risiko",
+        minWidth: "240px",
+        searchable: true,
+        renderKey: (r) => (
+          <div className="text-xs text-gray-800 leading-relaxed line-clamp-3 whitespace-pre-line">
+            {r.TindakanMitigasi || r.RencanaMitigasi || <span className="text-gray-400 italic">-</span>}
+          </div>
+        ),
+      },
+      {
+        key: "peluang",
+        label: "Peluang (Opportunity)",
+        minWidth: "180px",
+        renderKey: (r) => (
+          <div className="text-xs text-emerald-800 leading-relaxed line-clamp-2">
+            {r.Peluang || <span className="text-gray-400 italic">-</span>}
+          </div>
+        ),
+      },
+      {
+        key: "kenyataan_residu",
+        label: "Kenyataan Residu & RTL",
+        minWidth: "200px",
+        renderKey: (r) => (
+          <div className="text-xs text-gray-700 leading-relaxed line-clamp-2">
+            {r.KenyataanResidu || <span className="text-gray-400 italic">-</span>}
+          </div>
+        ),
+      },
+      {
+        key: "matriks_residu",
+        label: "Nilai Residu (K × D = T)",
+        width: "140px",
+        minWidth: "140px",
+        renderKey: (r) => {
+          if (!r.KemungkinanResidu && !r.DampakResidu) {
+            return <span className="text-xs text-gray-400 italic">-</span>;
+          }
+          const k = r.KemungkinanResidu ?? "-";
+          const d = r.DampakResidu ?? "-";
+          const t = r.TotalSkorResidu ?? (typeof k === "number" && typeof d === "number" ? k * d : "-");
+          return (
+            <div className="text-xs space-y-0.5 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+              <div className="text-gray-600 flex items-center justify-between text-[11px]">
+                <span>K: <b>{k}</b></span>
+                <span>D: <b>{d}</b></span>
+              </div>
+              <div className="text-amber-900 flex items-center justify-between font-bold pt-1 border-t border-amber-200">
+                <span>Total:</span>
+                <span className="text-sm font-black text-amber-700">{t}</span>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: "tingkat_risiko_residu",
+        label: "Tingkat Residu",
+        width: "150px",
+        minWidth: "150px",
+        renderKey: (r) => {
+          if (!r.TingkatRisikoResidu) {
+            return <span className="text-xs text-gray-400 italic">-</span>;
+          }
+          return renderLevelBadge(r.TingkatRisikoResidu, r.NamaTingkatResidu);
+        },
+      },
+      {
+        key: "rencana_tindak_lanjut",
+        label: "Tindak Lanjut (Follow-Up)",
+        minWidth: "180px",
+        renderKey: (r) => (
+          <div className="text-xs text-gray-700 leading-relaxed line-clamp-2">
+            {r.RencanaTindakLanjut || <span className="text-gray-400 italic">-</span>}
+          </div>
+        ),
+      },
+    ];
+
+    if (canManage) {
+      cols.push({
+        key: "actions",
+        label: "Aksi",
+        width: "100px",
+        renderKey: (r) => (
+          <div className="flex items-center gap-1">
+            <Tooltip title="Edit Analisis Risiko">
+              <button
+                type="button"
+                onClick={() => openEdit(r)}
+                className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 hover:text-amber-700 transition cursor-pointer"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            <Tooltip title="Hapus Analisis Risiko">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRow(r);
+                  setConfirmDelete(true);
+                }}
+                className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
+          </div>
+        ),
+      });
+    }
+
+    return cols;
+  }, [canManage, riskLevels]);
 
   return (
     <>
@@ -484,21 +579,25 @@ const RiskAssessmentPage = () => {
           subtitle={
             isAdmin
               ? "Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (Data Seluruh Fakultas & Unit)"
-              : `Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (${
+              : canManage
+              ? `Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (${
                   userUnitData?.nama || "Unit Kerja Terdaftar"
                 })`
+              : "Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (Mode Pratinjau / Lihat Saja)"
           }
           icon={FileSpreadsheet}
           iconColor="text-purple-600"
           actions={
-            <button
-              type="button"
-              onClick={openNew}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-purple-600 text-white hover:bg-purple-700 shadow-md shadow-purple-600/20 transition cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tambah Analisis Risiko</span>
-            </button>
+            canManage ? (
+              <button
+                type="button"
+                onClick={openNew}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-purple-600 text-white hover:bg-purple-700 shadow-md shadow-purple-600/20 transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Analisis Risiko</span>
+              </button>
+            ) : null
           }
         />
 

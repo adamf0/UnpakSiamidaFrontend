@@ -24,7 +24,7 @@ export default function Choice({
         {/* === YA === */}
         <label
           className={`
-            cursor-pointer rounded-xl border p-4 transition
+            ${disabled ? "cursor-default opacity-85" : "cursor-pointer"} rounded-xl border p-4 transition
             ${watchValue === "1"
               ? "border-blue-500 bg-blue-50 ring-1 ring-blue-400"
               : "border-gray-300 hover:border-gray-400"}
@@ -33,10 +33,11 @@ export default function Choice({
           <input
             type="radio"
             value="1"
+            disabled={disabled}
             className="hidden"
-            {...register(name, !disabled? {
+            {...register(name, !disabled ? {
               required: required ? `${label} wajib dipilih` : false,
-            }: undefined)}
+            } : undefined)}
           />
 
           <div className="flex items-center gap-3">
@@ -63,7 +64,7 @@ export default function Choice({
         {/* === TIDAK === */}
         <label
           className={`
-            cursor-pointer rounded-xl border p-4 transition
+            ${disabled ? "cursor-default opacity-85" : "cursor-pointer"} rounded-xl border p-4 transition
             ${watchValue === "0"
               ? "border-red-500 bg-red-50 ring-1 ring-red-400"
               : "border-gray-300 hover:border-gray-400"}
@@ -72,10 +73,11 @@ export default function Choice({
           <input
             type="radio"
             value="0"
+            disabled={disabled}
             className="hidden"
-            {...register(name, {
+            {...register(name, !disabled ? {
               required: required ? `${label} wajib dipilih` : false,
-            })}
+            } : undefined)}
           />
 
           <div className="flex items-center gap-3">

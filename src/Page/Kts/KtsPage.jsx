@@ -14,6 +14,15 @@ import TextInput from "@/Components/TextInput";
 import Choice from "@/Components/Choice";
 import InfoAuditCard from "@/Components/InfoAuditCard";
 import { apiClient, API_BASE_URL, ktsApi } from "@/Common/api";
+import {
+  Download,
+  ShieldCheck,
+  FileText,
+  Calendar,
+  CheckCircle2,
+  AlertTriangle,
+  Building2,
+} from "lucide-react";
 
 const decodeJWT = (jwt) => {
   if (!jwt || typeof jwt !== "string") return null;
@@ -45,7 +54,10 @@ const getSID = () => {
   return payload?.sid || null;
 };
 
-function ruleAllowAccess(row, currentLevel, info, currentUser) {
+function ruleAllowAccess(row, currentLevel, info, currentUser, readOnly = false) {
+  if (readOnly) {
+    return true;
+  }
   const userLevel = (currentLevel || currentUser?.level || "").toLowerCase().trim();
 
   // 1. Admin always has full access
@@ -136,8 +148,17 @@ function renderStatus(currentStatus) {
 /* =========================
    PAGE
 ========================= */
-const KtsPage = () => {
-  const { tahun, target, uuidaudit } = useParams();
+const KtsPage = ({
+  tahun: propTahun,
+  target: propTarget,
+  uuidaudit: propUuidaudit,
+  readOnly = false,
+  hideNavbar = false,
+} = {}) => {
+  const params = useParams();
+  const tahun = propTahun || params.tahun;
+  const target = propTarget || params.target;
+  const uuidaudit = propUuidaudit || params.uuidaudit;
   const { user, getValidToken } = useAuth();
   const { addToast } = useToast();
   const {
@@ -161,13 +182,15 @@ const KtsPage = () => {
   // popper action
   const [activeActionId, setActiveActionId] = useState(null);
   const [onlyAllowed, setOnlyAllowed] = useState(false);
-  const filteredData = onlyAllowed
-    ? data.filter((row) => ruleAllowAccess(row, level, info, user))
+  const filteredData = (!readOnly && onlyAllowed)
+    ? data.filter((row) => ruleAllowAccess(row, level, info, user, readOnly))
     : data;
 
   useEffect(() => {
-    console.log(data);
-  }, [data]);
+    if (Array.isArray(data) && data.length > 0 && !selectedRow) {
+      setSelectedRow(data[0]);
+    }
+  }, [data, selectedRow]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -230,6 +253,9 @@ const KtsPage = () => {
           }
 
           setData(data);
+          if (Array.isArray(data) && data.length > 0) {
+            setSelectedRow((prev) => prev || data[0]);
+          }
         } catch (err) {
           errors.push({
             url: err.__url,
@@ -252,14 +278,27 @@ const KtsPage = () => {
   };
 
   function renderContent() {
+    if (!selectedRow) return null;
+
+    // Mode read-only (Riwayat Audit) atau KTS yang sudah selesai/tutup: Tampilkan SELURUH field input
+    if (readOnly || selectedRow.Status === "tutup_kts") {
+      return (
+        <KtsFullDetailForm
+          data={selectedRow}
+          readOnly={true}
+          onDownload={() => downloadHandler(selectedRow)}
+        />
+      );
+    }
+
     const statusMap = {
       draf: KtsForm1,
       menunggu_verif_auditee: KtsForm2,
       terima_auditee: KtsForm3,
       menunggu_penyelesaian: KtsForm4,
       tindakan_penyelesaian: KtsForm5,
-      tutup_kts: null,
-      tolak_auditee: null,
+      tutup_kts: KtsFullDetailForm,
+      tolak_auditee: KtsFullDetailForm,
     };
     const isAvailableEdit = [
       "menunggu_penyelesaian",
@@ -269,14 +308,14 @@ const KtsPage = () => {
       "terima_auditee",
     ].includes(selectedRow?.Status);
 
-    const Component = statusMap[selectedRow?.Status];
+    const Component = statusMap[selectedRow?.Status] || KtsForm1;
     if (!Component) return null;
 
-    if (isAvailableEdit && isUbahTindakan) {
-      return <KtsForm2 data={selectedRow} isUbahTindakan={isUbahTindakan} />;
+    if (isAvailableEdit && isUbahTindakan && !readOnly) {
+      return <KtsForm2 data={selectedRow} isUbahTindakan={isUbahTindakan} readOnly={readOnly} />;
     }
 
-    return <Component data={selectedRow} />;
+    return <Component data={selectedRow} readOnly={readOnly} />;
   }
 
   const downloadHandler = async (row) => {
@@ -306,20 +345,22 @@ const KtsPage = () => {
 
   return (
     <>
-      <Navbar
-        renderChangeLevelModal={() => (
-          <ChangeLevelModal
-            open={openChangeLevel}
-            onClose={() => setOpenChangeLevel(false)}
-            levels={listLevel}
-            currentLevel={level}
-            onSubmit={(val) => {
-              setLevel(val);
-              setOpenChangeLevel(false);
-            }}
-          />
-        )}
-      />
+      {!hideNavbar && (
+        <Navbar
+          renderChangeLevelModal={() => (
+            <ChangeLevelModal
+              open={openChangeLevel}
+              onClose={() => setOpenChangeLevel(false)}
+              levels={listLevel}
+              currentLevel={level}
+              onSubmit={(val) => {
+                setLevel(val);
+                setOpenChangeLevel(false);
+              }}
+            />
+          )}
+        />
+      )}
 
       <div className="p-4 bg-white">
         <h2 className="text-lg font-semibold mb-4">KTS Audit</h2>
@@ -328,30 +369,24 @@ const KtsPage = () => {
 
         {/* ================= GRID UTAMA ================= */}
         <div
-          className="
+          className={`
             grid gap-4
             grid-cols-1
             sm:grid-cols-[1fr_360px]
-            h-[calc(100vh-140px)]
-          "
+            ${hideNavbar ? "sm:h-[calc(100vh-230px)] sm:min-h-[500px]" : "sm:h-[calc(100vh-140px)] sm:min-h-[550px]"}
+          `}
         >
-          <div className="flex flex-col gap-4 h-full">
+          <div className="flex flex-col gap-4 h-full min-h-0">
             {/* ================= CARD 1 ================= */}
-            <div className="border rounded-lg p-4 flex flex-col overflow-hidden">
-              {/* Mobile */}
-              <div className="sm:hidden flex gap-4 overflow-x-auto">
-                <InfoAuditCard info={info} />
-              </div>
-
-              {/* Desktop */}
-              <div className="hidden sm:block flex-1 overflow-y-auto">
-                <InfoAuditCard info={info} />
-              </div>
+            <div className="border border-gray-200 rounded-xl p-3 sm:p-4 shrink-0 max-h-[220px] overflow-y-auto bg-white shadow-2xs">
+              <InfoAuditCard info={info} />
             </div>
 
             {/* ================= CARD 2 ================= */}
             <div
-              className={`border rounded-lg p-4 overflow-hidden flex flex-col ${!selectedRow ? "justify-center items-center" : ""}`}
+              className={`border border-gray-200 rounded-xl p-3 sm:p-4 overflow-hidden flex flex-col flex-1 min-h-0 bg-white shadow-2xs ${
+                !selectedRow ? "justify-center items-center" : ""
+              }`}
             >
               {/* Mobile */}
               <div className="sm:hidden flex gap-4 overflow-x-auto">
@@ -363,18 +398,12 @@ const KtsPage = () => {
               </div>
 
               {/* Desktop */}
-              <div className="hidden sm:block flex-1 overflow-y-auto">
+              <div className="hidden sm:block flex-1 min-h-0 overflow-y-auto pr-1">
                 {!selectedRow ? (
                   <div className="text-gray-400 text-sm">
-                    {(
-                      data?.filter(
-                        (d) =>
-                          d.Status === "tutup_kts" ||
-                          d.Status === "tolak_auditee",
-                      ) ?? []
-                    ).length > 0
-                      ? "KTS selesai diisi semua"
-                      : "Pilih data KTS untuk melihat detail"}
+                    {data && data.length > 0
+                      ? "Pilih salah satu temuan KTS di samping untuk melihat rincian seluruh field"
+                      : "Belum ada catatan temuan KTS pada jadwal audit ini"}
                   </div>
                 ) : (
                   renderContent()
@@ -383,7 +412,7 @@ const KtsPage = () => {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 overflow-y-auto pr-1">
+          <div className="flex flex-col gap-4 overflow-y-auto h-full min-h-0 pr-1">
             <div
               onClick={() => setOnlyAllowed(!onlyAllowed)}
               className={`flex items-start gap-3 rounded-lg border p-3 mb-4 cursor-pointer transition ${onlyAllowed ? "bg-purple-50 border-purple-400" : "hover:bg-gray-50"}`}
@@ -422,14 +451,16 @@ const KtsPage = () => {
                   key={row.UUID}
                   row={row}
                   onDownload={downloadHandler}
-                  tahun={positionYear}
+                  tahun={tahun || positionYear}
                   level={level}
                   user={user}
                   info={info}
+                  readOnly={readOnly}
                   activeActionId={activeActionId}
                   setActiveActionId={setActiveActionId}
                   onEdit={(row) => setSelectedRow(row)}
                   onChangePosition={(status, ubahTindakan) => {
+                    if (readOnly) return;
                     console.log(status, ubahTindakan);
                     setPositionStatus(status);
                     setIsUbahTindakan(ubahTindakan);
@@ -466,6 +497,7 @@ function CardKts({
   onChangePosition,
   isActive = false,
   onDownload,
+  readOnly = false,
 }) {
   const isRenstraNilai =
     !isNumeric(row?.RenstraNilai) && isNumeric(row?.DokumenTambahan);
@@ -521,7 +553,8 @@ function CardKts({
 
   return (
     <div
-      className={`border ${isActive ? "border-green-500" : ""} rounded-lg p-4 shadow-sm hover:shadow-md transition`}
+      onClick={() => onEdit && onEdit(row)}
+      className={`border ${isActive ? "border-green-500" : ""} rounded-lg p-4 shadow-sm hover:shadow-md transition cursor-pointer`}
     >
       {isNotMatch ? (
         <div className="flex flex-col items-center text-center gap-3 p-6">
@@ -544,7 +577,7 @@ function CardKts({
             </span>
 
             {/* ACTION */}
-            {ruleAllowAccess(row, level, info, user) && (
+            {ruleAllowAccess(row, level, info, user, readOnly) && (
               <div className="relative">
                 <button
                   onClick={(e) => {
@@ -566,7 +599,7 @@ function CardKts({
                     bg-white border rounded shadow-lg z-20
                   "
                   >
-                    {action && (
+                    {!readOnly && action && (
                       <ActionItem
                         label={action}
                         danger={action == "Closing"}
@@ -577,7 +610,7 @@ function CardKts({
                         }}
                       />
                     )}
-                    {visibleUbahTindakan && "auditee" == level && (
+                    {!readOnly && visibleUbahTindakan && "auditee" == level && (
                       <ActionItem
                         label="Ubah Tindakan"
                         onClick={() => {
@@ -587,7 +620,7 @@ function CardKts({
                         }}
                       />
                     )}
-                    {action && <Divider />}
+                    {!readOnly && action && <Divider />}
                     <ActionItem
                       label="Download"
                       onClick={() => {
@@ -601,6 +634,7 @@ function CardKts({
             )}
           </div>
 
+          {/* CONTENT */}
           {renderContent()}
         </>
       )}
@@ -623,11 +657,377 @@ function ActionItem({ label, onClick, danger }) {
   );
 }
 
-function Divider() {
-  return <div className="my-1 border-t" />;
+/* =========================================================================
+   KTS FULL DETAIL FORM (MENAMPILKAN SELURUH FIELD INPUT KTS SECARA LENGKAP)
+   Digunakan pada mode read-only (Riwayat Audit) dan status Tutup KTS
+   sehingga pengguna melihat seluruh isi temuan, tanggapan, dan penutupan,
+   tidak stuck hanya pada form PLOR.
+========================================================================= */
+export function KtsFullDetailForm({ data, readOnly = true, onDownload }) {
+  const { control, reset, watch } = useForm({
+    defaultValues: {
+      NomorLaporan: "",
+      TanggalLaporan: "",
+      KetidaksesuaianP: "",
+      KetidaksesuaianL: "",
+      KetidaksesuaianO: "",
+      KetidaksesuaianR: "",
+      AkarMasalah: "",
+      TindakanKoreksi: "",
+      Status: null,
+      KeteranganTolak: "",
+      TindakanPerbaikan: "",
+      TanggalPenyelesaian: "",
+      TanggalClosing: "",
+      TinjauanTindakanPerbaikan: "",
+      TanggalClosingFinal: "",
+      WmmUpmfUpmps: "",
+    },
+    mode: "onSubmit",
+  });
+
+  useEffect(() => {
+    if (!data?.UUID) return;
+    const formatDt = (val) => {
+      if (!val) return "";
+      if (typeof val === "string" && val.includes("T")) return val.split("T")[0];
+      return String(val);
+    };
+
+    reset({
+      NomorLaporan: data.NomorLaporan ?? "",
+      TanggalLaporan: formatDt(data.TanggalLaporan),
+      KetidaksesuaianP: data.KetidaksesuaianP ?? "",
+      KetidaksesuaianL: data.KetidaksesuaianL ?? "",
+      KetidaksesuaianO: data.KetidaksesuaianO ?? "",
+      KetidaksesuaianR: data.KetidaksesuaianR ?? "",
+      AkarMasalah: data.AkarMasalah ?? "",
+      TindakanKoreksi: data.TindakanKoreksi ?? "",
+      Status:
+        data.StatusAccAuditee !== undefined && data.StatusAccAuditee !== null
+          ? String(data.StatusAccAuditee)
+          : null,
+      KeteranganTolak: data.KeteranganTolak ?? "",
+      TindakanPerbaikan: data.TindakanPerbaikan ?? "",
+      TanggalPenyelesaian: formatDt(data.TanggalPenyelesaian),
+      TanggalClosing: formatDt(data.TanggalClosing),
+      TinjauanTindakanPerbaikan: data.TinjauanTindakanPerbaikan ?? "",
+      TanggalClosingFinal: formatDt(data.TanggalClosingFinal),
+      WmmUpmfUpmps: formatDt(data.WmmUpmfUpmps),
+    });
+  }, [data]);
+
+  const statusLabel = (data?.Status || "").replace(/_/g, " ").toUpperCase();
+
+  return (
+    <div className="flex flex-col gap-5 p-1 pb-8">
+      {/* HEADER RINGKASAN TEMUAN */}
+      <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 border border-purple-200/90 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-200 text-purple-900 border border-purple-300">
+              Laporan KTS Lengkap
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white text-gray-700 border border-gray-200 shadow-2xs">
+              Status: {statusLabel || "DRAF"}
+            </span>
+          </div>
+          <h3 className="text-base font-bold text-gray-900 leading-snug">
+            {data?.Indikator || data?.Pertanyaan || "Temuan Ketidaksesuaian"}
+          </h3>
+          <p className="text-xs text-gray-600">
+            {data?.Standar && (
+              <span>
+                Standar: <strong>{data.Standar}</strong>
+              </span>
+            )}
+            {data?.JenisFile && (
+              <span>
+                Jenis File: <strong>{data.JenisFile}</strong>
+              </span>
+            )}
+            {data?.Target && <span> • Target: {data.Target}</span>}
+          </p>
+        </div>
+
+        {onDownload && (
+          <button
+            type="button"
+            onClick={onDownload}
+            className="self-start sm:self-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Unduh PDF</span>
+          </button>
+        )}
+      </div>
+
+      {/* ================= BAGIAN 1: PLOR & TEMUAN AWAL ================= */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center gap-2.5 border-b border-gray-100 pb-3">
+          <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
+            1
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-gray-900">
+              Data Laporan &amp; Temuan Ketidaksesuaian (PLOR)
+            </h4>
+            <p className="text-[11px] text-gray-500">
+              Problem, Location, Objective, Reference beserta akar masalah dan tindakan koreksi awal
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <TextInput
+            label="Nomor Laporan"
+            value={watch("NomorLaporan")}
+            disabled={true}
+          />
+          <TextInput
+            label="Tanggal Laporan"
+            type="date"
+            value={watch("TanggalLaporan")}
+            disabled={true}
+          />
+        </div>
+
+        <RestrictedCkEditor
+          label="Ketidaksesuaian (P - Problem)"
+          name="KetidaksesuaianP"
+          control={control}
+          disabled={true}
+        />
+
+        <RestrictedCkEditor
+          label="Ketidaksesuaian (L - Location)"
+          name="KetidaksesuaianL"
+          control={control}
+          disabled={true}
+        />
+
+        <RestrictedCkEditor
+          label="Ketidaksesuaian (O - Objective)"
+          name="KetidaksesuaianO"
+          control={control}
+          disabled={true}
+        />
+
+        <RestrictedCkEditor
+          label="Ketidaksesuaian (R - Reference)"
+          name="KetidaksesuaianR"
+          control={control}
+          disabled={true}
+        />
+
+        <RestrictedCkEditor
+          label="Akar Masalah"
+          name="AkarMasalah"
+          control={control}
+          disabled={true}
+        />
+
+        <RestrictedCkEditor
+          label="Tindakan Koreksi Awal"
+          name="TindakanKoreksi"
+          control={control}
+          disabled={true}
+        />
+      </div>
+
+      {/* ================= BAGIAN 2: RESPON / VERIFIKASI AUDITEE ================= */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center gap-2.5 border-b border-gray-100 pb-3">
+          <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
+            2
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-gray-900">
+              Respon &amp; Verifikasi Auditee
+            </h4>
+            <p className="text-[11px] text-gray-500">
+              Persetujuan/penolakan dan rencana tindakan perbaikan oleh auditee
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2 text-gray-700">
+            Status Tanggapan Auditee
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div
+              className={`rounded-xl border p-3 transition flex items-center gap-3 ${
+                watch("Status") === "1"
+                  ? "border-emerald-500 bg-emerald-50/80 ring-1 ring-emerald-400 font-bold"
+                  : "border-gray-200 bg-gray-50/60 opacity-60"
+              }`}
+            >
+              <div
+                className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${
+                  watch("Status") === "1" ? "border-emerald-500 bg-emerald-500 text-white" : "border-gray-400"
+                }`}
+              >
+                {watch("Status") === "1" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </div>
+              <div>
+                <p className="font-bold text-xs text-gray-800">Diterima</p>
+                <p className="text-[11px] text-gray-500">Setuju dengan temuan auditor</p>
+              </div>
+            </div>
+
+            <div
+              className={`rounded-xl border p-3 transition flex items-center gap-3 ${
+                watch("Status") === "0"
+                  ? "border-rose-500 bg-rose-50/80 ring-1 ring-rose-400 font-bold"
+                  : "border-gray-200 bg-gray-50/60 opacity-60"
+              }`}
+            >
+              <div
+                className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${
+                  watch("Status") === "0" ? "border-rose-500 bg-rose-500 text-white" : "border-gray-400"
+                }`}
+              >
+                {watch("Status") === "0" && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </div>
+              <div>
+                <p className="font-bold text-xs text-gray-800">Ditolak</p>
+                <p className="text-[11px] text-gray-500">Tidak setuju dengan temuan auditor</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {watch("Status") === "0" && (
+          <RestrictedCkEditor
+            label="Keterangan Tolak Auditee"
+            name="KeteranganTolak"
+            control={control}
+            disabled={true}
+          />
+        )}
+
+        <RestrictedCkEditor
+          label="Tindakan Perbaikan Auditee"
+          name="TindakanPerbaikan"
+          control={control}
+          disabled={true}
+        />
+      </div>
+
+      {/* ================= BAGIAN 3: TARGET PENYELESAIAN ================= */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center gap-2.5 border-b border-gray-100 pb-3">
+          <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-black text-xs shrink-0">
+            3
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-gray-900">
+              Jadwal &amp; Target Waktu Penyelesaian
+            </h4>
+            <p className="text-[11px] text-gray-500">
+              Batas waktu penyelesaian yang disepakati bersama
+            </p>
+          </div>
+        </div>
+
+        <TextInput
+          label="Tanggal Target Penyelesaian"
+          type="date"
+          value={watch("TanggalPenyelesaian")}
+          disabled={true}
+        />
+      </div>
+
+      {/* ================= BAGIAN 4: TINJAUAN AUDITOR ================= */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center gap-2.5 border-b border-gray-100 pb-3">
+          <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center font-black text-xs shrink-0">
+            4
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-gray-900">
+              Tinjauan Tindakan Perbaikan (Auditor)
+            </h4>
+            <p className="text-[11px] text-gray-500">
+              Evaluasi efektivitas dan tanggal closing tindakan perbaikan
+            </p>
+          </div>
+        </div>
+
+        <TextInput
+          label="Tanggal Closing Auditor"
+          type="date"
+          value={watch("TanggalClosing")}
+          disabled={true}
+        />
+
+        <RestrictedCkEditor
+          label="Tinjauan Tindakan Perbaikan"
+          name="TinjauanTindakanPerbaikan"
+          control={control}
+          disabled={true}
+        />
+      </div>
+
+      {/* ================= BAGIAN 5: CLOSING FINAL & PENGESAHAN ================= */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center gap-2.5 border-b border-gray-100 pb-3">
+          <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs shrink-0">
+            5
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-gray-900">
+              Closing Final &amp; Pengesahan Mutu
+            </h4>
+            <p className="text-[11px] text-gray-500">
+              Pengesahan penutupan KTS oleh Auditor dan WMM / UPMF / UPMPS
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <TextInput
+            label="Tanggal Closing Final"
+            type="date"
+            value={watch("TanggalClosingFinal")}
+            disabled={true}
+          />
+
+          <TextInput
+            label="WMM / UPMF / UPMPS"
+            value={watch("WmmUpmfUpmps")}
+            disabled={true}
+          />
+        </div>
+      </div>
+
+      {/* BANNER STATUS KTS */}
+      <div className="p-4 bg-amber-50 border border-amber-200/90 rounded-2xl text-amber-800 text-xs font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
+          <span>
+            {readOnly
+              ? "Mode Riwayat Audit KTS: Seluruh 5 Bagian Input Ditampilkan Secara Lengkap (Hanya Lihat)."
+              : "KTS Selesai (Tutup KTS): Seluruh 5 Bagian Input Ditampilkan Secara Lengkap."}
+          </span>
+        </div>
+        {onDownload && (
+          <button
+            type="button"
+            onClick={onDownload}
+            className="self-start sm:self-center text-xs font-bold text-amber-900 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Unduh Dokumen KTS (PDF)</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
-export function KtsForm1({ data }) {
+export function KtsForm1({ data, readOnly = false }) {
   const {
     register,
     control,
@@ -672,6 +1072,7 @@ export function KtsForm1({ data }) {
   }, [data?.UUID]); // ⬅️ PENTING
 
   const onSubmit = (data) => {
+    if (readOnly) return;
     //ini tidak bekerja validasinya, jika tidak required maka muncul erorr label red
     console.log("SUBMIT DATA:", data);
   };
@@ -682,27 +1083,30 @@ export function KtsForm1({ data }) {
 
       <TextInput
         label="Nomor Laporan"
-        required
+        required={!readOnly}
+        disabled={readOnly}
         error={errors.NomorLaporan}
-        {...register("NomorLaporan", {
+        {...(!readOnly ? register("NomorLaporan", {
           required: "Nomor laporan wajib diisi",
-        })}
+        }) : {})}
       />
 
       <TextInput
         label="Tanggal Laporan"
         type="date"
-        required
+        required={!readOnly}
+        disabled={readOnly}
         error={errors.TanggalLaporan}
-        {...register("TanggalLaporan", {
+        {...(!readOnly ? register("TanggalLaporan", {
           required: "Tanggal laporan wajib diisi",
-        })}
+        }) : {})}
       />
 
       {/* ================= CKEDITOR FIELDS ================= */}
 
       <RestrictedCkEditor
-        required
+        required={!readOnly}
+        disabled={readOnly}
         label="Ketidaksesuaian (P)"
         name="KetidaksesuaianP"
         control={control}
@@ -710,7 +1114,8 @@ export function KtsForm1({ data }) {
       />
 
       <RestrictedCkEditor
-        required
+        required={!readOnly}
+        disabled={readOnly}
         label="Ketidaksesuaian (L)"
         name="KetidaksesuaianL"
         control={control}
@@ -718,7 +1123,8 @@ export function KtsForm1({ data }) {
       />
 
       <RestrictedCkEditor
-        required
+        required={!readOnly}
+        disabled={readOnly}
         label="Ketidaksesuaian (O)"
         name="KetidaksesuaianO"
         control={control}
@@ -726,7 +1132,8 @@ export function KtsForm1({ data }) {
       />
 
       <RestrictedCkEditor
-        required
+        required={!readOnly}
+        disabled={readOnly}
         label="Ketidaksesuaian (R)"
         name="KetidaksesuaianR"
         control={control}
@@ -734,7 +1141,8 @@ export function KtsForm1({ data }) {
       />
 
       <RestrictedCkEditor
-        required
+        required={!readOnly}
+        disabled={readOnly}
         label="Akar Masalah"
         name="AkarMasalah"
         control={control}
@@ -742,7 +1150,8 @@ export function KtsForm1({ data }) {
       />
 
       <RestrictedCkEditor
-        required
+        required={!readOnly}
+        disabled={readOnly}
         label="Tindakan Koreksi"
         name="TindakanKoreksi"
         control={control}
@@ -751,18 +1160,24 @@ export function KtsForm1({ data }) {
 
       {/* ================= ACTION ================= */}
       <div className="flex justify-end pt-4">
-        <button
-          type="submit"
-          className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-        >
-          Simpan
-        </button>
+        {readOnly ? (
+          <div className="w-full p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-medium text-center">
+            Mode Riwayat Audit (Hanya Lihat - Form Dinonaktifkan)
+          </div>
+        ) : (
+          <button
+            type="submit"
+            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            Simpan
+          </button>
+        )}
       </div>
     </form>
   );
 }
 
-export function KtsForm2({ data, isUbahTindakan = false }) {
+export function KtsForm2({ data, isUbahTindakan = false, readOnly = false }) {
   const {
     register,
     control,
@@ -798,6 +1213,7 @@ export function KtsForm2({ data, isUbahTindakan = false }) {
   }, [data?.UUID]);
 
   const onSubmit = (data) => {
+    if (readOnly) return;
     //ini tidak bekerja validasinya, jika tidak required maka muncul erorr label red
     console.log("SUBMIT DATA:", data);
   };
@@ -810,8 +1226,8 @@ export function KtsForm2({ data, isUbahTindakan = false }) {
         <Choice
           name="Status"
           label="Status"
-          required
-          disabled={isUbahTindakan}
+          required={!readOnly}
+          disabled={readOnly || isUbahTindakan}
           register={register}
           watchValue={watch("Status")}
           error={errors.Status}
@@ -824,7 +1240,8 @@ export function KtsForm2({ data, isUbahTindakan = false }) {
 
       {isUbahTindakan ? (
         <RestrictedCkEditor
-          required
+          required={!readOnly}
+          disabled={readOnly}
           label="Tindakan Koreksi"
           name="TindakanKoreksi"
           control={control}
@@ -833,15 +1250,16 @@ export function KtsForm2({ data, isUbahTindakan = false }) {
       ) : watch("Status") == "0" ? (
         <>
           <RestrictedCkEditor
-            required
-            disabled={isUbahTindakan}
+            required={!readOnly}
+            disabled={readOnly || isUbahTindakan}
             label="Keterangan Tolak"
             name="KeteranganTolak"
             control={control}
             error={errors.KeteranganTolak}
           />
           <RestrictedCkEditor
-            required
+            required={!readOnly}
+            disabled={readOnly}
             label="Tindakan Koreksi"
             name="TindakanKoreksi"
             control={control}
@@ -852,18 +1270,24 @@ export function KtsForm2({ data, isUbahTindakan = false }) {
 
       {/* ================= ACTION ================= */}
       <div className="flex justify-end pt-4">
-        <button
-          type="submit"
-          className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-        >
-          Simpan
-        </button>
+        {readOnly ? (
+          <div className="w-full p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-medium text-center">
+            Mode Riwayat Audit (Hanya Lihat - Form Dinonaktifkan)
+          </div>
+        ) : (
+          <button
+            type="submit"
+            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            Simpan
+          </button>
+        )}
       </div>
     </form>
   );
 }
 
-export function KtsForm3({ data }) {
+export function KtsForm3({ data, readOnly = false }) {
   const {
     register,
     handleSubmit,
@@ -893,6 +1317,7 @@ export function KtsForm3({ data }) {
   }, [data?.UUID]);
 
   const onSubmit = (data) => {
+    if (readOnly) return;
     //ini tidak bekerja validasinya, jika tidak required maka muncul erorr label red
     console.log("SUBMIT DATA:", data);
   };
@@ -904,27 +1329,34 @@ export function KtsForm3({ data }) {
       <TextInput
         label="Tanggal Penyelesaian"
         type="date"
-        required
+        required={!readOnly}
+        disabled={readOnly}
         error={errors.TanggalPenyelesaian}
-        {...register("TanggalPenyelesaian", {
+        {...(!readOnly ? register("TanggalPenyelesaian", {
           required: "Tanggal Penyelesaian wajib diisi",
-        })}
+        }) : {})}
       />
 
       {/* ================= ACTION ================= */}
       <div className="flex justify-end pt-4">
-        <button
-          type="submit"
-          className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-        >
-          Simpan
-        </button>
+        {readOnly ? (
+          <div className="w-full p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-medium text-center">
+            Mode Riwayat Audit (Hanya Lihat - Form Dinonaktifkan)
+          </div>
+        ) : (
+          <button
+            type="submit"
+            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            Simpan
+          </button>
+        )}
       </div>
     </form>
   );
 }
 
-export function KtsForm4({ data }) {
+export function KtsForm4({ data, readOnly = false }) {
   const {
     register,
     handleSubmit,
@@ -957,6 +1389,7 @@ export function KtsForm4({ data }) {
   }, [data?.UUID]);
 
   const onSubmit = (data) => {
+    if (readOnly) return;
     //ini tidak bekerja validasinya, jika tidak required maka muncul erorr label red
     console.log("SUBMIT DATA:", data);
   };
@@ -968,15 +1401,17 @@ export function KtsForm4({ data }) {
       <TextInput
         label="Tanggal Closing"
         type="date"
-        required
+        required={!readOnly}
+        disabled={readOnly}
         error={errors.TanggalClosing}
-        {...register("TanggalClosing", {
+        {...(!readOnly ? register("TanggalClosing", {
           required: "Tanggal Closing wajib diisi",
-        })}
+        }) : {})}
       />
 
       <RestrictedCkEditor
-        required
+        required={!readOnly}
+        disabled={readOnly}
         label="Tinjauan Tindakan Perbaikan"
         name="TinjauanTindakanPerbaikan"
         control={control}
@@ -985,18 +1420,24 @@ export function KtsForm4({ data }) {
 
       {/* ================= ACTION ================= */}
       <div className="flex justify-end pt-4">
-        <button
-          type="submit"
-          className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-        >
-          Simpan
-        </button>
+        {readOnly ? (
+          <div className="w-full p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-medium text-center">
+            Mode Riwayat Audit (Hanya Lihat - Form Dinonaktifkan)
+          </div>
+        ) : (
+          <button
+            type="submit"
+            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            Simpan
+          </button>
+        )}
       </div>
     </form>
   );
 }
 
-export function KtsForm5({ data }) {
+export function KtsForm5({ data, readOnly = false }) {
   const {
     register,
     handleSubmit,
@@ -1029,6 +1470,7 @@ export function KtsForm5({ data }) {
   }, [data?.UUID]);
 
   const onSubmit = (data) => {
+    if (readOnly) return;
     //ini tidak bekerja validasinya, jika tidak required maka muncul erorr label red
     console.log("SUBMIT DATA:", data);
   };
@@ -1040,31 +1482,39 @@ export function KtsForm5({ data }) {
       <TextInput
         label="Tanggal Closing"
         type="date"
-        required
+        required={!readOnly}
+        disabled={readOnly}
         error={errors.TanggalClosingFinal}
-        {...register("TanggalClosingFinal", {
+        {...(!readOnly ? register("TanggalClosingFinal", {
           required: "Tanggal Closing wajib diisi",
-        })}
+        }) : {})}
       />
 
       <TextInput
         label="Wmm / Upmf / Upmps"
         type="date"
-        required
+        required={!readOnly}
+        disabled={readOnly}
         error={errors.WmmUpmfUpmps}
-        {...register("WmmUpmfUpmps", {
+        {...(!readOnly ? register("WmmUpmfUpmps", {
           required: "Wmm / Upmf / Upmps wajib diisi",
-        })}
+        }) : {})}
       />
 
       {/* ================= ACTION ================= */}
       <div className="flex justify-end pt-4">
-        <button
-          type="submit"
-          className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-        >
-          Simpan
-        </button>
+        {readOnly ? (
+          <div className="w-full p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-medium text-center">
+            Mode Riwayat Audit (Hanya Lihat - Form Dinonaktifkan)
+          </div>
+        ) : (
+          <button
+            type="submit"
+            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            Simpan
+          </button>
+        )}
       </div>
     </form>
   );

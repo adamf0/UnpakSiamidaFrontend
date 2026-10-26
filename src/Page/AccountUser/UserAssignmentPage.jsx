@@ -8,6 +8,7 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { apiClient } from "@/Common/api";
+import { renderLabelFakultasUnit } from "@/Common/Utils";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import UserAssignmentModal from "./UserAssignmentModal";
 import {
@@ -19,6 +20,7 @@ import {
   Building2,
   Calendar,
   Users,
+  User,
   CheckCircle2,
   XCircle,
   Pencil,
@@ -221,6 +223,15 @@ export default function UserAssignmentPage() {
           <School className="w-3.5 h-3.5 text-amber-600" />
           <span>UPMS</span>
           <span className="text-[10px] font-normal opacity-75">(Sekolah)</span>
+        </span>
+      );
+    }
+    if (code === "user") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
+          <User className="w-3.5 h-3.5 text-purple-600" />
+          <span>User</span>
+          <span className="text-[10px] font-normal opacity-75">(Pengelola)</span>
         </span>
       );
     }
@@ -436,6 +447,7 @@ export default function UserAssignmentPage() {
                 className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
               >
                 <option value="all">Semua Role ABAC</option>
+                <option value="user">User (Pengguna / Pengelola Unit)</option>
                 <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
                 <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
                 <option value="upms">UPMS (Unit Penjaminan Mutu Sekolah)</option>
@@ -560,10 +572,19 @@ export default function UserAssignmentPage() {
                             <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
                             <div>
                               <p className="font-semibold text-gray-800 leading-tight">
-                                {item.NamaFakultasUnit || item.nama_fakultas_unit || "-"}
+                                {renderLabelFakultasUnit({
+                                  nama: item.NamaFakultasUnit || item.nama_fakultas_unit,
+                                  jenjang:
+                                    item.JenjangFakultasUnit ||
+                                    item.jenjang_fakultas_unit ||
+                                    item.jenjang ||
+                                    item.Jenjang,
+                                  type: item.TypeFakultasUnit || item.type_fakultas_unit,
+                                  role: role,
+                                }) || (role === "upms" ? "Seluruh Unit (Tingkat Universitas / Sekolah)" : "-")}
                               </p>
                               <span className="text-[10px] text-gray-400 capitalize">
-                                Tipe: {item.TypeFakultasUnit || item.type_fakultas_unit || "Unit"}
+                                Tipe: {item.TypeFakultasUnit || item.type_fakultas_unit || (role === "upms" ? "Universitas" : "Unit")}
                               </span>
                             </div>
                           </div>

@@ -21,7 +21,7 @@ import {
 import Tooltip from "@/Components/Tooltip";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/Providers/AuthProvider";
-import { isEmpty } from "@/Common/Utils";
+import { isEmpty, renderLabelFakultasUnit } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 import ScheduleAuditFilterDrawer, {
@@ -836,7 +836,12 @@ const ScheduleAuditPage = () => {
             }
             listcolumns={[
               { key: "Tahun", label: "Tahun", searchable: true },
-              { key: "FakultasUnit", label: "Target Audit", searchable: true },
+              {
+                key: "FakultasUnit",
+                label: "Target Audit",
+                searchable: true,
+                renderKey: (row) => renderLabelFakultasUnit(row),
+              },
               { key: "Type", label: "Tipe", searchable: true },
               { key: "Jenjang", label: "Jenjang", searchable: true },
               { key: "Auditee", label: "Auditee", searchable: true },

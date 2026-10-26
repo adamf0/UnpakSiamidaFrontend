@@ -16,6 +16,9 @@ import {
   Check,
   Search,
 } from "lucide-react";
+import { useAuth } from "@/Providers/AuthProvider";
+import { useContent } from "@/Providers/ContentProvider";
+import { formatProdiWithJenjang } from "@/Common/Utils";
 
 /**
  * Format label kategori (misal: "prodi#s1" -> "Prodi S1")
@@ -42,22 +45,64 @@ function RecipientBadgesList({
   currentUnitName,
   recipients = [],
   activeColor = "indigo",
+  fakultasUnits = [],
 }) {
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Map fakultasUnits untuk lookup prodi dan jenjang
+  const fuMap = useMemo(() => {
+    const map = new Map();
+    (fakultasUnits || []).forEach((u) => {
+      const id = String(u.ID || u.id);
+      const nama = String(u.Nama || u.nama || "").trim().toLowerCase();
+      if (id) map.set(id, u);
+      if (nama && !map.has(nama)) map.set(nama, u);
+    });
+    return map;
+  }, [fakultasUnits]);
+
+  // Format setiap penerima agar selalu menyertakan jenjang bila datanya prodi
+  const formattedRecipients = useMemo(() => {
+    return recipients.map((item) => {
+      if (!item) return "-";
+      const rawStr =
+        typeof item === "object"
+          ? item.label || item.nama || item.Nama || item.name || "-"
+          : String(item).trim();
+
+      // Jika sudah ada format jenjang seperti (S1), (S2), (D3), (D4), (S3), dsb.
+      if (/\((s1|s2|s3|d3|d4|profesi)\)/i.test(rawStr)) {
+        return rawStr;
+      }
+
+      // Coba lookup di fakultasUnits
+      const cleanKey = rawStr.toLowerCase();
+      const found = fuMap.get(cleanKey);
+      if (found) {
+        return formatProdiWithJenjang(
+          found.Nama || found.nama,
+          found.Jenjang || found.jenjang || found.KodeJenjang,
+          found.Type || found.type
+        );
+      }
+
+      return rawStr;
+    });
+  }, [recipients, fuMap]);
 
   const cleanCurrent = (currentUnitName || "").trim().toLowerCase();
 
   // Urutkan agar current unit selalu paling depan
   const sorted = useMemo(() => {
-    return [...recipients].sort((a, b) => {
+    return [...formattedRecipients].sort((a, b) => {
       const isACur = a.trim().toLowerCase() === cleanCurrent;
       const isBCur = b.trim().toLowerCase() === cleanCurrent;
       if (isACur && !isBCur) return -1;
       if (!isACur && isBCur) return 1;
       return a.localeCompare(b);
     });
-  }, [recipients, cleanCurrent]);
+  }, [formattedRecipients, cleanCurrent]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return sorted;
@@ -105,11 +150,6 @@ function RecipientBadgesList({
             >
               {isCurrent && <Check className="w-2.5 h-2.5" />}
               <span>{unitName}</span>
-              {isCurrent && (
-                <span className="opacity-90 font-medium text-[9px]">
-                  (Unit Ini)
-                </span>
-              )}
             </span>
           );
         })}
@@ -146,9 +186,19 @@ export default function PemetaanDetailModal({
   onClose,
   data,
   tahun,
+  fakultasUnits = [],
   onSetTarget1,
   onSetTarget2,
+  isAdmin: propIsAdmin,
 }) {
+  const { user } = useAuth();
+  const { level } = useContent();
+  const currentLevel = String(level || user?.level || "").toLowerCase().trim();
+  const isAdmin =
+    propIsAdmin !== undefined
+      ? Boolean(propIsAdmin)
+      : currentLevel === "admin";
+
   const [activeTab, setActiveTab] = useState("renstra");
   const [modalSearch, setModalSearch] = useState("");
 
@@ -214,7 +264,7 @@ export default function PemetaanDetailModal({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-bold text-gray-900 leading-snug">
-                  {nama}
+                  {formatProdiWithJenjang(nama, jenjang, type)}
                 </h3>
                 {jenjang && (
                   <span className="px-2 py-0.5 text-xs font-semibold rounded-md bg-gray-200 text-gray-800 uppercase">
@@ -324,13 +374,6 @@ export default function PemetaanDetailModal({
                   tahun {tahun}. Anda dapat melakukan pemetaan melalui menu
                   Template Renstra.
                 </p>
-                <Link
-                  to="/template_renstra"
-                  className="inline-flex items-center gap-1.5 mt-4 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition"
-                >
-                  Buka Form Template Renstra
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
               </div>
             ) : filteredRenstra.length === 0 ? (
               <div className="text-center py-8 text-xs text-gray-500">
@@ -357,7 +400,7 @@ export default function PemetaanDetailModal({
                         </h5>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                        {item.hasDupe && (
+                        {isAdmin && item.hasDupe && (
                           <span
                             className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1 shadow-2xs"
                             title={`Ditemukan ${item.dupeCount + 1} row di database dengan indikator & tugas yang sama (ID: ${item.dupeRowIds?.join(", ") || "N/A"}). Terindikasi salah generate / bad SQL.`}
@@ -428,13 +471,19 @@ export default function PemetaanDetailModal({
                       {/* List Prodi/Fakultas/Unit yang dapat */}
                       {item.recipientUnits && item.recipientUnits.length > 0 ? (
                         <RecipientBadgesList
-                          currentUnitName={nama}
+                          currentUnitName={formatProdiWithJenjang(
+                            nama,
+                            jenjang,
+                            type
+                          )}
                           recipients={item.recipientUnits}
                           activeColor="indigo"
+                          fakultasUnits={fakultasUnits}
                         />
                       ) : (
                         <p className="text-[11px] text-gray-500 italic">
-                          Diberikan khusus untuk unit: {nama}
+                          Diberikan khusus untuk unit:{" "}
+                          {formatProdiWithJenjang(nama, jenjang, type)}
                         </p>
                       )}
                     </div>
@@ -453,13 +502,6 @@ export default function PemetaanDetailModal({
                 dipetakan pada tahun {tahun}. Silakan petakan melalui menu
                 Template Dokumen Tambahan.
               </p>
-              <Link
-                to="/template_dokumen_tambahan"
-                className="inline-flex items-center gap-1.5 mt-4 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition"
-              >
-                Buka Form Dokumen Tambahan
-                <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
             </div>
           ) : filteredDokumen.length === 0 ? (
             <div className="text-center py-8 text-xs text-gray-500">
@@ -483,7 +525,7 @@ export default function PemetaanDetailModal({
                       </h5>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                      {doc.hasDupe && (
+                      {isAdmin && doc.hasDupe && (
                         <span
                           className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1 shadow-2xs"
                           title={`Ditemukan ${doc.dupeCount + 1} row di database dengan dokumen & tugas yang sama (ID: ${doc.dupeRowIds?.join(", ") || "N/A"}). Terindikasi salah generate / bad SQL.`}
@@ -539,13 +581,19 @@ export default function PemetaanDetailModal({
                     {/* List unit yang dapat */}
                     {doc.recipientUnits && doc.recipientUnits.length > 0 ? (
                       <RecipientBadgesList
-                        currentUnitName={nama}
+                        currentUnitName={formatProdiWithJenjang(
+                          nama,
+                          jenjang,
+                          type
+                        )}
                         recipients={doc.recipientUnits}
                         activeColor="emerald"
+                        fakultasUnits={fakultasUnits}
                       />
                     ) : (
                       <p className="text-[11px] text-gray-500 italic">
-                        Diberikan khusus untuk unit: {nama}
+                        Diberikan khusus untuk unit:{" "}
+                        {formatProdiWithJenjang(nama, jenjang, type)}
                       </p>
                     )}
                   </div>
@@ -556,29 +604,35 @@ export default function PemetaanDetailModal({
         </div>
 
         {/* FOOTER */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-t bg-gray-50">
+        <div className="flex flex-wrap items-center justify-end gap-2 px-6 py-3.5 border-t bg-gray-50">
           <div className="flex items-center gap-2">
-            <Link
-              to="/template_renstra"
-              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+            {isAdmin && onSetTarget1 && (
+              <button
+                type="button"
+                onClick={() => onSetTarget1(data)}
+                className="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                title="Bandingkan unit ini di Target 1 Komparasi"
+              >
+                <span>+ Komparasi Target 1</span>
+              </button>
+            )}
+            {isAdmin && onSetTarget2 && (
+              <button
+                type="button"
+                onClick={() => onSetTarget2(data)}
+                className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                title="Bandingkan unit ini di Target 2 Komparasi"
+              >
+                <span>+ Komparasi Target 2</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition cursor-pointer shadow-2xs"
             >
-              Kelola Renstra →
-            </Link>
-            <span className="text-gray-300">•</span>
-            <Link
-              to="/template_dokumen_tambahan"
-              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
-            >
-              Kelola Dok. Tambahan →
-            </Link>
+              Tutup
+            </button>
           </div>
-
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition cursor-pointer"
-          >
-            Tutup
-          </button>
         </div>
       </div>
     </div>

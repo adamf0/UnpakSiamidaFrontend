@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { apiClient } from "@/Common/api";
 import { useContent } from "@/Providers/ContentProvider";
+import { useAuth } from "@/Providers/AuthProvider";
 import {
   makeCirclePoly,
   seedGroupPoints,
@@ -9,6 +10,7 @@ import {
 import PemetaanDetailModal from "./PemetaanDetailModal";
 import DupeIncidentModal from "./DupeIncidentModal";
 import PemetaanCompareSection from "./PemetaanCompareSection";
+import { formatProdiWithJenjang, renderLabelFakultasUnit } from "@/Common/Utils";
 import {
   Calendar,
   Filter,
@@ -196,7 +198,10 @@ function formatCellLines(nama, maxCharsPerLine = 12) {
 }
 
 export default function PemetaanChartCard() {
-  const { positionYear } = useContent();
+  const { positionYear, level } = useContent();
+  const { user } = useAuth();
+  const currentLevel = String(level || user?.level || "").toLowerCase().trim();
+  const isAdmin = currentLevel === "admin";
 
   /* ================= STATE ================= */
   const [selectedTahun, setSelectedTahun] = useState(() => {
@@ -412,34 +417,50 @@ export default function PemetaanChartCard() {
 
     // 3. Helper matcher untuk row Renstra
     const doesRowMatchUnit = (row, unit) => {
-      // Direct ID Match
-      if (row.FakultasUnitID && Number(row.FakultasUnitID) === Number(unit.ID)) {
-        return true;
-      }
-      // Direct UUID Match
-      if (
-        row.FakultasUnitUUID &&
-        unit.UUID &&
-        row.FakultasUnitUUID === unit.UUID
-      ) {
-        return true;
-      }
-      // Direct Name Match
-      const rName = (row.FakultasUnit || "").trim().toLowerCase();
-      const uName = (unit.Nama || "").trim().toLowerCase();
-      if (rName && uName && rName === uName) {
-        return true;
-      }
-      // Kategori Fallback: HANYA jika row TIDAK memiliki FakultasUnitID spesifik
-      const hasSpecificUnit =
-        (row.FakultasUnitID && Number(row.FakultasUnitID) > 0) || Boolean(rName);
+      const uId = Number(unit.ID || unit.id || 0);
+      const rId = Number(
+        row.FakultasUnitID || row.fakultas_unit || row.FakultasUnitId || 0
+      );
 
-      if (!hasSpecificUnit && row.Kategori) {
+      // 1. Direct ID Match: jika row sudah ditargetkan untuk FakultasUnitID spesifik (> 0)
+      if (rId > 0 && uId > 0) {
+        return rId === uId;
+      }
+
+      // 2. Direct UUID Match
+      const rUuid = row.FakultasUnitUUID || row.fakultas_unit_uuid;
+      const uUuid = unit.UUID || unit.uuid;
+      if (rUuid && uUuid) {
+        return rUuid === uUuid;
+      }
+
+      // 3. Kategori Match: HANYA jika row TIDAK memiliki FakultasUnitID spesifik
+      if (row.Kategori) {
         const [kType, kJenjang] = row.Kategori.toLowerCase().split("#");
-        if (kType === (unit.Type || "").toLowerCase()) {
+        const uType = (unit.Type || unit.type || "").toLowerCase();
+        const uJenjang = (unit.Jenjang || unit.jenjang || "").toLowerCase();
+
+        if (kType === uType) {
           if (!kJenjang || kJenjang === "all") return true;
-          if (kJenjang === (unit.Jenjang || "").toLowerCase()) return true;
+          if (kJenjang === uJenjang) return true;
         }
+        return false;
+      }
+
+      // 4. Direct Name Match: HANYA jika TIDAK ADA FakultasUnitID/UUID dan TIDAK ADA Kategori
+      const rName = (row.FakultasUnit || "").trim().toLowerCase();
+      const uName = (unit.Nama || unit.nama || "").trim().toLowerCase();
+      if (rName && uName) {
+        const uType = (unit.Type || unit.type || "").toLowerCase();
+        const uJenjang = (unit.Jenjang || unit.jenjang || "").toLowerCase();
+
+        if (uType === "prodi") {
+          if (uJenjang && (rName.includes(`(${uJenjang})`) || rName.endsWith(` ${uJenjang}`))) {
+            return rName.startsWith(uName);
+          }
+          return rName === uName;
+        }
+        return rName === uName;
       }
       return false;
     };
@@ -448,18 +469,23 @@ export default function PemetaanChartCard() {
     const doesDocMatchUnit = (target, unit) => {
       if (!target) return false;
       const clean = target.trim().toLowerCase();
-      if (clean === "fakultas#all" && unit.Type === "fakultas") return true;
-      if (clean === "prodi#all" && unit.Type === "prodi") return true;
-      if (clean === "unit#all" && unit.Type === "unit") return true;
+      const uType = (unit.Type || unit.type || "").toLowerCase();
+      const uJenjang = (unit.Jenjang || unit.jenjang || "").toLowerCase();
+      const uName = (unit.Nama || unit.nama || "").trim().toLowerCase();
+
+      if (clean === "fakultas#all" && uType === "fakultas") return true;
+      if (clean === "prodi#all" && uType === "prodi") return true;
+      if (clean === "unit#all" && uType === "unit") return true;
       if (clean.includes("#")) {
         const [tType, tJenjang] = clean.split("#");
-        if (tType === (unit.Type || "").toLowerCase()) {
+        if (tType === uType) {
           if (!tJenjang || tJenjang === "all") return true;
-          if (tJenjang === (unit.Jenjang || "").toLowerCase()) return true;
+          if (tJenjang === uJenjang) return true;
         }
+        return false;
       }
-      if (clean === String(unit.ID)) return true;
-      if (unit.Nama && clean === unit.Nama.trim().toLowerCase()) return true;
+      if (clean === String(unit.ID || unit.id)) return true;
+      if (uName && clean === uName) return true;
       return false;
     };
 
@@ -504,17 +530,63 @@ export default function PemetaanChartCard() {
           ind.rawRows.forEach((r) => {
             if (r.Kategori) recipientKategoriSet.add(r.Kategori);
 
-            if (r.FakultasUnit) {
-              recipientUnitsMap.set(
-                r.FakultasUnitID ? String(r.FakultasUnitID) : r.FakultasUnit,
-                r.FakultasUnit
+            const rFuId = r.FakultasUnitID || r.fakultas_unit || r.FakultasUnitId;
+            if (rFuId) {
+              const fu = fakultasUnits.find(
+                (u) => Number(u.ID || u.id) === Number(rFuId)
               );
+              if (fu) {
+                recipientUnitsMap.set(
+                  String(fu.ID || fu.id),
+                  formatProdiWithJenjang(
+                    fu.Nama || fu.nama,
+                    fu.Jenjang || fu.jenjang,
+                    fu.Type || fu.type
+                  )
+                );
+              } else {
+                let fallbackJenjang = r.Jenjang || r.jenjang;
+                if (!fallbackJenjang && r.Kategori && r.Kategori.includes("#")) {
+                  fallbackJenjang = r.Kategori.split("#")[1];
+                }
+                const formatted = formatProdiWithJenjang(
+                  r.FakultasUnit,
+                  fallbackJenjang,
+                  r.FakultasUnitType || "prodi"
+                );
+                recipientUnitsMap.set(String(rFuId), formatted);
+              }
             } else if (r.Kategori) {
               fakultasUnits.forEach((fu) => {
                 if (doesRowMatchUnit(r, fu)) {
-                  recipientUnitsMap.set(String(fu.ID), fu.Nama);
+                  recipientUnitsMap.set(
+                    String(fu.ID || fu.id),
+                    formatProdiWithJenjang(
+                      fu.Nama || fu.nama,
+                      fu.Jenjang || fu.jenjang,
+                      fu.Type || fu.type
+                    )
+                  );
                 }
               });
+            } else if (r.FakultasUnit) {
+              const foundFu = fakultasUnits.find(
+                (u) =>
+                  (u.Nama || u.nama || "").toLowerCase().trim() ===
+                  String(r.FakultasUnit).toLowerCase().trim()
+              );
+              if (foundFu) {
+                recipientUnitsMap.set(
+                  String(foundFu.ID || foundFu.id),
+                  formatProdiWithJenjang(
+                    foundFu.Nama || foundFu.nama,
+                    foundFu.Jenjang || foundFu.jenjang,
+                    foundFu.Type || foundFu.type
+                  )
+                );
+              } else {
+                recipientUnitsMap.set(r.FakultasUnit, r.FakultasUnit);
+              }
             }
           });
 
@@ -579,7 +651,14 @@ export default function PemetaanChartCard() {
             if (r.FakultasProdiUnit) recipientTargetsSet.add(r.FakultasProdiUnit);
             fakultasUnits.forEach((fu) => {
               if (doesDocMatchUnit(r.FakultasProdiUnit, fu)) {
-                recipientUnitsMap.set(String(fu.ID), fu.Nama);
+                recipientUnitsMap.set(
+                  String(fu.ID || fu.id),
+                  formatProdiWithJenjang(
+                    fu.Nama || fu.nama,
+                    fu.Jenjang || fu.jenjang,
+                    fu.Type || fu.type
+                  )
+                );
               }
             });
           });
@@ -619,6 +698,11 @@ export default function PemetaanChartCard() {
         id: unit.ID,
         uuid: unit.UUID,
         nama: unit.Nama,
+        namaFormatted: formatProdiWithJenjang(
+          unit.Nama,
+          unit.Jenjang,
+          unit.Type
+        ),
         jenjang: unit.Jenjang || "",
         kodeJenjang: unit.KodeJenjang || "",
         type: unit.Type || "prodi",
@@ -636,6 +720,11 @@ export default function PemetaanChartCard() {
       };
     });
   }, [fakultasUnits, templateRenstra, templateDokumen]);
+
+  /* ================= USER ACCESSIBILITY RESTRICTION ================= */
+  // Card terbuka untuk seluruh stakeholder/user layaknya admin tanpa batasan unit
+  const accessibleUnitMatcher = null;
+  const userActiveUnit = null;
 
   /* ================= DETEKSI INSIDEN DUPLIKASI DATABASE ================= */
   const dupeIncidents = useMemo(() => {
@@ -658,7 +747,13 @@ export default function PemetaanChartCard() {
                 indikator: ren.Indikator || `Indikator #${ren.indikatorId}`,
                 indikatorId: ren.indikatorId,
                 standar: ren.StandarRenstra || "-",
-                unitNama: unit.nama,
+                unitNama: formatProdiWithJenjang(
+                  unit.nama,
+                  unit.jenjang,
+                  unit.type
+                ),
+                unitJenjang: unit.jenjang,
+                unitType: unit.type,
                 unitId: unit.id,
                 tugas: ren.Tugas || "-",
                 tahun: selectedTahun,
@@ -676,13 +771,20 @@ export default function PemetaanChartCard() {
             const signature = `dokumen_${unit.id}_${doc.jenisFileId}_${doc.Tugas}`;
             if (!seenSignatures.has(signature)) {
               seenSignatures.add(signature);
+              const formattedName = formatProdiWithJenjang(
+                unit.nama,
+                unit.jenjang,
+                unit.type
+              );
               list.push({
                 type: "dokumen",
                 signature,
                 jenisFile: doc.JenisFile || `File #${doc.jenisFileId}`,
                 pertanyaan: doc.Pertanyaan || "-",
-                target: unit.nama,
-                unitNama: unit.nama,
+                target: formattedName,
+                unitNama: formattedName,
+                unitJenjang: unit.jenjang,
+                unitType: unit.type,
                 unitId: unit.id,
                 tugas: doc.Tugas || "-",
                 tahun: selectedTahun,
@@ -720,13 +822,28 @@ export default function PemetaanChartCard() {
             item.rowIds && ids.some((id) => item.rowIds.includes(id))
           );
           if (!alreadyCaptured) {
+            const fuFound = fakultasUnits.find(
+              (u) =>
+                Number(u.ID || u.id) ===
+                Number(first.FakultasUnitID || first.fakultas_unit)
+            );
+            const unitFormatted = fuFound
+              ? formatProdiWithJenjang(
+                  fuFound.Nama || fuFound.nama,
+                  fuFound.Jenjang || fuFound.jenjang,
+                  fuFound.Type || fuFound.type
+                )
+              : first.FakultasUnit || first.Kategori || "-";
+
             list.push({
               type: "renstra",
               signature: sig,
               indikator: first.Indikator || `Indikator #${first.IndikatorRenstraID}`,
               indikatorId: first.IndikatorRenstraID,
               standar: first.StandarRenstra || "-",
-              unitNama: first.FakultasUnit || first.Kategori || "-",
+              unitNama: unitFormatted,
+              unitJenjang: fuFound?.Jenjang || fuFound?.jenjang || "",
+              unitType: fuFound?.Type || fuFound?.type || "",
               unitId: first.FakultasUnitID,
               tugas: first.Tugas || "-",
               tahun: first.Tahun || selectedTahun,
@@ -769,6 +886,7 @@ export default function PemetaanChartCard() {
               jenisFile: first.JenisFile || `File #${first.JenisFileID}`,
               pertanyaan: first.Pertanyaan || "-",
               target: first.FakultasProdiUnit || "-",
+              unitNama: first.FakultasProdiUnit || "-",
               tugas: first.Tugas || "-",
               tahun: first.Tahun || selectedTahun,
               count: rows.length,
@@ -941,6 +1059,10 @@ export default function PemetaanChartCard() {
   /* ================= INTERACTION HANDLERS ================= */
   const handleMouseMove = (e, item) => {
     if (!containerRef.current) return;
+    if (accessibleUnitMatcher && !accessibleUnitMatcher.checkUnit(item)) {
+      setHoveredItem(null);
+      return;
+    }
     const rect = containerRef.current.getBoundingClientRect();
     setTooltipPos({
       x: e.clientX - rect.left,
@@ -955,11 +1077,13 @@ export default function PemetaanChartCard() {
 
   const handleCellClick = (item) => {
     if (justFinishedDragRef.current) return;
+    if (accessibleUnitMatcher && !accessibleUnitMatcher.checkUnit(item)) return;
     setSelectedDetailUnit(item);
   };
 
   /* ================= UNIVERSAL POINTER DRAG & DROP DARI CHART ================= */
   const handleCellPointerDown = (e, cell) => {
+    if (!isAdmin) return;
     // Tanggapi hanya klik kiri mouse / touch
     if (e.button !== 0) return;
     dragStateRef.current = {
@@ -1109,27 +1233,6 @@ export default function PemetaanChartCard() {
 
           {/* CONTROLS */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* FILTER TAHUN */}
-            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-300 shadow-2xs hover:border-indigo-400 transition">
-              <Calendar className="w-4 h-4 text-indigo-600" />
-              <label htmlFor="filter-tahun-select" className="text-xs font-medium text-gray-500">Tahun:</label>
-              <select
-                id="filter-tahun-select"
-                aria-label="Filter Tahun Pemetaan"
-                value={selectedTahun}
-                onChange={(e) => setSelectedTahun(e.target.value)}
-                className="text-sm font-bold text-gray-800 bg-transparent border-none outline-none cursor-pointer pr-1"
-              >
-                {availableYears
-                  .filter((yr) => yr !== "2023" && Number(yr) >= 2024)
-                  .map((yr) => (
-                    <option key={yr} value={yr}>
-                      {yr}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
             {/* FILTER STATUS / TIPE */}
             <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-gray-300 shadow-2xs">
               <Filter className="w-3.5 h-3.5 text-gray-400" />
@@ -1251,49 +1354,51 @@ export default function PemetaanChartCard() {
           </div>
         </div>
 
-        {/* DETEKSI DUPE INDIKATOR BANNER (INSIDEN BAD CODE / BAD EXECUTE SQL) */}
-        {dupeIncidents.length > 0 ? (
-          <div className="mt-4 p-4 bg-amber-50/90 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 border border-amber-300 shrink-0 mt-0.5">
-                <AlertTriangle className="w-5 h-5 text-amber-700" />
-              </div>
-              <div className="space-y-0.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h4 className="text-xs font-bold text-amber-950">
-                    Terdeteksi {stats.dupeUnitsCount > 0 ? `${stats.dupeUnitsCount} Unit Mengalami Duplikasi Penugasan` : `${dupeIncidents.length} Indikator/Dokumen Duplikat`} ({totalExtraRows} baris berlebih)
-                  </h4>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-200 text-amber-800">
-                    Insiden Bad Code / SQL
-                  </span>
+        {/* DETEKSI DUPE INDIKATOR BANNER (INSIDEN BAD CODE / BAD EXECUTE SQL) - HANYA UNTUK ADMIN */}
+        {isAdmin && (
+          dupeIncidents.length > 0 ? (
+            <div className="mt-4 p-4 bg-amber-50/90 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 border border-amber-300 shrink-0 mt-0.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-700" />
                 </div>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Terdapat baris template ganda untuk tahun {selectedTahun} akibat tumpang tindih penugasan kategori broadcast vs penugasan unit langsung pada tabel MySQL.
-                </p>
+                <div className="space-y-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-xs font-bold text-amber-950">
+                      Terdeteksi {stats.dupeUnitsCount > 0 ? `${stats.dupeUnitsCount} Unit Mengalami Duplikasi Penugasan` : `${dupeIncidents.length} Indikator/Dokumen Duplikat`} ({totalExtraRows} baris berlebih)
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-200 text-amber-800">
+                      Insiden Bad Code / SQL
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Terdapat baris template ganda untuk tahun {selectedTahun} akibat tumpang tindih penugasan kategori broadcast vs penugasan unit langsung pada tabel MySQL.
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={() => setShowDupeModal(true)}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-xs shrink-0 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Database className="w-3.5 h-3.5" />
+                Inspeksi
+              </button>
             </div>
-            <button
-              onClick={() => setShowDupeModal(true)}
-              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-xs shrink-0 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Database className="w-3.5 h-3.5" />
-              Inspeksi &amp; Query Bersih
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4 px-4 py-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl flex items-center justify-between text-xs text-emerald-800">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="font-semibold">Integritas Data Master Bersih:</span>
-              <span className="text-emerald-700">Tidak ada duplikasi baris database pada template {selectedTahun}.</span>
+          ) : (
+            <div className="mt-4 px-4 py-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl flex items-center justify-between text-xs text-emerald-800">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-semibold">Integritas Data Master Bersih:</span>
+                <span className="text-emerald-700">Tidak ada duplikasi baris database pada template {selectedTahun}.</span>
+              </div>
+              <button
+                onClick={() => setShowDupeModal(true)}
+                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+              >
+                Status Audit
+              </button>
             </div>
-            <button
-              onClick={() => setShowDupeModal(true)}
-              className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
-            >
-              Status Audit
-            </button>
-          </div>
+          )
         )}
       </div>
 
@@ -1348,114 +1453,153 @@ export default function PemetaanChartCard() {
                     <th className="py-3 px-4 text-center">Tipe &amp; Jenjang</th>
                     <th className="py-3 px-4 text-center">Renstra</th>
                     <th className="py-3 px-4 text-center">Dok. Tambahan</th>
-                    <th className="py-3 px-4 text-center">Total</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-center">Aksi</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap">Total</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap min-w-[120px]">Status</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredData.map((row) => (
-                    <tr
-                      key={row.uuid || row.id}
-                      draggable="true"
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("application/json", JSON.stringify({
-                          id: row.id,
-                          uuid: row.uuid,
-                          nama: row.nama,
-                        }));
-                        e.dataTransfer.effectAllowed = "copy";
-                        setDraggedUnit(row);
-                      }}
-                      onDragEnd={() => setDraggedUnit(null)}
-                      className={`hover:bg-indigo-50/40 transition cursor-grab active:cursor-grabbing ${
-                        row.isUnmapped ? "bg-rose-50/20" : ""
-                      }`}
-                      onClick={() => setSelectedDetailUnit(row)}
-                      title="Klik untuk detail atau drag ke kotak Target 1 / Target 2 di bawah"
-                    >
-                      <td className="py-3 px-4 font-semibold text-gray-900">
-                        <div className="flex items-center gap-2">
-                          <GripVertical className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span
-                            className="w-2.5 h-2.5 rounded-full shrink-0"
-                            style={{
-                              backgroundColor: row.isUnmapped
-                                ? UNMAPPED_CONFIG.color
-                                : row.groupConfig?.color,
-                            }}
-                          ></span>
-                          <span>{row.nama}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">{row.fakultas}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="px-2 py-0.5 rounded-md bg-gray-100 font-medium text-gray-700">
-                          {row.type?.toUpperCase()} {row.jenjang ? `(${row.jenjang})` : ""}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center font-semibold text-gray-800">
-                        {row.renstraCount}
-                      </td>
-                      <td className="py-3 px-4 text-center font-semibold text-gray-800">
-                        {row.dokumenTambahanCount}
-                      </td>
-                      <td className="py-3 px-4 text-center font-bold text-gray-900">
-                        <div>{row.totalPemetaan}</div>
-                        {row.dupeIncidentCount > 0 && (
-                          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                            ⚠️ {row.dupeIncidentCount} dupe di DB
+                  {filteredData.map((row) => {
+                    const isAccessible = !accessibleUnitMatcher || accessibleUnitMatcher.checkUnit(row);
+                    const isDisabled = !isAccessible;
+
+                    return (
+                      <tr
+                        key={row.uuid || row.id}
+                        draggable={!isDisabled && isAdmin}
+                        onDragStart={
+                          !isDisabled && isAdmin
+                            ? (e) => {
+                                e.dataTransfer.setData(
+                                  "application/json",
+                                  JSON.stringify({
+                                    id: row.id,
+                                    uuid: row.uuid,
+                                    nama: row.nama,
+                                  })
+                                );
+                                e.dataTransfer.effectAllowed = "copy";
+                                setDraggedUnit(row);
+                              }
+                            : (e) => e.preventDefault()
+                        }
+                        onDragEnd={!isDisabled && isAdmin ? () => setDraggedUnit(null) : undefined}
+                        className={`transition ${
+                          isDisabled
+                            ? "opacity-35 bg-gray-50/80 cursor-not-allowed select-none"
+                            : isAdmin
+                            ? "hover:bg-indigo-50/40 cursor-grab active:cursor-grabbing"
+                            : "hover:bg-indigo-50/40 cursor-pointer"
+                        } ${row.isUnmapped && !isDisabled ? "bg-rose-50/20" : ""}`}
+                        onClick={isDisabled ? undefined : () => setSelectedDetailUnit(row)}
+                        title={
+                          isDisabled
+                            ? "Akses dinonaktifkan: Bukan unit kerja Anda"
+                            : isAdmin
+                            ? "Klik untuk detail atau drag ke kotak Target 1 / Target 2 di bawah"
+                            : "Klik untuk melihat detail pemetaan"
+                        }
+                      >
+                        <td className="py-3 px-4 font-semibold text-gray-900">
+                          <div className="flex items-center gap-2">
+                            {isAdmin && (
+                              <GripVertical className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            )}
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{
+                                backgroundColor: row.isUnmapped
+                                  ? UNMAPPED_CONFIG.color
+                                  : row.groupConfig?.color,
+                              }}
+                            ></span>
+                            <span>
+                              {formatProdiWithJenjang(
+                                row.nama,
+                                row.jenjang,
+                                row.type
+                              )}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">{row.fakultas}</td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="px-2 py-0.5 rounded-md bg-gray-100 font-medium text-gray-700">
+                            {row.type?.toUpperCase()} {row.jenjang ? `(${row.jenjang})` : ""}
                           </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {row.isUnmapped ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
-                            Belum Ada (0)
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                            Terpetakan
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDetailUnit(row);
-                            }}
-                            className="px-2 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition"
-                          >
-                            Detail
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCompareTarget1(row);
-                              scrollToCompare();
-                            }}
-                            className="px-2 py-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition cursor-pointer"
-                            title="Set Target 1 di Komparasi"
-                          >
-                            + T1
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCompareTarget2(row);
-                              scrollToCompare();
-                            }}
-                            className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition cursor-pointer"
-                            title="Set Target 2 di Komparasi"
-                          >
-                            + T2
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-3 px-4 text-center font-semibold text-gray-800">
+                          {row.renstraCount}
+                        </td>
+                        <td className="py-3 px-4 text-center font-semibold text-gray-800">
+                          {row.dokumenTambahanCount}
+                        </td>
+                        <td className="py-3 px-4 text-center font-bold text-gray-900">
+                          <div>{row.totalPemetaan}</div>
+                          {isAdmin && row.dupeIncidentCount > 0 && (
+                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                              ⚠️ {row.dupeIncidentCount} dupe di DB
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          {row.isUnmapped ? (
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-rose-100 text-rose-700 border border-rose-200 shadow-2xs">
+                              Belum Ada
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-2xs">
+                              Terpetakan
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              disabled={isDisabled}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isDisabled) setSelectedDetailUnit(row);
+                              }}
+                              className={`px-2 py-1 text-xs font-semibold rounded-lg transition ${
+                                isDisabled
+                                  ? "text-gray-400 bg-gray-100 cursor-not-allowed"
+                                  : "text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 cursor-pointer"
+                              }`}
+                            >
+                              {isDisabled ? "Terkunci" : "Detail"}
+                            </button>
+                            {!isDisabled && isAdmin && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCompareTarget1(row);
+                                    scrollToCompare();
+                                  }}
+                                  className="px-2 py-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition cursor-pointer"
+                                  title="Set Target 1 di Komparasi"
+                                >
+                                  + T1
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCompareTarget2(row);
+                                    scrollToCompare();
+                                  }}
+                                  className="px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition cursor-pointer"
+                                  title="Set Target 2 di Komparasi"
+                                >
+                                  + T2
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1486,7 +1630,7 @@ export default function PemetaanChartCard() {
                   <span className="w-3 h-3 rounded-full bg-indigo-600"></span>
                   <span>Terpetakan ({stats.mappedUnits})</span>
                 </div>
-                {stats.dupeUnitsCount > 0 && (
+                {isAdmin && stats.dupeUnitsCount > 0 && (
                   <button
                     onClick={() => setFilterType(filterType === "dupe" ? "all" : "dupe")}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition cursor-pointer ${
@@ -1544,6 +1688,23 @@ export default function PemetaanChartCard() {
                       />
                     </filter>
 
+                    {/* Shadow & Glow Khusus Unit Aktif Non-Admin (misal: BPSI) */}
+                    <filter
+                      id="active-unit-aura"
+                      x="-40%"
+                      y="-40%"
+                      width="180%"
+                      height="180%"
+                    >
+                      <feDropShadow
+                        dx="0"
+                        dy="0"
+                        stdDeviation="5"
+                        floodColor="#4F46E5"
+                        floodOpacity="0.85"
+                      />
+                    </filter>
+
                     {/* Gradient background untuk outer circle */}
                     <radialGradient
                       id="outer-circle-glow"
@@ -1586,8 +1747,10 @@ export default function PemetaanChartCard() {
                   </text>
 
                   {/* VORONOI CELLS (100% GAPLESS TESSELLATION) */}
-                  <g className="cursor-pointer">
+                  <g>
                     {voronoiCells.map((cell) => {
+                      const isAccessible = !accessibleUnitMatcher || accessibleUnitMatcher.checkUnit(cell);
+                      const isDisabled = !isAccessible;
                       const isHovered = hoveredItem?.uuid === cell.uuid;
                       const isMatchedSearch =
                         searchQuery &&
@@ -1610,45 +1773,68 @@ export default function PemetaanChartCard() {
                       return (
                         <g
                           key={cell.uuid || cell.id}
-                          draggable="true"
-                          onPointerDown={(e) => handleCellPointerDown(e, cell)}
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData(
-                              "application/json",
-                              JSON.stringify({
-                                id: cell.id,
-                                uuid: cell.uuid,
-                                nama: cell.nama,
-                              })
-                            );
-                            e.dataTransfer.effectAllowed = "copy";
-                            setDraggedUnit(cell);
-                          }}
-                          onDragEnd={() => setDraggedUnit(null)}
-                          onMouseMove={(e) => handleMouseMove(e, cell)}
-                          onMouseLeave={handleMouseLeave}
-                          onClick={() => handleCellClick(cell)}
-                          className="transition-all duration-150 cursor-grab active:cursor-grabbing"
+                          draggable={!isDisabled && isAdmin}
+                          onPointerDown={
+                            !isDisabled && isAdmin
+                              ? (e) => handleCellPointerDown(e, cell)
+                              : undefined
+                          }
+                          onDragStart={
+                            !isDisabled && isAdmin
+                              ? (e) => {
+                                  e.dataTransfer.setData(
+                                    "application/json",
+                                    JSON.stringify({
+                                      id: cell.id,
+                                      uuid: cell.uuid,
+                                      nama: cell.nama,
+                                    })
+                                  );
+                                  e.dataTransfer.effectAllowed = "copy";
+                                  setDraggedUnit(cell);
+                                }
+                              : (e) => e.preventDefault()
+                          }
+                          onDragEnd={!isDisabled && isAdmin ? () => setDraggedUnit(null) : undefined}
+                          onMouseMove={isDisabled ? undefined : (e) => handleMouseMove(e, cell)}
+                          onMouseLeave={isDisabled ? undefined : handleMouseLeave}
+                          onClick={isDisabled ? undefined : () => handleCellClick(cell)}
+                          className={
+                            isDisabled
+                              ? "cursor-not-allowed select-none transition-all duration-150"
+                              : isAdmin
+                              ? "transition-all duration-150 cursor-grab active:cursor-grabbing hover:scale-[1.01]"
+                              : "transition-all duration-150 cursor-pointer hover:scale-[1.01]"
+                          }
+                          aria-disabled={isDisabled}
                         >
                           {/* Poligon Sel - Rapat Menempel Sempurna ke Tetangga */}
                           <path
                             d={cell.pathD}
-                            fill={cell.cellColor}
+                            fill={isDisabled ? "#94A3B8" : cell.cellColor}
                             stroke={
-                              cell.dupeIncidentCount > 0
+                              isDisabled
+                                ? "#CBD5E1"
+                                : isHovered
+                                ? "#3B82F6"
+                                : isAdmin && cell.dupeIncidentCount > 0
                                 ? "#F59E0B"
                                 : "#FFFFFF"
                             }
                             strokeWidth={
-                              isHovered
+                              isDisabled
+                                ? 0.75
+                                : isHovered
                                 ? 3.8
-                                : cell.dupeIncidentCount > 0
+                                : isAdmin && cell.dupeIncidentCount > 0
                                 ? 2.5
                                 : 1.75
                             }
                             strokeLinejoin="round"
                             opacity={
-                              filterType === "dupe" && cell.dupeIncidentCount === 0
+                              isDisabled
+                                ? 0.16
+                                : isAdmin && filterType === "dupe" && cell.dupeIncidentCount === 0
                                 ? 0.15
                                 : activeGroupHighlight && !isHighlightedGroup
                                 ? 0.35
@@ -1656,7 +1842,7 @@ export default function PemetaanChartCard() {
                                 ? 0.35
                                 : isHovered
                                 ? 1.0
-                                : 0.95
+                                : 0.98
                             }
                             style={{
                               transition: "all 0.15s ease-out",
@@ -1668,6 +1854,8 @@ export default function PemetaanChartCard() {
                             <g
                               transform={`translate(${cell.centroid.x}, ${cell.centroid.y})`}
                               pointerEvents="none"
+                              opacity={isDisabled ? 0.25 : 1}
+                              className={isDisabled ? "select-none" : ""}
                             >
                               {cell.isUnmapped ? (
                                 /* UNMAPPED CELL (MERAH): HANYA NAMA + ANGKA NUMERIK 0 (MENCEGAH OVERLAY) */
@@ -1747,30 +1935,6 @@ export default function PemetaanChartCard() {
                               ) : isLarge ? (
                                 /* 1. SEL BESAR TERPETAKAN */
                                 <>
-                                  {/* Pill Jenjang / Tipe */}
-                                  {cell.jenjang && (
-                                    <>
-                                      <rect
-                                        x="-20"
-                                        y={lines.length > 1 ? "-25" : "-21"}
-                                        width="40"
-                                        height="13"
-                                        rx="6.5"
-                                        fill={cell.badgeColor}
-                                        stroke="#FFFFFF"
-                                        strokeWidth="0.8"
-                                      />
-                                      <text
-                                        x="0"
-                                        y={lines.length > 1 ? "-15" : "-11"}
-                                        textAnchor="middle"
-                                        className="text-[8px] font-black fill-white uppercase"
-                                      >
-                                        {cell.jenjang}
-                                      </text>
-                                    </>
-                                  )}
-
                                   {/* Baris 1 Nama Unit */}
                                   <text
                                     y={lines.length > 1 ? "-7" : "-2"}
@@ -1861,7 +2025,9 @@ export default function PemetaanChartCard() {
                                       textShadow: "0 1px 2px rgba(0,0,0,0.85)",
                                     }}
                                   >
-                                    {lines[0]}
+                                    {cell.type === "prodi" && cell.jenjang && !lines[0].toLowerCase().includes(cell.jenjang.toLowerCase())
+                                      ? `${lines[0]} ${cell.jenjang.toUpperCase()}`
+                                      : lines[0]}
                                   </text>
                                   <text
                                     y="9"
@@ -1908,7 +2074,11 @@ export default function PemetaanChartCard() {
                           </span>
                         </div>
                         <h4 className="text-sm font-extrabold text-white mt-0.5 leading-snug">
-                          {hoveredItem.nama}
+                          {formatProdiWithJenjang(
+                            hoveredItem.nama,
+                            hoveredItem.jenjang,
+                            hoveredItem.type
+                          )}
                         </h4>
                       </div>
                       {hoveredItem.jenjang && (
@@ -1955,7 +2125,7 @@ export default function PemetaanChartCard() {
                         </span>
                       </div>
 
-                      {hoveredItem.dupeIncidentCount > 0 && (
+                      {isAdmin && hoveredItem.dupeIncidentCount > 0 && (
                         <div className="space-y-1.5 mt-1.5 pt-1 border-t border-gray-800 pointer-events-auto">
                           <div className="flex items-center justify-between text-amber-300 font-bold text-[11px] bg-amber-950/80 px-2.5 py-1.5 rounded-xl border border-amber-500/60 shadow-sm animate-pulse">
                             <span className="flex items-center gap-1.5">
@@ -2100,21 +2270,23 @@ export default function PemetaanChartCard() {
         )}
       </div>
 
-      {/* SEKSI KOMPARASI INTERAKTIF (3 KOLOM SESUAI SKETSA GAMBAR USER) */}
-      <div className="border-t border-gray-100 bg-gray-50/30">
-        <PemetaanCompareSection
-          allUnits={processedData}
-          selectedTahun={selectedTahun}
-          target1={compareTarget1}
-          setTarget1={setCompareTarget1}
-          target2={compareTarget2}
-          setTarget2={setCompareTarget2}
-          draggedUnit={draggedUnit}
-          setDraggedUnit={setDraggedUnit}
-          isHoveringDrop1={hoveredDropSlot === 1}
-          isHoveringDrop2={hoveredDropSlot === 2}
-        />
-      </div>
+      {/* SEKSI KOMPARASI INTERAKTIF (3 KOLOM SESUAI SKETSA GAMBAR USER) - HANYA UNTUK ADMIN */}
+      {isAdmin && (
+        <div className="border-t border-gray-100 bg-gray-50/30">
+          <PemetaanCompareSection
+            allUnits={processedData}
+            selectedTahun={selectedTahun}
+            target1={compareTarget1}
+            setTarget1={setCompareTarget1}
+            target2={compareTarget2}
+            setTarget2={setCompareTarget2}
+            draggedUnit={draggedUnit}
+            setDraggedUnit={setDraggedUnit}
+            isHoveringDrop1={hoveredDropSlot === 1}
+            isHoveringDrop2={hoveredDropSlot === 2}
+          />
+        </div>
+      )}
 
       {/* DETAIL MODAL PEMETAAN */}
       <PemetaanDetailModal
@@ -2122,28 +2294,41 @@ export default function PemetaanChartCard() {
         onClose={() => setSelectedDetailUnit(null)}
         data={selectedDetailUnit}
         tahun={selectedTahun}
-        onSetTarget1={(unit) => {
-          setCompareTarget1(unit);
-          setSelectedDetailUnit(null);
-          scrollToCompare();
-        }}
-        onSetTarget2={(unit) => {
-          setCompareTarget2(unit);
-          setSelectedDetailUnit(null);
-          scrollToCompare();
-        }}
+        fakultasUnits={fakultasUnits}
+        isAdmin={isAdmin}
+        onSetTarget1={
+          isAdmin
+            ? (unit) => {
+                setCompareTarget1(unit);
+                setSelectedDetailUnit(null);
+                scrollToCompare();
+              }
+            : undefined
+        }
+        onSetTarget2={
+          isAdmin
+            ? (unit) => {
+                setCompareTarget2(unit);
+                setSelectedDetailUnit(null);
+                scrollToCompare();
+              }
+            : undefined
+        }
       />
 
-      {/* MODAL DETEKSI DUPLIKASI DATABASE (INSIDEN BAD CODE / BAD EXECUTE SQL) */}
-      <DupeIncidentModal
-        open={showDupeModal}
-        onClose={() => setShowDupeModal(false)}
-        incidents={dupeIncidents}
-        tahun={selectedTahun}
-      />
+      {/* MODAL DETEKSI DUPLIKASI DATABASE (INSIDEN BAD CODE / BAD EXECUTE SQL) - HANYA UNTUK ADMIN */}
+      {isAdmin && (
+        <DupeIncidentModal
+          open={showDupeModal}
+          onClose={() => setShowDupeModal(false)}
+          incidents={dupeIncidents}
+          tahun={selectedTahun}
+          isAdmin={isAdmin}
+        />
+      )}
 
       {/* FLOATING DRAG GHOST BADGE (MENGIKUTI POSISI KURSOR SAAT DRAG DARI CHART) */}
-      {draggedUnit && (
+      {isAdmin && draggedUnit && (
         <div
           className="fixed pointer-events-none z-50 transform -translate-x-1/2 -translate-y-1/2"
           style={{
@@ -2177,7 +2362,7 @@ export default function PemetaanChartCard() {
       )}
 
       {/* DOCK QUICK DROP TARGET MELAYANG DI BAWAH (MEMUDAHKAN DRAG TANPA PERLU SCROLL JAUH) */}
-      {draggedUnit && (
+      {isAdmin && draggedUnit && (
         <div className="fixed bottom-6 inset-x-0 mx-auto max-w-xl z-50 pointer-events-auto flex items-center justify-center gap-4 px-4 py-3 bg-gray-950/90 backdrop-blur-lg rounded-3xl shadow-2xl border border-gray-700/80 animate-in slide-in-from-bottom-6 duration-200">
           {/* SLOT 1 */}
           <div

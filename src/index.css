@@ -85,36 +85,28 @@
   }
 
    /* Scrollbar horizontal merah dan tersembunyi default */
+  /* Scrollbar horizontal modern dan terlihat */
   .scroll-custom {
     scrollbar-width: thin; /* Firefox */
-    scrollbar-color: #1a2f48 transparent; /* Firefox */
+    scrollbar-color: #cbd5e1 #f1f5f9; /* Firefox */
   }
 
   /* Chrome, Edge, Safari */
   .scroll-custom::-webkit-scrollbar {
-    height: 8px; /* tinggi scroll horizontal */
-    background: transparent; /* hide default track */
+    height: 7px; /* tinggi scroll horizontal */
+    width: 7px;
+    background: #f1f5f9; /* background track */
   }
 
   .scroll-custom::-webkit-scrollbar-thumb {
-    background-color: #1a2f48; /* warna thumb */
-    border-radius: 4px;
-    transition: opacity 0.3s;
-    opacity: 0; /* hide default */
+    background-color: #cbd5e1; /* warna thumb */
+    border-radius: 9999px;
+    transition: background-color 0.2s;
   }
 
   .scroll-custom:hover::-webkit-scrollbar-thumb,
   .scroll-custom:active::-webkit-scrollbar-thumb {
-    opacity: 1; /* muncul saat hover / scroll */
-  }
-
-  /* IE & Edge Legacy */
-  .scroll-custom {
-    -ms-overflow-style: none; /* hide scrollbar */
-  }
-
-  .scroll-custom::-ms-scrollbar {
-    display: none; /* hide scrollbar IE/Edge */
+    background-color: #94a3b8;
   }
 }
 

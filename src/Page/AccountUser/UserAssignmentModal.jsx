@@ -6,7 +6,12 @@ import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { apiClient } from "@/Common/api";
-import { isEmpty } from "@/Common/Utils";
+import {
+  isEmpty,
+  cleanDuplicateJenjang,
+  formatProdiWithJenjang,
+  fetchFakultasUnits,
+} from "@/Common/Utils";
 import {
   UserCheck,
   Shield,
@@ -132,32 +137,11 @@ export default function UserAssignmentModal({
     }
   };
 
-  // Fetch Fakultas / Units
-  const fetchFakultasUnits = async () => {
+  // Fetch Fakultas / Units menggunakan fungsi tunggal terpadu
+  const loadFakultasUnits = async () => {
     setLoadingFakultas(true);
     try {
-      const res = await apiClient.get("/fakultasunits?mode=all");
-      const list = res?.data ?? res ?? [];
-      const safe = Array.isArray(list) ? list : (list.data || []);
-      const opts = safe.map((f) => {
-        const type = (f.type || f.Type || "").toLowerCase();
-        let label = f.Nama || f.nama_fak_prod_unit || f.nama || "";
-        if (type === "prodi") {
-          label = `${label} (Prodi ${f.Jenjang || f.jenjang || ""})`;
-        } else if (type === "fakultas") {
-          label = `${label} (Fakultas)`;
-        } else {
-          label = `${label} (Unit / Lembaga)`;
-        }
-        return {
-          id: f.UUID || f.uuid || f.ID || f.id,
-          uuid: f.UUID || f.uuid,
-          id_numeric: f.ID || f.id,
-          nama: label,
-          pureName: f.Nama || f.nama_fak_prod_unit || f.nama,
-          type: type,
-        };
-      });
+      const opts = await fetchFakultasUnits();
       setFakultasOptions(opts);
     } catch (err) {
       console.error("Fetch fakultas units error:", err);
@@ -192,7 +176,7 @@ export default function UserAssignmentModal({
   useEffect(() => {
     if (open) {
       fetchUsers();
-      fetchFakultasUnits();
+      loadFakultasUnits();
       fetchYears();
     }
   }, [open]);
@@ -299,25 +283,28 @@ export default function UserAssignmentModal({
     }
   }, [selectedFakultasUnit, watchRole]);
 
-  const getEffectiveRole = () => {
+  const effectiveRole = useMemo(() => {
     if (watchRole && watchRole !== "auto") {
-      if (isFakultas && watchRole === "upms") {
-        return "upmf";
-      }
-      if (!isFakultas && selectedFakultasUnit && watchRole === "upmf") {
-        return detectedRole === "upms" ? "upms" : "upml";
+      if (watchRole === "upms") {
+        return "upms";
       }
       return watchRole;
     }
     return detectedRole;
-  };
+  }, [watchRole, detectedRole]);
 
   const onSubmit = async (formValues) => {
     if (!selectedUser) {
       addToast("error", "Pilih pengguna yang akan ditugaskan");
       return;
     }
-    if (!selectedFakultasUnit) {
+
+    const effRole = effectiveRole;
+    if (effRole === "upmf" && !selectedFakultasUnit) {
+      addToast("error", "Target Fakultas wajib dipilih untuk role UPMF");
+      return;
+    }
+    if (effRole !== "upms" && !selectedFakultasUnit) {
       addToast("error", "Pilih fakultas / unit / target penugasan");
       return;
     }
@@ -331,10 +318,10 @@ export default function UserAssignmentModal({
       const fd = new FormData();
       if (selectedUser.id_numeric) fd.append("id_user", String(selectedUser.id_numeric));
       if (selectedUser.uuid) fd.append("user_uuid", selectedUser.uuid);
-      if (selectedFakultasUnit.id_numeric) fd.append("id_fakultas_unit", String(selectedFakultasUnit.id_numeric));
-      if (selectedFakultasUnit.uuid) fd.append("uuid_fakultas_unit", selectedFakultasUnit.uuid);
+      if (selectedFakultasUnit?.id_numeric) fd.append("id_fakultas_unit", String(selectedFakultasUnit.id_numeric));
+      if (selectedFakultasUnit?.uuid) fd.append("uuid_fakultas_unit", selectedFakultasUnit.uuid);
       fd.append("tahun", String(formValues.tahun).trim());
-      fd.append("role", getEffectiveRole());
+      fd.append("role", effRole);
       fd.append("status", formValues.status || "active");
 
       if (mode === "edit" && (data?.UUID || data?.uuid)) {
@@ -359,8 +346,6 @@ export default function UserAssignmentModal({
       setIsSubmitting(false);
     }
   };
-
-  const effectiveRole = getEffectiveRole();
 
   return (
     <Transition appear show={open} as={Fragment}>
@@ -474,16 +459,26 @@ export default function UserAssignmentModal({
                 {/* TARGET FAKULTAS / UNIT */}
                 <div>
                   <SearchSelect
-                    label="Target Fakultas / Unit / Lembaga"
-                    placeholder="Pilih unit kerja atau fakultas sasaran..."
+                    label={
+                      effectiveRole === "upms"
+                        ? "Target Fakultas / Unit / Lembaga (Opsional untuk UPMS)"
+                        : "Target Fakultas / Unit / Lembaga"
+                    }
+                    placeholder={
+                      effectiveRole === "upms"
+                        ? "Opsional (kosongkan untuk tingkat Universitas / Sekolah)..."
+                        : "Pilih unit kerja atau fakultas sasaran..."
+                    }
                     options={fakultasOptions}
                     value={selectedFakultasUnit}
                     onChange={handleSelectUnit}
                     loading={loadingFakultas}
-                    required
+                    required={effectiveRole !== "upms"}
                   />
                   <span className="text-[11px] text-gray-500 mt-0.5 block">
-                    Role akan disesuaikan secara otomatis berdasarkan tipe target yang dipilih.
+                    {effectiveRole === "upms"
+                      ? "Role UPMS bersifat menyeluruh (tidak wajib target unit, berlaku tingkat universitas / sekolah)."
+                      : "Role akan disesuaikan secara otomatis berdasarkan tipe target yang dipilih."}
                   </span>
                 </div>
 
@@ -547,13 +542,12 @@ export default function UserAssignmentModal({
                       <option value="auto">
                         Otomatis (Berdasarkan Unit: {detectedRole.toUpperCase()})
                       </option>
+                      <option value="user">User (Pengguna / Pengelola Unit)</option>
                       <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
                       {(!selectedFakultasUnit || isFakultas) && (
                         <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
                       )}
-                      {(!selectedFakultasUnit || !isFakultas) && (
-                        <option value="upms">UPMS (Unit Penjaminan Mutu Sekolah)</option>
-                      )}
+                      <option value="upms">UPMS (Unit Penjaminan Mutu Sekolah)</option>
                     </select>
 
                     <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">

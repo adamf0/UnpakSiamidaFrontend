@@ -150,9 +150,13 @@ const RemoteTable = forwardRef(function RemoteTable(
     }
 
     try {
+      const activeLevel = localStorage.getItem("activeLevel");
+      const posYear = localStorage.getItem("positionYear");
       const headers = {
         ...(mode === "sse" ? { Accept: "text/event-stream" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(activeLevel ? { "X-Active-Role": activeLevel, "X-Level": activeLevel } : {}),
+        ...(posYear ? { "X-Position-Year": posYear, "X-Tahun": posYear } : {}),
       };
 
       const res = await fetch(url, {
@@ -369,8 +373,8 @@ const RemoteTable = forwardRef(function RemoteTable(
 
       {/* TABLE */}
       {/*table-fixed*/}
-      <div className="overflow-x-auto w-full max-w-full">
-        <table className="w-full min-w-max">
+      <div className="overflow-x-auto w-full max-w-full scroll-custom">
+        <table className="w-full">
           <colgroup>
             {listcolumns.map((c, i) => (
               <col
@@ -396,10 +400,16 @@ const RemoteTable = forwardRef(function RemoteTable(
                     ? "175px"
                     : c.width);
 
+                const isStickyRight = c.isStickyRight || c.sticky === "right";
+
                 return (
                   <th
                     key={c.key ? `${c.key}-${c.label || i}` : (c.label || i)}
-                    className={`px-4 py-2.5 text-sm text-left ${c.className || ""}`}
+                    className={`px-4 py-2.5 text-sm text-left ${c.className || ""} ${
+                      isStickyRight
+                        ? "sticky right-0 z-20 bg-gray-100 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]"
+                        : ""
+                    }`}
                     style={{
                       ...(c.width ? { width: c.width } : {}),
                       ...(effectiveMinWidth ? { minWidth: effectiveMinWidth } : {}),
@@ -470,20 +480,27 @@ const RemoteTable = forwardRef(function RemoteTable(
 
             {!loading &&
               rows.map((r, idx) => (
-                <tr key={r.id || r.UUID || r.uuid || idx} className="border-t">
-                  {listcolumns.map((c, i) => (
-                    <td
-                      key={c.key ? `${c.key}-${i}` : i}
-                      className={`px-4 py-3 text-sm ${c.className || ""}`}
-                      style={{
-                        ...(c.width ? { width: c.width } : {}),
-                        ...(c.minWidth ? { minWidth: c.minWidth } : {}),
-                        ...(c.maxWidth ? { maxWidth: c.maxWidth } : {}),
-                      }}
-                    >
-                      {c.renderKey ? c.renderKey(r) : r[c.key]}
-                    </td>
-                  ))}
+                <tr key={r.id || r.UUID || r.uuid || idx} className="border-t group hover:bg-gray-50/70 transition-colors">
+                  {listcolumns.map((c, i) => {
+                    const isStickyRight = c.isStickyRight || c.sticky === "right";
+                    return (
+                      <td
+                        key={c.key ? `${c.key}-${i}` : i}
+                        className={`px-4 py-3 text-sm ${c.className || ""} ${
+                          isStickyRight
+                            ? "sticky right-0 z-10 bg-white group-hover:bg-gray-50/90 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]"
+                            : ""
+                        }`}
+                        style={{
+                          ...(c.width ? { width: c.width } : {}),
+                          ...(c.minWidth ? { minWidth: c.minWidth } : {}),
+                          ...(c.maxWidth ? { maxWidth: c.maxWidth } : {}),
+                        }}
+                      >
+                        {c.renderKey ? c.renderKey(r) : (typeof c.render === "function" ? c.render(r) : r[c.key])}
+                      </td>
+                    );
+                  })}
                   {typeof renderAction === "function" && (
                     <td className="px-4 py-3 text-right relative">
                       <button

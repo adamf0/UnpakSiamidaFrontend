@@ -20,6 +20,7 @@ import {
   formatRupiah,
   hasRealisasiAnggaran,
   getRealisasiAnggaran,
+  isAnggaranRevised,
 } from "./prokerConstants";
 import {
   ArrowLeft,
@@ -973,7 +974,7 @@ export default function ProkerV3TimelinePage() {
               </span>
               <span className="text-xs px-2.5 py-1 rounded-full font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                 Anggaran:{" "}
-                {hasRealisasiAnggaran(aktivitas) ? (
+                {isAnggaranRevised(aktivitas) ? (
                   <>
                     <span
                       className="line-through text-emerald-800/60 font-normal mr-1.5 decoration-rose-500 decoration-1"
@@ -989,7 +990,7 @@ export default function ProkerV3TimelinePage() {
                     </span>
                   </>
                 ) : (
-                  formatRupiah(aktivitas?.Anggaran)
+                  formatRupiah(hasRealisasiAnggaran(aktivitas) ? getRealisasiAnggaran(aktivitas) : aktivitas?.Anggaran)
                 )}
               </span>
             </div>

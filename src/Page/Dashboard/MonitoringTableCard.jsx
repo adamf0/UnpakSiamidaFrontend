@@ -393,64 +393,17 @@ export default function MonitoringTableCard() {
           )}
         </div>
 
-        {/* FILTER BADGES & DROPDOWN TAHUN */}
-        {(unlockedUnit || tahun) && (
+        {/* FILTER BADGES */}
+        {unlockedUnit && (
           <div className="px-6 py-2.5 flex flex-wrap items-center gap-2.5 border-b bg-gray-50/40">
             <span className="text-xs text-gray-500 font-medium">
               Filter Aktif:
             </span>
 
-            {/* DROPDOWN TAHUN */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-900 border border-blue-200 shadow-2xs hover:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-500 transition text-xs font-bold">
-              <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <label htmlFor="filter-tahun-monitoring" className="text-blue-800 font-bold">
-                Tahun:
-              </label>
-              <div className="relative inline-flex items-center">
-                <select
-                  id="filter-tahun-monitoring"
-                  aria-label="Filter Tahun Monitoring Program Kerja"
-                  value={tahun?.UUID || tahun?.id || tahun?.Tahun || ""}
-                  onChange={(e) => {
-                    const selectedVal = e.target.value;
-                    const selected = dataTahun.find(
-                      (t) =>
-                        String(t.UUID) === selectedVal ||
-                        String(t.id) === selectedVal ||
-                        String(t.Tahun) === selectedVal,
-                    );
-                    if (selected) {
-                      handleTahunChange(selected);
-                    }
-                  }}
-                  disabled={loading || loadingTahun}
-                  className="bg-transparent text-blue-950 font-black focus:outline-none cursor-pointer pr-4 appearance-none py-0 text-xs disabled:opacity-50"
-                  title="Pilih Tahun Program Kerja"
-                >
-                  {dataTahun.length === 0 ? (
-                    <option value="">{tahun?.Tahun || tahun?.nama || "Pilih Tahun"}</option>
-                  ) : (
-                    dataTahun.map((t) => (
-                      <option
-                        key={t.UUID || t.id || t.Tahun}
-                        value={t.UUID || t.id || t.Tahun}
-                        className="text-gray-900 font-semibold bg-white"
-                      >
-                        {t.Tahun || t.nama}
-                      </option>
-                    ))
-                  )}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-blue-600 pointer-events-none absolute right-0" />
-              </div>
-            </div>
-
             {/* BADGE UNIT (JIKA UNIT TELAH DIBUKA / DIPILIH) */}
-            {unlockedUnit && (
-              <span className="bg-blue-50 text-blue-800 border border-blue-200 text-xs px-2.5 py-1 rounded-full font-bold">
-                Unit: {unlockedUnit.Nama || unlockedUnit.nama}
-              </span>
-            )}
+            <span className="bg-blue-50 text-blue-800 border border-blue-200 text-xs px-2.5 py-1 rounded-full font-bold">
+              Unit: {unlockedUnit.Nama || unlockedUnit.nama}
+            </span>
           </div>
         )}
 

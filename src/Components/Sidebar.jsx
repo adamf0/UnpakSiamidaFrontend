@@ -26,12 +26,25 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const { level, appVersion } = useContent();
+  const { level, appVersion, positionYear, activeYear } = useContent();
   const { user } = useAuth();
   const currentLevel = String(level || "").toLowerCase().trim();
   const isAdmin = currentLevel === "admin" || String(user?.level || "").toLowerCase().trim() === "admin";
-  const currentVerConfig = getVersionConfig(appVersion || "v2");
-  const hasFakultasUnit = !isEmpty(String(user?.fakultas_unit ?? ""));
+  const selectedYear = parseInt(positionYear || activeYear || "2026", 10);
+  const effectiveVersion = isAdmin
+    ? (appVersion || "v2")
+    : selectedYear >= 2027
+    ? "v3"
+    : selectedYear <= 2023
+    ? "v1"
+    : "v2";
+  const currentVerConfig = getVersionConfig(effectiveVersion);
+  const fuVal = String(user?.fakultas_unit ?? "").trim();
+  const hasExtraRoleUnit = Array.isArray(user?.extra_role) && user.extra_role.some((r) => {
+    const id = String(r.id_fakultas_unit ?? r.IdFakultasUnit ?? "").trim();
+    return id !== "" && id !== "0" && id !== "null" && id !== "undefined";
+  });
+  const hasFakultasUnit = (fuVal !== "" && fuVal !== "0" && fuVal !== "null" && fuVal !== "undefined") || hasExtraRoleUnit;
   const [closedGroups, setClosedGroups] = useState({});
 
   const toggleGroup = (groupName) => {
@@ -196,6 +209,11 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
               icon: <IoWarningOutline size={19} />,
             },
             {
+              name: "Mata Program",
+              path: "/mata_program",
+              icon: <IoFileTrayStacked size={19} />,
+            },
+            {
               name: "Aktivitas",
               path: "/aktivitas",
               icon: <HiOutlineDocumentText size={20} />,
@@ -300,6 +318,11 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                     icon: <IoWarningOutline size={19} />,
                   },
                   {
+                    name: "Mata Program",
+                    path: "/mata_program",
+                    icon: <IoFileTrayStacked size={19} />,
+                  },
+                  {
                     name: "Aktivitas",
                     path: "/aktivitas",
                     icon: <HiOutlineDocumentText size={20} />,
@@ -367,6 +390,11 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                     icon: <IoWarningOutline size={19} />,
                   },
                   {
+                    name: "Mata Program",
+                    path: "/mata_program",
+                    icon: <IoFileTrayStacked size={19} />,
+                  },
+                  {
                     name: "Aktivitas",
                     path: "/aktivitas",
                     icon: <HiOutlineDocumentText size={20} />,
@@ -388,12 +416,27 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
       ];
     }
 
+    const isVerifierRole = [
+      "upml",
+      "upmf",
+      "upms",
+      "anggaran",
+      "keuangan",
+      "evaluator",
+    ].includes(currentLevel);
+
     return groups
       .map((section) => ({
         ...section,
-        items: section.items.filter((item) =>
-          isMenuVisibleForVersion(item.path, appVersion)
-        ),
+        items: section.items.filter((item) => {
+          if (
+            isVerifierRole &&
+            (item.path === "/proker_v3" || item.path.startsWith("/proker_v3/"))
+          ) {
+            return true;
+          }
+          return isMenuVisibleForVersion(item.path, effectiveVersion);
+        }),
       }))
       .filter((section) => section.items && section.items.length > 0);
   }
@@ -502,7 +545,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                                 </span>
                               </div>
 
-                              {isAdmin && isV2 && !isCollapsed && (
+                              {isV2 && !isCollapsed && (
                                 <span
                                   className={`
                                     text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 transition-colors

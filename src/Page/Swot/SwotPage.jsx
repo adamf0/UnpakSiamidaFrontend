@@ -10,7 +10,7 @@ import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
 import Tooltip from "@/Components/Tooltip";
-import { isEmpty, throwIfResponseNotOk } from "@/Common/Utils";
+import { isEmpty, throwIfResponseNotOk, renderLabelFakultasUnit } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import {
   Plus,
@@ -74,9 +74,14 @@ const SwotPage = () => {
     setLevel,
     openChangeLevel,
     setOpenChangeLevel,
+    positionYear,
   } = useContent();
 
-  const isAdmin = level === "admin" || user?.level === "admin";
+  const curRole = String(
+    localStorage.getItem("activeLevel") || level || user?.level || ""
+  ).toLowerCase().trim();
+  const isLevelUser = curRole === "user";
+  const isAdmin = curRole === "admin";
 
   // Filter States
   const [selectedTahun, setSelectedTahun] = useState("");
@@ -89,6 +94,42 @@ const SwotPage = () => {
   const [tahunList, setTahunList] = useState([]);
   const [fakultasList, setFakultasList] = useState([]);
   const [userUnitData, setUserUnitData] = useState(null);
+
+  // Loading & Counts for SWOT Cards
+  const [loadingCards, setLoadingCards] = useState(true);
+  const [swotCounts, setSwotCounts] = useState({
+    Kekuatan: null,
+    Kelemahan: null,
+    Peluang: null,
+    Ancaman: null,
+  });
+
+  // Cek apakah user memiliki fakultas_unit yang ditugaskan
+  const hasFakultasUnit = useMemo(() => {
+    if (userUnitData?.id || userUnitData?.UUID) return true;
+    if (
+      user?.fakultas_unit ||
+      user?.id_fakultas_unit ||
+      user?.FakultasUnit ||
+      user?.uuid_fakultas_unit
+    ) {
+      return true;
+    }
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      const posYear = localStorage.getItem("positionYear") || positionYear;
+      return user.extra_role.some((r) => {
+        const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
+        const yearOk = !posYear || !rYear || rYear === String(posYear);
+        return yearOk && (rRole === "user" || !rRole) && Boolean(uId);
+      });
+    }
+    return false;
+  }, [user, userUnitData, positionYear]);
+
+  // Tombol tambah, edit, hapus hanya muncul jika level user yang memiliki fakultas_unit
+  const canManage = isLevelUser && hasFakultasUnit;
 
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
@@ -114,31 +155,110 @@ const SwotPage = () => {
         const list = Array.isArray(jsonFu) ? jsonFu : [];
         setFakultasList(list);
 
-          // Cari unit milik user auditee
-          if (user?.fakultas_unit) {
-            const myUnit = list.find(
-              (u) =>
-                u.UUID === user.fakultas_unit ||
-                String(u.ID) === String(user.fakultas_unit)
-            );
-            if (myUnit) {
-              setUserUnitData({
-                id: myUnit.UUID,
-                UUID: myUnit.UUID,
-                rawId: myUnit.ID,
-                nama: `${myUnit.Nama || ""}${
-                  myUnit.Jenjang ? ` (${myUnit.Jenjang})` : ""
-                }`.trim(),
-              });
+        // Cari unit milik user
+        let myFuId =
+          user?.fakultas_unit ||
+          user?.id_fakultas_unit ||
+          user?.FakultasUnit ||
+          user?.uuid_fakultas_unit;
+
+        if (!myFuId && Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+          const posYear = localStorage.getItem("positionYear") || positionYear;
+          const matchYear = user.extra_role.find((r) => {
+            const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+            const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+            const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
+            return (!posYear || rYear === String(posYear)) && (rRole === "user" || !rRole) && Boolean(uId);
+          });
+          if (matchYear) {
+            myFuId = matchYear.id_fakultas_unit ?? matchYear.IdFakultasUnit ?? matchYear.uuid_fakultas_unit;
+          } else {
+            const anyMatch = user.extra_role.find((r) => {
+              const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+              const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
+              return (rRole === "user" || !rRole) && Boolean(uId);
+            });
+            if (anyMatch) {
+              myFuId = anyMatch.id_fakultas_unit ?? anyMatch.IdFakultasUnit ?? anyMatch.uuid_fakultas_unit;
             }
           }
+        }
+
+        if (myFuId) {
+          const myUnit = list.find(
+            (u) =>
+              u.UUID === myFuId ||
+              String(u.ID) === String(myFuId)
+          );
+          if (myUnit) {
+            setUserUnitData({
+              id: myUnit.UUID,
+              UUID: myUnit.UUID,
+              rawId: myUnit.ID,
+              nama: `${myUnit.Nama || ""}${
+                myUnit.Jenjang ? ` (${myUnit.Jenjang})` : ""
+              }`.trim(),
+            });
+          } else {
+            setUserUnitData({
+              id: myFuId,
+              UUID: myFuId,
+              nama: user?.nama_fakultas_unit || user?.NamaFakultasUnit || `Unit #${myFuId}`,
+            });
+          }
+        }
       } catch (err) {
         console.error("Gagal mengambil master data filter:", err);
       }
     };
 
     fetchMetadata();
-  }, [getValidToken, user?.fakultas_unit]);
+  }, [getValidToken, user?.fakultas_unit, user?.extra_role, positionYear]);
+
+  // Fetch SWOT Counts for Filter Cards
+  const fetchSwotCounts = async () => {
+    const token = getValidToken();
+    if (isEmpty(token)) return;
+
+    setLoadingCards(true);
+    try {
+      const params = new URLSearchParams({ mode: "all" });
+      if (selectedTahun && selectedTahun !== "all") {
+        params.append("filter_tahun", selectedTahun);
+      }
+      if (isAdmin) {
+        if (selectedFakultas && selectedFakultas !== "all") {
+          params.append("filter_fakultas_unit", selectedFakultas);
+        }
+      } else {
+        const fu = userUnitData?.UUID || userUnitData?.id || user?.fakultas_unit;
+        if (fu) {
+          params.append("filter_fakultas_unit", String(fu));
+        }
+      }
+      const res = await apiClient.get(`/swots?${params.toString()}`);
+      const raw = res?.data;
+      const list = Array.isArray(raw) ? raw : raw?.data || [];
+      const counts = { Kekuatan: 0, Kelemahan: 0, Peluang: 0, Ancaman: 0 };
+      if (Array.isArray(list)) {
+        list.forEach((item) => {
+          const kat = item.Kategori || item.kategori;
+          if (counts[kat] !== undefined) {
+            counts[kat] += 1;
+          }
+        });
+      }
+      setSwotCounts(counts);
+    } catch (err) {
+      console.error("Gagal mengambil ringkasan SWOT:", err);
+    } finally {
+      setLoadingCards(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSwotCounts();
+  }, [getValidToken, selectedTahun, selectedFakultas, isAdmin, user?.fakultas_unit, userUnitData]);
 
   // Mapped Options for SearchSelect Filters
   const tahunOptions = useMemo(() => {
@@ -175,34 +295,57 @@ const SwotPage = () => {
         params.append("filter_fakultas_unit", selectedFakultas);
       }
     } else {
-      // Non-admin (auditee): lock to own unit
-      if (user?.fakultas_unit) {
-        params.append("filter_fakultas_unit", String(user.fakultas_unit));
+      // Non-admin: kunci ke unit kerja sendiri
+      const fu = userUnitData?.UUID || userUnitData?.id || user?.fakultas_unit;
+      if (fu) {
+        params.append("filter_fakultas_unit", String(fu));
       }
     }
 
     const qs = params.toString();
     return `/swots${qs ? `?${qs}` : ""}`;
-  }, [selectedTahun, selectedKategori, selectedFakultas, isAdmin, user?.fakultas_unit]);
+  }, [selectedTahun, selectedKategori, selectedFakultas, isAdmin, user?.fakultas_unit, userUnitData]);
 
   const openNew = () => {
+    if (!canManage) {
+      addToast(
+        "warning",
+        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat menambah data"
+      );
+      return;
+    }
     setModalMode("new");
     setSelectedRow(null);
     setModalOpen(true);
   };
 
   const openEdit = (row) => {
+    if (!canManage) {
+      addToast(
+        "warning",
+        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat mengedit data"
+      );
+      return;
+    }
     setModalMode("edit");
     setSelectedRow(row);
     setModalOpen(true);
   };
 
   const handleDelete = async () => {
+    if (!canManage) {
+      addToast(
+        "warning",
+        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat menghapus data"
+      );
+      return;
+    }
     if (!selectedRow?.UUID) return;
 
     try {
       await apiClient.delete(`/swot/${selectedRow.UUID}`);
       addToast("success", "Berhasil menghapus analisis SWOT");
+      fetchSwotCounts();
     } catch (err) {
       addToast(
         "error",
@@ -233,7 +376,9 @@ const SwotPage = () => {
       renderKey: (r) => (
         <div className="flex items-center gap-1.5 text-xs font-medium text-gray-900">
           <Building2 className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-          <span className="line-clamp-2">{r.NamaFakultasUnit || "Unit Terdaftar"}</span>
+          <span className="line-clamp-2">
+            {renderLabelFakultasUnit(r) || r.NamaFakultasUnit || "Unit Terdaftar"}
+          </span>
         </div>
       ),
     },
@@ -358,18 +503,26 @@ const SwotPage = () => {
                   className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
                     isAdmin
                       ? "bg-indigo-100 text-indigo-800"
-                      : "bg-emerald-100 text-emerald-800"
+                      : canManage
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-gray-100 text-gray-700"
                   }`}
                 >
-                  {isAdmin ? "Admin (Semua Unit)" : "Auditee Unit Terbatas"}
+                  {isAdmin
+                    ? "Admin (Semua Unit)"
+                    : canManage
+                    ? "Pengelola Unit"
+                    : "Pratinjau (Lihat Saja)"}
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-gray-700 font-medium mt-0.5">
                 {isAdmin
                   ? "Menampilkan seluruh data analisis SWOT universitas. Anda dapat memfilter per fakultas/unit."
-                  : `Tabel secara otomatis menampilkan data khusus unit Anda (${
-                      userUnitData?.nama || user?.fakultas_unit || "Unit Terdaftar"
-                    }).`}
+                  : canManage
+                  ? `Tabel secara otomatis menampilkan data khusus unit Anda (${
+                      userUnitData?.nama || user?.nama_fakultas_unit || user?.fakultas_unit || "Unit Terdaftar"
+                    }).`
+                  : "Anda dalam mode lihat saja (hanya level user yang memiliki fakultas/unit yang dapat menambah, mengubah, atau menghapus data)."}
               </p>
             </div>
           </div>
@@ -431,43 +584,79 @@ const SwotPage = () => {
 
         {/* 4 Kuadran Matrix Quick Filter Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {Object.entries(KATEGORI_CONFIG).map(([key, config]) => {
-            const Icon = config.icon;
-            const isSelected = selectedKategori === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() =>
-                  setSelectedKategori((prev) => (prev === key ? "" : key))
-                }
-                className={`p-4 rounded-xl border text-left transition relative cursor-pointer ${
-                  isSelected
-                    ? `${config.cardBg} ring-2 ring-purple-600 shadow-md`
-                    : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-xs"
-                }`}
+          {loadingCards ? (
+            // Skeleton Loading 4 Kartu Kuadran SWOT
+            Array.from({ length: 4 }).map((_, idx) => (
+              <div
+                key={`swot-skeleton-${idx}`}
+                className="p-4 rounded-xl border border-gray-200 bg-white shadow-2xs animate-pulse relative overflow-hidden"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                      isSelected ? "bg-white/80 shadow-xs" : "bg-gray-100"
-                    }`}
-                  >
-                    <Icon className={`w-5 h-5 ${config.iconColor}`} />
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-9 h-9 rounded-lg bg-gray-200" />
+                  <div className="w-6 h-6 rounded bg-gray-100" />
+                </div>
+                <div className="h-4 bg-gray-200 rounded w-4/5 mb-2" />
+                <div className="flex items-center justify-between mt-2">
+                  <div className="h-3 bg-gray-200 rounded w-2/5" />
+                  <div className="h-4 w-12 bg-gray-100 rounded-full" />
+                </div>
+              </div>
+            ))
+          ) : (
+            Object.entries(KATEGORI_CONFIG).map(([key, config]) => {
+              const Icon = config.icon;
+              const isSelected = selectedKategori === key;
+              const count = swotCounts[key];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() =>
+                    setSelectedKategori((prev) => (prev === key ? "" : key))
+                  }
+                  className={`p-4 rounded-xl border text-left transition relative cursor-pointer ${
+                    isSelected
+                      ? `${config.cardBg} ring-2 ring-purple-600 shadow-md`
+                      : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-xs"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                        isSelected ? "bg-white/80 shadow-xs" : "bg-gray-100"
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 ${config.iconColor}`} />
+                    </div>
+                    <span className="text-xl font-extrabold text-gray-300">
+                      {config.short}
+                    </span>
                   </div>
-                  <span className="text-xl font-extrabold text-gray-300">
-                    {config.short}
-                  </span>
-                </div>
-                <div className="text-sm font-bold text-gray-900 leading-tight">
-                  {config.label}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {isSelected ? "Filter aktif (klik untuk lepas)" : "Klik untuk filter"}
-                </div>
-              </button>
-            );
-          })}
+                  <div className="text-sm font-bold text-gray-900 leading-tight">
+                    {config.label}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+                    <span>
+                      {isSelected
+                        ? "Filter aktif (klik untuk lepas)"
+                        : "Klik untuk filter"}
+                    </span>
+                    {count !== null && count !== undefined && (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          isSelected
+                            ? "bg-white/90 text-purple-800 border-purple-200"
+                            : "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}
+                      >
+                        {count} data
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
 
         {/* Remote Table Section */}
@@ -481,48 +670,54 @@ const SwotPage = () => {
               console.error("TABLE ERROR SWOT:", err);
             }}
             renderAddAction={
-              <Tooltip content="Tambah Analisis SWOT">
-                <button
-                  type="button"
-                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
-                  onClick={openNew}
-                  aria-label="Tambah Analisis SWOT"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </Tooltip>
+              canManage ? (
+                <Tooltip content="Tambah Analisis SWOT">
+                  <button
+                    type="button"
+                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
+                    onClick={openNew}
+                    aria-label="Tambah Analisis SWOT"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </Tooltip>
+              ) : null
             }
             listcolumns={listColumns}
-            renderAction={({ row, close }) => (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition cursor-pointer text-left group"
-                  onClick={() => {
-                    openEdit(row);
-                    close();
-                  }}
-                >
-                  <Pencil className="w-4 h-4 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
-                  <span>Edit SWOT</span>
-                </button>
+            renderAction={
+              canManage
+                ? ({ row, close }) => (
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition cursor-pointer text-left group"
+                        onClick={() => {
+                          openEdit(row);
+                          close();
+                        }}
+                      >
+                        <Pencil className="w-4 h-4 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span>Edit SWOT</span>
+                      </button>
 
-                <div className="my-1 border-t border-gray-150" />
+                      <div className="my-1 border-t border-gray-150" />
 
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition cursor-pointer text-left group"
-                  onClick={() => {
-                    setSelectedRow(row);
-                    setConfirmDelete(true);
-                    close();
-                  }}
-                >
-                  <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
-                  <span>Hapus</span>
-                </button>
-              </div>
-            )}
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition cursor-pointer text-left group"
+                        onClick={() => {
+                          setSelectedRow(row);
+                          setConfirmDelete(true);
+                          close();
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span>Hapus</span>
+                      </button>
+                    </div>
+                  )
+                : null
+            }
           />
         </div>
 
@@ -534,7 +729,10 @@ const SwotPage = () => {
           isAdmin={isAdmin}
           userUnit={userUnitData}
           onClose={() => setModalOpen(false)}
-          onSuccess={() => tableRef.current?.reload?.({ resetPage: true })}
+          onSuccess={() => {
+            fetchSwotCounts();
+            tableRef.current?.reload?.({ resetPage: true });
+          }}
         />
 
         <ConfirmDeleteDialog

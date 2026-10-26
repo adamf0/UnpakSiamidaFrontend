@@ -304,18 +304,18 @@ const SearchSelect = ({
                         {item.tahun}
                       </span>
                     ) : null}
-                    {item.badge ? (
+                    {(item.badge || item.Type || item.type) ? (
                       <span
-                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider shrink-0 ${
+                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md uppercase tracking-wider shrink-0 ${
                           item.badgeClass ||
-                          (String(item.badge).toLowerCase() === "fakultas"
+                          (String(item.badge || item.Type || item.type).toLowerCase() === "fakultas"
                             ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                            : String(item.badge).toLowerCase() === "unit"
+                            : String(item.badge || item.Type || item.type).toLowerCase() === "unit"
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : "bg-purple-50 text-purple-700 border border-purple-200")
                         }`}
                       >
-                        {item.badge}
+                        {item.badge || String(item.Type || item.type).toUpperCase()}
                       </span>
                     ) : null}
                     <span className="truncate">

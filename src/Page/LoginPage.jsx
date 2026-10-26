@@ -78,6 +78,8 @@ function LoginContent() {
         addToast("error", body.error);
         // setErrorMessage(body.error);
       } else {
+        localStorage.removeItem("activeLevel");
+        localStorage.removeItem("activeLevelYear");
         localStorage.setItem("token", body.access_token);
         localStorage.setItem("refresh", body.refresh_token);
 
@@ -85,12 +87,26 @@ function LoginContent() {
       }
     } catch (err) {
       console.error(err);
-      const data = err.response.data;
+      const status = err?.status ?? err?.response?.status;
+      const resData = err?.data ?? err?.response?.data;
+      const isHtml =
+        typeof resData === "string" &&
+        (/<html/i.test(resData) ||
+          /<!doctype/i.test(resData) ||
+          /<body/i.test(resData) ||
+          /<title>404/i.test(resData) ||
+          resData.trim().startsWith("<"));
 
-      if (typeof data === "object" && data !== null) {
-        addToast("error", data.message);
-      }
-      else {
+      if ((status === 404 && isHtml) || status === 404) {
+        addToast("error", "username atau password tidak tepat");
+      } else if (typeof resData === "object" && resData !== null) {
+        addToast(
+          "error",
+          resData.message || resData.error || err.message || "ada masalah pada aplikasi"
+        );
+      } else if (err?.message && !isHtml) {
+        addToast("error", err.message);
+      } else {
         addToast("error", "ada masalah pada aplikasi");
       }
     } finally {

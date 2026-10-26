@@ -19,6 +19,7 @@ import {
   formatRupiah,
   hasRealisasiAnggaran,
   getRealisasiAnggaran,
+  isAnggaranRevised,
   getTimelineRkSlots,
   getTimelineRSlots,
 } from "./prokerConstants";
@@ -52,6 +53,8 @@ import {
   AlertCircle,
   Save,
   Coins,
+  PencilLine,
+  Wallet,
   Lightbulb,
   ChevronDown,
   ChevronUp,
@@ -69,14 +72,83 @@ export default function ProkerV3AktivitasPage() {
     openChangeLevel,
     setOpenChangeLevel,
     changeLevel,
+    positionYear,
   } = useContent();
 
   const isAdmin = level === "admin" || user?.level === "admin";
-  const curRole = String(level || localStorage.getItem("activeLevel") || "")
+  const curRole = String(
+    level || localStorage.getItem("activeLevel") || user?.level || ""
+  )
     .toLowerCase()
     .trim();
-  const isVerifier = ["upml", "upmf", "upms", "evaluator"].includes(curRole);
+  const isVerifier = ["upml", "upmf", "upms", "fakultas", "evaluator"].includes(curRole);
   const isAnggaran = ["anggaran", "keuangan"].includes(curRole);
+  const canRevisiAnggaran = isAnggaran || isAdmin;
+
+  // Tombol tambah aktivitas hanya boleh muncul jika role aktif adalah "user"
+  const isLevelUser = curRole === "user";
+
+  // Data state
+  const [loading, setLoading] = useState(true);
+  const [proker, setProker] = useState(null);
+  const [activities, setActivities] = useState([]);
+
+  // Cek apakah proker ini sesuai target unit yang ditugaskan kepada user
+  const hasAssignedTarget = useMemo(() => {
+    if (!proker) return false;
+
+    const prokerFuId = proker.IdFakultasUnit ? String(proker.IdFakultasUnit) : "";
+    const prokerFuUuid = proker.UuidFakultasUnit ? String(proker.UuidFakultasUnit).toLowerCase() : "";
+    const prokerFuName = proker.NamaFakultasUnit ? String(proker.NamaFakultasUnit).trim().toLowerCase() : "";
+    const effYear = String(proker.Tahun || positionYear || "").trim();
+
+    // 1. Cek dari user.extra_role (penugasan ABAC)
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      const match = user.extra_role.some((r) => {
+        const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+        if (rYear && effYear && rYear !== effYear) {
+          return false;
+        }
+
+        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        if (rRole === "auditor1" || rRole === "auditor2") {
+          return false;
+        }
+
+        const rFuId = r.id_fakultas_unit ?? r.IdFakultasUnit;
+        if (rFuId && prokerFuId && String(rFuId) === prokerFuId) return true;
+
+        const rFuUuid = String(r.uuid_fakultas_unit ?? r.UuidFakultasUnit ?? "").toLowerCase();
+        if (rFuUuid && prokerFuUuid && rFuUuid === prokerFuUuid) return true;
+
+        const rFuName = String(r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "").trim().toLowerCase();
+        if (rFuName && prokerFuName && (rFuName === prokerFuName || prokerFuName.includes(rFuName) || rFuName.includes(prokerFuName))) return true;
+
+        return false;
+      });
+
+      if (match) return true;
+    }
+
+    // 2. Cek dari field user langsung
+    const directFu = String(user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit || "");
+    if (directFu) {
+      if (prokerFuId && directFu === prokerFuId) return true;
+      if (prokerFuUuid && directFu.toLowerCase() === prokerFuUuid) return true;
+      if (prokerFuName && directFu.toLowerCase() === prokerFuName) return true;
+    }
+
+    const directFuUuid = String(user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "").toLowerCase();
+    if (directFuUuid && prokerFuUuid && directFuUuid === prokerFuUuid) return true;
+
+    const directFuName = String(user?.nama_fakultas_unit || user?.NamaFakultasUnit || "").trim().toLowerCase();
+    if (directFuName && prokerFuName && directFuName === prokerFuName) return true;
+
+    return false;
+  }, [user, proker, positionYear]);
+
+  // Tombol tambah aktivitas HANYA muncul di level user dengan target yang ditugaskan (bukan di level lain/role lain)
+  const canAddAktivitas = isLevelUser && hasAssignedTarget;
 
   // State History Drawer State
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -103,11 +175,6 @@ export default function ProkerV3AktivitasPage() {
   const [isSubmittingBatchReject, setIsSubmittingBatchReject] = useState(false);
   const [verifyingRowUuid, setVerifyingRowUuid] = useState(null);
 
-  // Data state
-  const [loading, setLoading] = useState(true);
-  const [proker, setProker] = useState(null);
-  const [activities, setActivities] = useState([]);
-
   // Form Activity Modal State
   const [actModalOpen, setActModalOpen] = useState(false);
   const [actModalMode, setActModalMode] = useState("create");
@@ -128,6 +195,18 @@ export default function ProkerV3AktivitasPage() {
   // Delete State
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [actToDelete, setActToDelete] = useState(null);
+
+  // Revisi Anggaran State (Tim Anggaran / Admin)
+  const [revisiModalOpen, setRevisiModalOpen] = useState(false);
+  const [actToRevisi, setActToRevisi] = useState(null);
+  const [revisiAnggaran, setRevisiAnggaran] = useState(0);
+  const [revisiAnggaranStr, setRevisiAnggaranStr] = useState("0");
+  const [isSubmittingRevisi, setIsSubmittingRevisi] = useState(false);
+
+  // Revisi Status Proker ke Draft (Tim Anggaran, Verifikator, Admin)
+  const [revisiDraftModalOpen, setRevisiDraftModalOpen] = useState(false);
+  const [alasanRevisiDraft, setAlasanRevisiDraft] = useState("");
+  const [isSubmittingRevisiDraft, setIsSubmittingRevisiDraft] = useState(false);
 
   // Fetch Data (Proker & Activities)
   const fetchData = async () => {
@@ -189,10 +268,17 @@ export default function ProkerV3AktivitasPage() {
   };
 
   const openCreateActivity = () => {
+    if (!canAddAktivitas) {
+      addToast(
+        "warning",
+        "Akses ditolak: Tambah aktivitas hanya untuk level user pada unit yang ditugaskan"
+      );
+      return;
+    }
     setActModalMode("create");
     setSelectedAct(null);
     setActNama("");
-    setActPic(user?.nama || "");
+    setActPic(user?.nama || proker?.PIC || "");
     setActAnggaran(0);
     setActAnggaranStr("");
     setActCapaian("");
@@ -204,6 +290,13 @@ export default function ProkerV3AktivitasPage() {
   };
 
   const openEditActivity = (act) => {
+    if (!canAddAktivitas) {
+      addToast(
+        "warning",
+        "Akses ditolak: Edit aktivitas hanya untuk level user pada unit yang ditugaskan"
+      );
+      return;
+    }
     setActModalMode("edit");
     setSelectedAct(act);
     setActNama(act.Aktivitas || "");
@@ -227,6 +320,13 @@ export default function ProkerV3AktivitasPage() {
 
   const handleSaveActivity = async (e) => {
     e.preventDefault();
+    if (!canAddAktivitas) {
+      addToast(
+        "warning",
+        "Akses ditolak: Simpan aktivitas hanya untuk level user pada unit yang ditugaskan",
+      );
+      return;
+    }
     if (!actNama.trim()) {
       addToast("warning", "Nama aktivitas / kegiatan wajib diisi");
       return;
@@ -234,9 +334,8 @@ export default function ProkerV3AktivitasPage() {
 
     setSavingAct(true);
     try {
-      const token = getValidToken();
       const fd = new FormData();
-      fd.append("aktivitas", actName.trim());
+      fd.append("aktivitas", actNama.trim());
       fd.append("pic", actPic.trim());
       fd.append("anggaran", String(Number(actAnggaran) || 0));
       fd.append("status", actStatus);
@@ -272,6 +371,14 @@ export default function ProkerV3AktivitasPage() {
   };
 
   const handleDeleteActivity = async () => {
+    if (!canAddAktivitas) {
+      addToast(
+        "warning",
+        "Akses ditolak: Hapus aktivitas hanya untuk level user pada unit yang ditugaskan",
+      );
+      setConfirmDelete(false);
+      return;
+    }
     if (!actToDelete?.UUID) return;
     try {
       const res = await apiClient.delete(
@@ -321,6 +428,105 @@ export default function ProkerV3AktivitasPage() {
     }
   };
 
+  // ==========================================
+  // REVISI ANGGARAN HANDLERS (TIM ANGGARAN / ADMIN)
+  // ==========================================
+  const openRevisiAnggaranModal = (act) => {
+    setActToRevisi(act);
+    const currReal = getRealisasiAnggaran(act);
+    const initialVal =
+      currReal !== null && currReal > 0 ? currReal : (Number(act.Anggaran) || 0);
+    setRevisiAnggaran(initialVal);
+    setRevisiAnggaranStr(
+      initialVal > 0 ? new Intl.NumberFormat("id-ID").format(initialVal) : "0"
+    );
+    setRevisiModalOpen(true);
+  };
+
+  const handleRevisiInputChange = (e) => {
+    const rawValue = e.target.value;
+    const digitsOnly = rawValue.replace(/\D/g, "");
+    if (!digitsOnly) {
+      setRevisiAnggaran(0);
+      setRevisiAnggaranStr("");
+      return;
+    }
+    const numericValue = Number(digitsOnly);
+    setRevisiAnggaran(numericValue);
+    setRevisiAnggaranStr(new Intl.NumberFormat("id-ID").format(numericValue));
+  };
+
+  const handleSaveRevisiAnggaran = async (e) => {
+    e.preventDefault();
+    if (!actToRevisi?.UUID) return;
+
+    setIsSubmittingRevisi(true);
+    try {
+      const fd = new FormData();
+      fd.append("realisasi", String(revisiAnggaran));
+
+      await apiClient.put(`/proker_v3/aktivitas/${actToRevisi.UUID}`, fd);
+      addToast(
+        "success",
+        `Realisasi anggaran aktivitas "${actToRevisi.Aktivitas}" berhasil disimpan: ${formatRupiah(revisiAnggaran)}`
+      );
+      setRevisiModalOpen(false);
+      setActToRevisi(null);
+      fetchData();
+    } catch (err) {
+      addToast(
+        "error",
+        err?.message || "Gagal memperbarui realisasi anggaran aktivitas"
+      );
+    } finally {
+      setIsSubmittingRevisi(false);
+    }
+  };
+
+  const handleSubmitRevisiDraft = async () => {
+    if (!prokerUuid) return;
+    try {
+      setIsSubmittingRevisiDraft(true);
+      const fd = new FormData();
+      fd.append("status", "draft");
+      if (alasanRevisiDraft.trim()) {
+        fd.append("catatan_penolakan", alasanRevisiDraft.trim());
+      }
+      await apiClient.put(`/proker_v3/${prokerUuid}/status`, fd);
+      addToast(
+        "success",
+        `Program kerja "${proker?.NamaProgram || ""}" berhasil dikembalikan ke status Draft`,
+      );
+      setRevisiDraftModalOpen(false);
+      setAlasanRevisiDraft("");
+      await fetchData();
+    } catch (err) {
+      addToast(
+        "error",
+        err?.response?.data?.error || err?.message || "Gagal mengembalikan status ke Draft",
+      );
+    } finally {
+      setIsSubmittingRevisiDraft(false);
+    }
+  };
+
+  const handleRevisiActDraft = async (act) => {
+    if (!act?.UUID) return;
+    try {
+      const fd = new FormData();
+      fd.append("status", "draft");
+      fd.append("role", isAnggaran ? "anggaran" : curRole);
+      await apiClient.put(`/proker_v3/aktivitas/${act.UUID}/status`, fd);
+      addToast(
+        "success",
+        `Aktivitas "${act.Aktivitas}" berhasil dikembalikan ke status Draft`,
+      );
+      await fetchData();
+    } catch (err) {
+      addToast("error", err?.message || "Gagal mengembalikan aktivitas ke Draft");
+    }
+  };
+
   // Verifier Handlers for Program Kerja
   const prokerStatusClean = String(proker?.Status || "draft")
     .toLowerCase()
@@ -366,6 +572,23 @@ export default function ProkerV3AktivitasPage() {
 
   const isVerifierApproved = isProkerAccVerifikator;
   const isTerimaAnggaranStage = isProkerAccAnggaran;
+
+  // Tombol revisi ke draft hanya tampil ketika status Verifikasi UPM / Verifikasi Anggaran diterima/ditolak,
+  // hanya muncul di level verifikator dan anggaran
+  const canRevisiDraftProker = useMemo(() => {
+    if (!isVerifier && !isAnggaran) return false;
+    const isVerifierDone = isProkerAccVerifikator || pVerif === "ditolak" || pMain.includes("ditolak");
+    const isAnggaranDone = isProkerAccAnggaran || pAngg === "ditolak";
+    if (isVerifier) return isVerifierDone;
+    if (isAnggaran) return isAnggaranDone;
+    return false;
+  }, [isVerifier, isAnggaran, isProkerAccVerifikator, isProkerAccAnggaran, pVerif, pAngg, pMain]);
+
+  // Tombol revisi aktivitas ke draft di tabel: TIDAK ada pada role upml, upmf, upms
+  const canRevisiActDraft = useMemo(() => {
+    if (["upml", "upmf", "upms"].includes(curRole)) return false;
+    return isAdmin || isAnggaran;
+  }, [curRole, isAdmin, isAnggaran]);
 
   // Hanya verifikator (upml, upmf, upms, evaluator) dan admin yang memverifikasi aktivitas
   const canVerify = isVerifier || isAdmin;
@@ -599,6 +822,76 @@ export default function ProkerV3AktivitasPage() {
     setBatchRejectReason("");
     await fetchData();
     setIsSubmittingBatchReject(false);
+    setIsBatchProcessing(false);
+  };
+
+  // Parallel Batch Revisi ke Draft
+  const handleBatchRevisiDraft = async () => {
+    if (selectedActUuids.length === 0) return;
+    setIsBatchProcessing(true);
+    setRowErrors((prev) => {
+      const next = { ...prev };
+      selectedActUuids.forEach((id) => delete next[id]);
+      return next;
+    });
+
+    const roleToUse = isAnggaran ? "anggaran" : curRole;
+    const promises = selectedActUuids.map(async (uuid) => {
+      try {
+        const fd = new FormData();
+        fd.append("status", "draft");
+        fd.append("role", roleToUse);
+        await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, fd);
+        return { uuid, success: true };
+      } catch (err) {
+        return {
+          uuid,
+          success: false,
+          error:
+            err?.response?.data?.error ||
+            err?.message ||
+            "Gagal mengubah ke Draft",
+        };
+      }
+    });
+
+    const results = await Promise.allSettled(promises);
+    const newErrors = {};
+    let successCount = 0;
+    let failCount = 0;
+
+    results.forEach((res) => {
+      if (res.status === "fulfilled") {
+        const val = res.value;
+        if (!val.success) {
+          newErrors[val.uuid] = val.error;
+          failCount++;
+        } else {
+          successCount++;
+        }
+      } else {
+        failCount++;
+      }
+    });
+
+    if (Object.keys(newErrors).length > 0) {
+      setRowErrors((prev) => ({ ...prev, ...newErrors }));
+      setSelectedActUuids(Object.keys(newErrors));
+    } else {
+      setSelectedActUuids([]);
+    }
+
+    if (failCount > 0) {
+      addToast("error", `${failCount} aktivitas gagal dikembalikan ke Draft.`);
+    }
+    if (successCount > 0) {
+      addToast(
+        "success",
+        `${successCount} aktivitas berhasil dikembalikan ke status Draft.`,
+      );
+    }
+
+    await fetchData();
     setIsBatchProcessing(false);
   };
 
@@ -848,6 +1141,20 @@ export default function ProkerV3AktivitasPage() {
                     Status Program Kerja:
                   </span>
                   {renderStatusBadge(prokerStatusClean)}
+                  {canRevisiDraftProker && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAlasanRevisiDraft("");
+                        setRevisiDraftModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs transition cursor-pointer ml-1"
+                      title="Kembalikan status program kerja ke Draft untuk direvisi oleh pengaju"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Revisi ke Draft</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -916,7 +1223,7 @@ export default function ProkerV3AktivitasPage() {
                     Total Anggaran Akumulatif
                   </div>
                   <div className="text-base font-extrabold font-mono">
-                    {hasRealisasi ? (
+                    {hasRealisasi && totalAnggaran !== totalRealisasi ? (
                       <div className="flex flex-wrap items-baseline gap-2">
                         <span
                           className="line-through text-purple-200/80 text-xs font-normal decoration-rose-300 decoration-1"
@@ -929,14 +1236,8 @@ export default function ProkerV3AktivitasPage() {
                         </span>
                       </div>
                     ) : (
-                      formatRupiah(totalAnggaran)
+                      formatRupiah(hasRealisasi ? totalRealisasi : totalAnggaran)
                     )}
-                  </div>
-                  <div className="text-[11px] text-purple-100 flex items-center justify-between pt-0.5">
-                    <span>{activities.length} Aktivitas Kegiatan</span>
-                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">
-                      Aktif
-                    </span>
                   </div>
                 </div>
               </div>
@@ -959,7 +1260,7 @@ export default function ProkerV3AktivitasPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {!isVerifier && (
+              {canAddAktivitas && (
                 <button
                   type="button"
                   onClick={openCreateActivity}
@@ -1021,6 +1322,23 @@ export default function ProkerV3AktivitasPage() {
                   <X className="w-4 h-4" />
                   <span>Tolak Semua Proker</span>
                 </button>
+
+                {canRevisiActDraft && (
+                  <button
+                    type="button"
+                    onClick={handleBatchRevisiDraft}
+                    disabled={isBatchProcessing}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm hover:shadow transition cursor-pointer disabled:opacity-50"
+                    title="Kembalikan semua aktivitas yang dipilih ke status Draft"
+                  >
+                    {isBatchProcessing ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-4 h-4" />
+                    )}
+                    <span>Revisi Semua ke Draft</span>
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1056,7 +1374,7 @@ export default function ProkerV3AktivitasPage() {
                     Aktivitas / Kegiatan
                   </th>
                   <th className="py-3 px-4 min-w-[130px]">PIC Kegiatan</th>
-                  <th className="py-3 px-4 min-w-[150px] text-right">
+                  <th className="py-3 px-4 min-w-[170px] text-right">
                     Anggaran (Rp)
                   </th>
                   <th className="py-3 px-4 min-w-[170px]">Dokumen Referensi</th>
@@ -1079,7 +1397,7 @@ export default function ProkerV3AktivitasPage() {
                         Belum ada aktivitas pada program kerja ini
                       </p>
                       <p className="text-[11px] text-gray-400 mt-0.5">
-                        {!isVerifier
+                        {canAddAktivitas
                           ? 'Klik tombol "+ Tambah Aktivitas Baru" di atas untuk mulai membuat kegiatan'
                           : "Aktivitas kegiatan belum dibuat oleh unit kerja"}
                       </p>
@@ -1151,7 +1469,7 @@ export default function ProkerV3AktivitasPage() {
 
                           {/* Anggaran */}
                           <td className="py-3.5 px-4 text-right font-mono text-xs whitespace-nowrap">
-                            {hasRealisasiAnggaran(act) ? (
+                            {isAnggaranRevised(act) ? (
                               <div>
                                 <span
                                   className="line-through text-gray-400 text-[11px] block font-normal decoration-rose-500 decoration-1"
@@ -1168,8 +1486,23 @@ export default function ProkerV3AktivitasPage() {
                               </div>
                             ) : (
                               <span className="font-bold text-emerald-700">
-                                {formatRupiah(act.Anggaran)}
+                                {formatRupiah(hasRealisasiAnggaran(act) ? getRealisasiAnggaran(act) : act.Anggaran)}
                               </span>
+                            )}
+
+                            {/* Action Revisi Anggaran untuk Tim Anggaran / Admin */}
+                            {canRevisiAnggaran && (
+                              <div className="mt-1.5 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => openRevisiAnggaranModal(act)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-600 hover:text-white text-amber-700 border border-amber-200 transition cursor-pointer shadow-2xs whitespace-nowrap group"
+                                  title="Revisi realisasi anggaran kegiatan ini"
+                                >
+                                  <PencilLine className="w-3 h-3 text-amber-600 group-hover:text-white shrink-0" />
+                                  <span>Revisi Anggaran</span>
+                                </button>
+                              </div>
                             )}
                           </td>
 
@@ -1670,8 +2003,26 @@ export default function ProkerV3AktivitasPage() {
                                   </>
                                 )}
 
-                              {/* Auditee Actions: Edit, Delete */}
-                              {!isVerifier && !isAnggaran && !isAdmin && (
+                              {/* Option to revert single activity to draft (bukan untuk upml, upmf, upms) */}
+                              {canRevisiActDraft &&
+                                (act.Status || "").toLowerCase() !== "draft" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevisiActDraft(act)}
+                                    disabled={
+                                      verifyingRowUuid === act.UUID ||
+                                      isBatchProcessing
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                    title="Kembalikan aktivitas ini ke status Draft"
+                                  >
+                                    <RotateCcw className="w-3 h-3" />
+                                    <span>Draft</span>
+                                  </button>
+                                )}
+
+                              {/* User with assigned target Actions: Edit, Delete */}
+                              {canAddAktivitas && (
                                 <>
                                   <Tooltip title="Edit Aktivitas">
                                     <button
@@ -2379,6 +2730,209 @@ export default function ProkerV3AktivitasPage() {
         </Dialog>
       </Transition>
 
+      {/* =======================================================
+          MODAL REVISI ANGGARAN (TIM ANGGARAN / KEUANGAN / ADMIN)
+          ======================================================= */}
+      <Transition appear show={revisiModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => !isSubmittingRevisi && setRevisiModalOpen(false)}
+        >
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+              <Dialog.Panel className="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-gray-100 flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-amber-50/80 via-orange-50/30 to-white">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/25 shrink-0 ring-4 ring-amber-100">
+                      <Coins className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Dialog.Title className="text-base sm:text-lg font-bold text-gray-900 leading-tight">
+                          Revisi Realisasi Anggaran
+                        </Dialog.Title>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                          Tim Anggaran
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Sesuaikan biaya realisasi anggaran yang disetujui
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRevisiModalOpen(false)}
+                    disabled={isSubmittingRevisi}
+                    className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-white hover:shadow-xs border border-transparent hover:border-gray-200 transition cursor-pointer disabled:opacity-50"
+                    title="Tutup Modal"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Body Form */}
+                <form onSubmit={handleSaveRevisiAnggaran} className="p-6 space-y-4">
+                  {/* Card Info Aktivitas & Anggaran Awal */}
+                  <div className="bg-linear-to-br from-gray-50 to-slate-50 border border-gray-200/80 rounded-2xl p-4 space-y-3">
+                    <div>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 block mb-1">
+                        Aktivitas / Kegiatan
+                      </span>
+                      <p className="text-xs font-bold text-gray-900 leading-snug">
+                        {actToRevisi?.Aktivitas || "-"}
+                      </p>
+                      {actToRevisi?.PIC && (
+                        <span className="text-[11px] text-gray-500 mt-0.5 block">
+                          PIC: {actToRevisi.PIC}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-gray-200/70">
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 block mb-0.5">
+                          Anggaran Awal (Pagu)
+                        </span>
+                        <span className="text-xs font-mono font-bold text-gray-700">
+                          {formatRupiah(actToRevisi?.Anggaran)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 block mb-0.5">
+                          Status Realisasi Saat Ini
+                        </span>
+                        {hasRealisasiAnggaran(actToRevisi) ? (
+                          <span className="text-xs font-mono font-bold text-emerald-700">
+                            {formatRupiah(getRealisasiAnggaran(actToRevisi))}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">
+                            Belum direvisi
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Input Biaya Realisasi */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1.5">
+                      Biaya Realisasi Anggaran (Rp)
+                      <span className="text-rose-500 font-bold ml-1">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500 font-mono font-bold text-xs">
+                        Rp
+                      </div>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        required
+                        value={revisiAnggaranStr}
+                        onChange={handleRevisiInputChange}
+                        placeholder="0"
+                        className="w-full pl-11 pr-4 py-2.5 text-sm font-mono font-bold text-emerald-700 rounded-xl border border-gray-200 bg-gray-50/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition shadow-2xs"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className="text-[11px] text-gray-500">
+                        Terbilang:{" "}
+                        <span className="font-semibold text-gray-700">
+                          {formatRupiah(revisiAnggaran)}
+                        </span>
+                      </p>
+                      {actToRevisi?.Anggaran &&
+                        Number(actToRevisi.Anggaran) !== revisiAnggaran && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const val = Number(actToRevisi.Anggaran) || 0;
+                              setRevisiAnggaran(val);
+                              setRevisiAnggaranStr(
+                                new Intl.NumberFormat("id-ID").format(val)
+                              );
+                            }}
+                            className="text-[10px] font-bold text-amber-600 hover:text-amber-800 hover:underline cursor-pointer"
+                          >
+                            Samakan dgn Anggaran Awal
+                          </button>
+                        )}
+                    </div>
+                  </div>
+
+                  {/* Selisih Penyesuaian */}
+                  {actToRevisi?.Anggaran && (
+                    <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3 text-xs flex items-center justify-between">
+                      <span className="text-amber-900 font-medium">
+                        Selisih Penyesuaian:
+                      </span>
+                      <span
+                        className={`font-mono font-bold ${
+                          revisiAnggaran > Number(actToRevisi.Anggaran)
+                            ? "text-rose-600"
+                            : revisiAnggaran < Number(actToRevisi.Anggaran)
+                            ? "text-emerald-600"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {revisiAnggaran > Number(actToRevisi.Anggaran) ? "+" : ""}
+                        {formatRupiah(
+                          revisiAnggaran - Number(actToRevisi.Anggaran)
+                        )}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Footer Buttons */}
+                  <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setRevisiModalOpen(false)}
+                      disabled={isSubmittingRevisi}
+                      className="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingRevisi}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-200 transition cursor-pointer disabled:opacity-50"
+                    >
+                      {isSubmittingRevisi ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" />
+                          <span>Simpan Realisasi</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </Dialog.Panel>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
       {/* State History Right Drawer */}
       <StateHistoryDrawer
         isOpen={historyDrawerOpen}
@@ -2399,6 +2953,75 @@ export default function ProkerV3AktivitasPage() {
         title="Hapus Aktivitas Kegiatan?"
         message={`Apakah Anda yakin ingin menghapus aktivitas "${actToDelete?.Aktivitas}"? Semua jadwal timeline dan berkas bukti terkait akan dihapus permanen.`}
       />
+
+      {/* Revisi Status Program Kerja ke Draft Modal */}
+      <Transition appear show={revisiDraftModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => setRevisiDraftModalOpen(false)}
+        >
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Dialog.Panel className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2 text-amber-600 font-bold text-base">
+                  <RotateCcw className="w-5 h-5" />
+                  <span>Revisi Status ke Draft</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRevisiDraftModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs text-gray-600">
+                  Program kerja dan seluruh aktivitas di dalamnya akan dikembalikan ke status <b>Draft</b> agar dapat diedit/disesuaikan kembali oleh pengaju:
+                </p>
+                <div className="text-xs font-bold text-gray-900 bg-amber-50 border border-amber-200 p-2.5 rounded-lg line-clamp-2">
+                  {proker?.NamaProgram}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-700">
+                  Catatan / Alasan Revisi <span className="text-gray-400 font-normal">(opsional)</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={alasanRevisiDraft}
+                  onChange={(e) => setAlasanRevisiDraft(e.target.value)}
+                  placeholder="Tuliskan catatan perbaikan atau alasan pengembalian ke status Draft..."
+                  className="w-full p-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setRevisiDraftModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingRevisiDraft}
+                  onClick={handleSubmitRevisiDraft}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>{isSubmittingRevisiDraft ? "Memproses..." : "Kembalikan ke Draft"}</span>
+                </button>
+              </div>
+            </Dialog.Panel>
+          </div>
+        </Dialog>
+      </Transition>
     </>
   );
 }

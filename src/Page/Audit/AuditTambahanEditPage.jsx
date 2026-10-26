@@ -14,8 +14,13 @@ import RadioButton from "@/Components/RadioButton";
 import InfoAuditCard from "@/Components/InfoAuditCard";
 import { apiClient, API_BASE_URL } from "@/Common/api";
 
-const AuditTambahanEditPage = () => {
-  const { uuidRenstra } = useParams();
+const AuditTambahanEditPage = ({
+  uuidRenstra: propUuidRenstra,
+  readOnly = false,
+  hideNavbar = false,
+} = {}) => {
+  const params = useParams();
+  const uuidRenstra = propUuidRenstra || params.uuidRenstra;
   const { addToast } = useToast();
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel, positionYear } = useContent();
   const { getValidToken } = useAuth();
@@ -24,10 +29,16 @@ const AuditTambahanEditPage = () => {
   const [dataTemplate, setDataTemplate] = useState([]);
   const [dataRenstra, setDataRenstra] = useState(null);
 
-  // const [isMobileMode, setIsMobileMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false); // untuk sm screen
+  const formContainerRef = React.useRef(null);
+
+  useEffect(() => {
+    if (activeQuestion && formContainerRef.current) {
+      formContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [activeQuestion]);
 
   const {
     register,
@@ -56,6 +67,7 @@ const AuditTambahanEditPage = () => {
   };
 
   const onSubmit = async (data) => {
+    if (readOnly) return;
     if (isEmpty(getValidToken())) return;
     let audit = (dataAudit ?? []).find((item) => item.TemplateDokumenTambahanUUID === activeQuestion);
 
@@ -329,21 +341,29 @@ const AuditTambahanEditPage = () => {
 
   return (
     <>
-      <Navbar
-        renderChangeLevelModal={() => (
-          <ChangeLevelModal
-            open={openChangeLevel}
-            onClose={() => setOpenChangeLevel(false)}
-            levels={listLevel}
-            currentLevel={level}
-            onSubmit={(val) => {
-              setLevel(val);
-              setOpenChangeLevel(false);
-            }}
-          />
-        )}
-      />
-      <div className="p-3 bg-white min-h-screen flex flex-col md:flex-row">
+      {!hideNavbar && (
+        <Navbar
+          renderChangeLevelModal={() => (
+            <ChangeLevelModal
+              open={openChangeLevel}
+              onClose={() => setOpenChangeLevel(false)}
+              levels={listLevel}
+              currentLevel={level}
+              onSubmit={(val) => {
+                setLevel(val);
+                setOpenChangeLevel(false);
+              }}
+            />
+          )}
+        />
+      )}
+      <div
+        className={`p-3 sm:p-4 bg-white flex flex-col md:flex-row w-full gap-4 ${
+          hideNavbar
+            ? "md:h-[calc(100vh-230px)] md:min-h-[500px]"
+            : "md:h-[calc(100vh-80px)] md:min-h-[550px]"
+        }`}
+      >
         {/* Panel Nomor Soal Floating untuk SM */}
         <div className="md:hidden fixed bottom-4 right-4 z-50">
           {/* Tombol toggle */}
@@ -408,13 +428,16 @@ const AuditTambahanEditPage = () => {
           </div>
         </div>
 
-        {/* Sisi kiri: pertanyaan aktif */}
-        <div class="flex-1 flex flex-col md:mr-4 h-screen gap-4 min-w-0">
-          <InfoAuditCard info={dataRenstra} />
+        {/* Sisi kiri: info audit + form pertanyaan aktif */}
+        <div className="flex-1 flex flex-col gap-4 min-w-0 min-h-0 h-full">
+          <div className="shrink-0">
+            <InfoAuditCard info={dataRenstra} />
+          </div>
 
           <form
+            ref={formContainerRef}
             onSubmit={handleSubmit(onSubmit)}
-            className="flex-1 p-4 border rounded md:mr-4 overflow-y-auto h-screen"
+            className="flex-1 min-h-0 p-4 sm:p-5 border border-gray-200 rounded-xl overflow-y-auto bg-white shadow-2xs"
           >
             {!activeQuestion ? (
               <div className="h-full flex justify-center items-center">
@@ -473,7 +496,7 @@ const AuditTambahanEditPage = () => {
                     )}
                   </div>
 
-                  {level === "auditee" ? (
+                  {level === "auditee" && !readOnly ? (
                     <TextInput
                       type="text"
                       label="Link Berkas"
@@ -503,7 +526,7 @@ const AuditTambahanEditPage = () => {
                     </div>
                   )}
 
-                  {(level === "auditor1" || level === "auditor2") && (
+                  {(level === "auditor1" || level === "auditor2" || readOnly) && (
                     <div className="space-y-4 pt-2 border-t border-gray-150">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -516,11 +539,14 @@ const AuditTambahanEditPage = () => {
                               value={v}
                               text={v === "1" ? "Ya" : "Tidak"}
                               checked={watch("capaian_auditor") === v}
+                              disabled={readOnly}
                               onChange={() => {
-                                setValue("capaian_auditor", v, {
-                                  shouldValidate: true,
-                                  shouldDirty: true,
-                                });
+                                if (!readOnly) {
+                                  setValue("capaian_auditor", v, {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                  });
+                                }
                               }}
                             />
                           ))}
@@ -538,12 +564,17 @@ const AuditTambahanEditPage = () => {
                             Catatan
                           </label>
                           <textarea
-                            {...register("catatan_auditor", {
-                              required: "Catatan wajib diisi jika capaian tidak",
-                            })}
+                            {...(!readOnly
+                              ? register("catatan_auditor", {
+                                  required: "Catatan wajib diisi jika capaian tidak",
+                                })
+                              : { value: watch("catatan_auditor") })}
                             placeholder="Tulis catatan kenapa tidak tercapai..."
-                            className="w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 focus:border-transparent"
+                            className={`w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 ${
+                              readOnly ? "bg-gray-50 text-gray-700 cursor-not-allowed" : "focus:border-transparent"
+                            }`}
                             rows={4}
+                            disabled={readOnly}
                           />
                           {errors.catatan_auditor && (
                             <p className="text-red-500 text-xs mt-1">
@@ -556,13 +587,19 @@ const AuditTambahanEditPage = () => {
                   )}
 
                   <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-sm font-medium text-white rounded-xl py-2.5 transition shadow-sm cursor-pointer"
-                    >
-                      {loading ? "Menyimpan..." : "Simpan"}
-                    </button>
+                    {readOnly ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-medium text-center">
+                        Mode Riwayat Audit (Hanya Lihat - Input Dinonaktifkan)
+                      </div>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-sm font-medium text-white rounded-xl py-2.5 transition shadow-sm cursor-pointer"
+                      >
+                        {loading ? "Menyimpan..." : "Simpan"}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -571,8 +608,8 @@ const AuditTambahanEditPage = () => {
         </div>
 
         {/* Sisi kanan: panel nomor soal untuk desktop */}
-        <div className="hidden md:block w-80 p-4 bg-gray-50 border-l overflow-y-auto h-screen">
-          <h3 className="font-semibold mb-2">Nomor Audit</h3>
+        <div className="hidden md:flex flex-col w-72 lg:w-80 p-4 bg-gray-50 border border-gray-200 rounded-xl overflow-y-auto h-full min-h-0 shrink-0 shadow-2xs">
+          <h3 className="font-semibold mb-2 text-gray-800">Nomor Audit</h3>
           <div className="flex flex-wrap gap-2">
             {(dataTemplate ?? [])
               .filter((item) => item.IsPertanyaan)
@@ -580,20 +617,28 @@ const AuditTambahanEditPage = () => {
                 return (
                   <button
                     key={q.UUID}
+                    type="button"
                     onClick={() => {
                       setActiveQuestion(q.UUID);
                       setPanelOpen(false);
                     }}
-                    className={`w-10 h-10 flex items-center justify-center rounded ${getButtonClass(q)}`}
+                    className={`w-10 h-10 flex items-center justify-center rounded-lg font-medium transition cursor-pointer ${getButtonClass(q)}`}
                   >
                     {q.Pointing}
                   </button>
                 );
               })}
           </div>
-          <button className="w-full my-3 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-sm text-white rounded py-2" onClick={()=>{
-            //[pr] bikin modal
-          }} disabled>Catatan Akhir</button>
+          <button
+            type="button"
+            className="w-full my-3 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-sm text-white rounded-xl py-2 cursor-pointer transition shadow-2xs"
+            onClick={() => {
+              //[pr] bikin modal
+            }}
+            disabled
+          >
+            Catatan Akhir
+          </button>
         </div>
       </div>
     </>

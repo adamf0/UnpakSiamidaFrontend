@@ -7,12 +7,14 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { renderLabelFakultasUnit } from "@/Common/Utils";
-import { FileSpreadsheet, FileText, Trash2 } from "lucide-react";
+import { FileSpreadsheet, FileText, Trash2, History } from "lucide-react";
 
 const AuditPage = () => {
   const navigate = useNavigate();
   const tableRef = useRef(null);
   const [tahun, setTahun] = useState(0);
+  const [jadwalOpen, setJadwalOpen] = useState(false);
+  const [jadwalRow, setJadwalRow] = useState(null);
   const { positionYear, activeYear } = useContent();
 
   useEffect(()=>{
@@ -21,7 +23,6 @@ const AuditPage = () => {
     if(positionYear){
       setTahun(positionYear);
     }
-    console.log(positionYear)
   },[positionYear]);
 
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
@@ -59,6 +60,9 @@ const AuditPage = () => {
                 { key: "Tahun", label: "Tahun", searchable: true },
                 { key: "FakultasUnit", label: "Target Audit", searchable: true, renderKey: (row) => renderLabelFakultasUnit(row)},
                 { key: "Fakultas", label: "Fakultas", searchable: true },
+                { key: "Auditor1", label: "Auditor 1", searchable: true, renderKey: (row) => row.Auditor1 || "-" },
+                { key: "Auditor2", label: "Auditor 2", searchable: true, renderKey: (row) => row.Auditor2 || "-" },
+                { key: "Auditee", label: "Auditee", searchable: true, renderKey: (row) => row.Auditee || "-" },
                 { key: "PeriodeUploadDokumenMulai", label: "Status Jadwal", className: "w-64", renderKey: (row) => {
                   let styleBadge = "bg-gray-500 hover:bg-gray-600";
 
@@ -152,6 +156,19 @@ const AuditPage = () => {
                     <span>KTS</span>
                   </button>
 
+                  <button
+                    type="button"
+                    title="Lihat riwayat audit tahun sebelumnya"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-purple-700 hover:text-purple-800 hover:bg-purple-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                    onClick={() => {
+                      navigate(`/audit/history/${row.UUID}`);
+                      close();
+                    }}
+                  >
+                    <History className="w-4 h-4 text-purple-600 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span className="font-semibold">Riwayat</span>
+                  </button>
+
                   <div className="my-1 border-t border-gray-150" />
 
                   <button
@@ -171,6 +188,13 @@ const AuditPage = () => {
           }
         </div>
 
+        {jadwalRow && (
+          <JadwalModal
+            open={jadwalOpen}
+            onClose={() => setJadwalOpen(false)}
+            row={jadwalRow}
+          />
+        )}
       </div>
     </>
   );
@@ -337,6 +361,15 @@ export function JadwalModal({ open, onClose, row }) {
         </div>
 
         <div className="space-y-4 text-sm">
+          {(row?.Auditor1 || row?.Auditor2 || row?.Auditee) && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs space-y-1.5">
+              <div className="text-gray-500 font-semibold mb-1 uppercase tracking-wider text-[10px]">Petugas Yang Bertugas</div>
+              <div className="flex justify-between items-center"><span className="text-gray-600">Auditor 1:</span> <span className="font-semibold text-gray-900">{row.Auditor1 || "-"}</span></div>
+              <div className="flex justify-between items-center"><span className="text-gray-600">Auditor 2:</span> <span className="font-semibold text-gray-900">{row.Auditor2 || "-"}</span></div>
+              <div className="flex justify-between items-center"><span className="text-gray-600">Auditee:</span> <span className="font-semibold text-gray-900">{row.Auditee || "-"}</span></div>
+            </div>
+          )}
+
           <JadwalItem
             title="Upload Dokumen"
             start={row.PeriodeUploadMulai}

@@ -9,6 +9,7 @@ import {
   isEmpty,
   throwIfResponseNotOk,
   formatFetchError,
+  fetchFakultasUnits,
 } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import { ShieldCheck, AlertTriangle, TrendingUp, AlertCircle, Building2, Calendar } from "lucide-react";
@@ -124,18 +125,8 @@ export default function SwotFormModal({
   const fetchFakultasOptions = async () => {
     setLoadingFakultas(true);
     try {
-      const res = await apiClient.get("/fakultasunits?mode=all");
-      const json = res.data;
-      const mapped = (Array.isArray(json) ? json : []).map((item) => ({
-        id: item.UUID,
-        UUID: item.UUID,
-        rawId: item.ID,
-        nama: `${item.Nama || ""}${item.Jenjang ? ` (${item.Jenjang})` : ""}${
-          item.Type ? ` [${item.Type.toUpperCase()}]` : ""
-        }`.trim(),
-        ...item,
-      }));
-      setFakultasOptions(mapped);
+      const opts = await fetchFakultasUnits();
+      setFakultasOptions(opts);
     } catch (err) {
       console.error("Fetch fakultas unit gagal:", err);
     } finally {

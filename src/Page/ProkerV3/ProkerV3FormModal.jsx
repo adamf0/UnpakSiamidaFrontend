@@ -32,6 +32,8 @@ export default function ProkerV3FormModal({
   tahunOptions = [],
   standarOptions = [],
   indikatorOptions = [],
+  defaultYear,
+  defaultUnit,
   onClose,
   onSuccess,
 }) {
@@ -141,7 +143,8 @@ export default function ProkerV3FormModal({
       // Create mode
       setNoProker(1);
       setNamaProgram("");
-      setTahun("2026");
+      const resolvedYear = defaultYear && defaultYear !== "all" ? String(defaultYear) : "2026";
+      setTahun(resolvedYear);
       setSelectedStandar(null);
       setStandarSubStandar("");
       setSelectedIndikator(null);
@@ -151,23 +154,31 @@ export default function ProkerV3FormModal({
       setTargetUnit("");
       setOutput("");
       setOutcome("");
-      setPic(user?.nama || "");
+      setPic(user?.nama || user?.name || "");
 
-      // Default unit from user
-      const userUnitId = user?.id_fakultas_unit || user?.fakultas_unit;
-      const uObj = unitOptions.find(
-        (u) =>
-          String(u.id) === String(userUnitId) ||
-          String(u.uuid) === String(userUnitId) ||
-          String(u.nama).toLowerCase() === String(userUnitId).toLowerCase()
-      );
+      // Default unit from user or defaultUnit prop
+      const targetUnitValue =
+        defaultUnit?.id ||
+        defaultUnit?.uuid ||
+        defaultUnit ||
+        user?.fakultas_unit ||
+        user?.id_fakultas_unit ||
+        user?.FakultasUnit;
+      const uObj =
+        (defaultUnit && typeof defaultUnit === "object" && defaultUnit.id ? defaultUnit : null) ||
+        unitOptions.find(
+          (u) =>
+            String(u.id) === String(targetUnitValue) ||
+            String(u.uuid) === String(targetUnitValue) ||
+            String(u.nama).toLowerCase() === String(targetUnitValue).toLowerCase()
+        );
       setSelectedUnit(uObj || null);
-      setIdFakultasUnit(uObj ? uObj.id : null);
+      setIdFakultasUnit(uObj ? uObj.id : targetUnitValue ? Number(targetUnitValue) || targetUnitValue : null);
 
-      const tObj = tahunOptions.find((t) => String(t.tahun || t.Tahun) === "2026");
+      const tObj = tahunOptions.find((t) => String(t.tahun || t.Tahun) === resolvedYear);
       setSelectedTahun(tObj || null);
     }
-  }, [open, mode, initialData, unitOptions, tahunOptions, standarOptions, indikatorOptions, user]);
+  }, [open, mode, initialData, unitOptions, tahunOptions, standarOptions, indikatorOptions, user, defaultYear, defaultUnit]);
 
   // Handle Standar selection
   const handleSelectStandar = (item) => {

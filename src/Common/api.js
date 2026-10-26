@@ -81,8 +81,34 @@ apiClient.interceptors.response.use(
 
     if (error.response) {
       const data = error.response.data;
-      if (typeof data === "string") {
-        message = data;
+      const status = error.response.status;
+      const url = String(error.config?.url || "");
+      const isHtml =
+        typeof data === "string" &&
+        (/<html/i.test(data) ||
+          /<!doctype/i.test(data) ||
+          /<body/i.test(data) ||
+          /<title>404/i.test(data) ||
+          data.trim().startsWith("<"));
+
+      if (url.includes("/login") || url.endsWith("login")) {
+        if (status === 404 && isHtml) {
+          message = "username atau password tidak tepat";
+        } else if (typeof data === "string") {
+          message = isHtml ? "username atau password tidak tepat" : data;
+        } else if (data && typeof data === "object") {
+          message =
+            data.message ||
+            data.Message ||
+            data.error ||
+            data.Error ||
+            "username atau password tidak tepat";
+          code = data.code || data.Code;
+        }
+      } else if (typeof data === "string") {
+        message = isHtml
+          ? `HTTP ${status}: ${error.response.statusText || "Error"}`
+          : data;
       } else if (data && typeof data === "object") {
         message =
           data.message ||
@@ -95,7 +121,8 @@ apiClient.interceptors.response.use(
         message = `HTTP ${error.response.status}: ${error.response.statusText}`;
       }
     } else if (error.request) {
-      message = "Layanan server tidak dapat dihubungi. Periksa koneksi internet Anda.";
+      message =
+        "Layanan server tidak dapat dihubungi. Periksa koneksi internet Anda.";
     } else {
       message = error.message || message;
     }
@@ -104,6 +131,7 @@ apiClient.interceptors.response.use(
     customError.code = code;
     customError.status = error.response?.status;
     customError.data = error.response?.data;
+    customError.response = error.response;
     customError.originalError = error;
 
     return Promise.reject(customError);

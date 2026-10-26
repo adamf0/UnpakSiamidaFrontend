@@ -5,7 +5,7 @@ import TextInput from "@/Components/TextInput";
 import SearchSelect from "@/Components/SearchSelect";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
-import { isEmpty, throwIfResponseNotOk } from "@/Common/Utils";
+import { isEmpty, throwIfResponseNotOk, fetchFakultasUnits } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import {
   ShieldAlert,
@@ -238,16 +238,8 @@ export default function RiskAssessmentFormModal({
   const fetchFakultasOptions = async () => {
     setLoadingFakultas(true);
     try {
-      const res = await apiClient.get("/fakultasunits?mode=all");
-      const json = res.data;
-      const mapped = (Array.isArray(json) ? json : []).map((item) => ({
-        id: item.UUID,
-        UUID: item.UUID,
-        rawId: item.ID,
-        nama: `${item.Nama || ""}${item.Jenjang ? ` (${item.Jenjang})` : ""}`.trim(),
-        ...item,
-      }));
-      setFakultasOptions(mapped);
+      const opts = await fetchFakultasUnits();
+      setFakultasOptions(opts);
     } catch (err) {
       console.error("Fetch fakultas gagal:", err);
     } finally {

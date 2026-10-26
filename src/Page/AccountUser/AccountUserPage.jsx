@@ -7,10 +7,10 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
-import { Plus, Users, Pencil, Trash2, GitMerge, UserCheck, Building, GraduationCap, School } from "lucide-react";
+import { Plus, Users, User, Pencil, Trash2, GitMerge, UserCheck, Building, GraduationCap, School } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
-import { isEmpty } from "@/Common/Utils";
+import { isEmpty, renderLabelFakultasUnit, formatProdiWithJenjang } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 
@@ -34,6 +34,39 @@ export default function AccountUserPage() {
   const { getValidToken } = useAuth();
 
   const [abacMap, setAbacMap] = useState({});
+  const [fakultasMap, setFakultasMap] = useState({});
+
+  useEffect(() => {
+    const fetchFakultasMap = async () => {
+      try {
+        const res = await apiClient.get("/fakultasunits?mode=all");
+        const list = res?.data ?? res ?? [];
+        const safe = Array.isArray(list) ? list : (list.data || []);
+        const map = {};
+        safe.forEach((fu) => {
+          const id = String(fu.ID || fu.id || "");
+          const uuid = String(fu.UUID || fu.uuid || "");
+          const nama = String(fu.Nama || fu.nama_fak_prod_unit || fu.nama || "").trim();
+          const jenjang = String(fu.Jenjang || fu.jenjang || "").toUpperCase();
+          const type = String(fu.Type || fu.type || "").toLowerCase();
+
+          let formatted = nama;
+          if ((type === "prodi" || jenjang) && jenjang && !nama.toLowerCase().includes(jenjang.toLowerCase())) {
+            formatted = `${nama} (${jenjang})`;
+          }
+
+          const entry = { ...fu, formatted, jenjang, type };
+          if (id) map[id] = entry;
+          if (uuid) map[uuid] = entry;
+          if (nama) map[nama.toLowerCase()] = entry;
+        });
+        setFakultasMap(map);
+      } catch (err) {
+        console.error("Fetch fakultas map error in AccountUserPage:", err);
+      }
+    };
+    fetchFakultasMap();
+  }, []);
 
   const fetchAbacMap = async () => {
     try {
@@ -214,13 +247,36 @@ export default function AccountUserPage() {
                   label: "Fakultas / Unit",
                   searchable: true,
                   renderKey: (row) => {
-                    const unitName = row?.NamaFakultasUnit || row?.nama_fak_prod_unit;
-                    if (!unitName) {
+                    const rawUnitName = row?.NamaFakultasUnit || row?.nama_fak_prod_unit;
+                    if (!rawUnitName) {
                       return <span className="text-gray-400 text-xs">-</span>;
                     }
+
+                    const fuId = String(row?.FakultasUnit || row?.fakultas_unit || "");
+                    const fuUuid = String(row?.UuidFakultasUnit || row?.uuid_fakultas_unit || "");
+                    const foundFu =
+                      fakultasMap[fuId] ||
+                      fakultasMap[fuUuid] ||
+                      fakultasMap[rawUnitName.toLowerCase()];
+
+                    const jenjang =
+                      row?.Jenjang ||
+                      row?.jenjang ||
+                      foundFu?.jenjang ||
+                      foundFu?.Jenjang;
+                    const type =
+                      row?.Type ||
+                      row?.type ||
+                      foundFu?.type ||
+                      foundFu?.Type;
+
+                    const formattedName =
+                      foundFu?.formatted ||
+                      formatProdiWithJenjang(rawUnitName, jenjang, type);
+
                     return (
                       <span className="inline-block max-w-xs truncate text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 px-2 py-1 rounded">
-                        {unitName}
+                        {formattedName}
                       </span>
                     );
                   },
@@ -252,8 +308,21 @@ export default function AccountUserPage() {
                             item.role ||
                             "upm"
                           ).toUpperCase();
-                          const unit =
+                          const rawUnit =
                             item.NamaFakultasUnit || item.nama_fakultas_unit || "";
+                          const fuId = String(item.IdFakultasUnit || item.id_fakultas_unit || "");
+                          const fuUuid = String(item.UuidFakultasUnit || item.uuid_fakultas_unit || "");
+                          const foundFu =
+                            fakultasMap[fuId] ||
+                            fakultasMap[fuUuid] ||
+                            fakultasMap[rawUnit.toLowerCase()];
+                          const unit =
+                            foundFu?.formatted ||
+                            formatProdiWithJenjang(
+                              rawUnit,
+                              item.JenjangFakultasUnit || foundFu?.jenjang,
+                              item.TypeFakultasUnit || foundFu?.type
+                            );
                           const tahun = item.Tahun || item.tahun || "";
                           const status = (
                             item.Status ||
@@ -273,6 +342,10 @@ export default function AccountUserPage() {
                             badgeColor =
                               "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100";
                             Icon = School;
+                          } else if (role === "USER") {
+                            badgeColor =
+                              "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100";
+                            Icon = User;
                           }
 
                           return (
