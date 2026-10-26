@@ -195,13 +195,13 @@ export const ContentProvider = ({ children }) => {
     if (positionYear) {
       localStorage.setItem("positionYear", positionYear);
       const yNum = parseInt(positionYear, 10);
-      if (!isNaN(yNum) && user?.level !== "admin") {
+      if (!isNaN(yNum)) {
         const targetVer = yNum >= 2027 ? "v3" : yNum <= 2023 ? "v1" : "v2";
         setAppVersion(targetVer);
         localStorage.setItem("appVersion", targetVer);
       }
     }
-  }, [positionYear, user?.level]);
+  }, [positionYear]);
 
   /* ================= ACTIONS ================= */
   const changeYear = (year) => {
@@ -212,7 +212,7 @@ export const ContentProvider = ({ children }) => {
     localStorage.removeItem("activeLevelYear");
 
     const yNum = parseInt(yStr, 10);
-    if (!isNaN(yNum) && user?.level !== "admin") {
+    if (!isNaN(yNum)) {
       const targetVer = yNum >= 2027 ? "v3" : yNum <= 2023 ? "v1" : "v2";
       setAppVersion(targetVer);
       localStorage.setItem("appVersion", targetVer);

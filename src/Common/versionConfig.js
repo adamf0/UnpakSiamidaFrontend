@@ -75,6 +75,7 @@ export const V3_FEATURE_PATHS = [
   "/risk_assessment",
   "/analisis_resiko",
   "/analisis_risiko",
+  "/proker_v3",
 ];
 
 export const isV3FeaturePath = (path) => {
@@ -87,31 +88,29 @@ export const getVersionConfig = (versionId = "v2") => {
 
 /**
  * Menentukan apakah suatu menu ditampilkan berdasarkan versi yang dipilih
+ * - 2027 (v3): menu v3 dan v2 muncul
+ * - 2024-2026 (v2): menu v2 muncul (menu v3 tidak muncul)
+ * - <= 2023 (v1): legacy menu v1
  */
 export const isMenuVisibleForVersion = (path, versionId = "v2") => {
   if (!versionId || versionId === "all") return true;
 
-  // Program Kerja V3 aktif di versi v2 (mulai 2026) dan v3 (2027)
-  if (path === "/proker_v3" || path.startsWith("/proker_v3/")) {
-    return versionId === "v2" || versionId === "v3";
-  }
-
-  // Fitur eksklusif V3: Analisis SWOT & Analisis Risiko HANYA muncul di v3
+  // Fitur eksklusif V3 (Program Kerja V3, Analisis SWOT, Analisis Risiko): HANYA muncul di v3 (2027)
   if (isV3FeaturePath(path)) {
     return versionId === "v3";
   }
 
   const isV2 = isV2FeaturePath(path);
   if (versionId === "v2") {
-    // V2 menampilkan fitur spesifik V2 dan fitur universal
+    // V2 (2024-2026): menampilkan fitur spesifik V2 dan fitur universal (tanpa fitur V3)
     return true;
   }
   if (versionId === "v1") {
-    // V1 menyembunyikan fitur spesifik V2 dan fitur V3
+    // V1 (2023): menyembunyikan fitur spesifik V2 dan fitur V3
     return !isV2;
   }
   if (versionId === "v3") {
-    // V3 menampilkan fitur V3 dan fitur lainnya
+    // V3 (2027): menampilkan fitur V3 DAN fitur V2 serta universal
     return true;
   }
   return true;

@@ -31,20 +31,38 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
   const currentLevel = String(level || "").toLowerCase().trim();
   const isAdmin = currentLevel === "admin" || String(user?.level || "").toLowerCase().trim() === "admin";
   const selectedYear = parseInt(positionYear || activeYear || "2026", 10);
-  const effectiveVersion = isAdmin
-    ? (appVersion || "v2")
-    : selectedYear >= 2027
-    ? "v3"
-    : selectedYear <= 2023
-    ? "v1"
-    : "v2";
+  const effectiveVersion =
+    selectedYear >= 2027
+      ? "v3"
+      : selectedYear <= 2023
+      ? "v1"
+      : "v2";
   const currentVerConfig = getVersionConfig(effectiveVersion);
-  const fuVal = String(user?.fakultas_unit ?? "").trim();
-  const hasExtraRoleUnit = Array.isArray(user?.extra_role) && user.extra_role.some((r) => {
-    const id = String(r.id_fakultas_unit ?? r.IdFakultasUnit ?? "").trim();
-    return id !== "" && id !== "0" && id !== "null" && id !== "undefined";
-  });
-  const hasFakultasUnit = (fuVal !== "" && fuVal !== "0" && fuVal !== "null" && fuVal !== "undefined") || hasExtraRoleUnit;
+  const rawFu =
+    user?.fakultas_unit ??
+    user?.id_fakultas_unit ??
+    user?.FakultasUnit ??
+    user?.uuid_fakultas_unit ??
+    "";
+  const fuVal = String(rawFu).trim();
+  const directHasUnit =
+    fuVal !== "" && fuVal !== "0" && fuVal !== "null" && fuVal !== "undefined";
+
+  // Penugasan unit ABAC hanya berlaku jika role penugasan adalah "user"
+  const hasUserRoleUnit =
+    Array.isArray(user?.extra_role) &&
+    user.extra_role.some((r) => {
+      const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+      if (rRole !== "user") return false;
+      const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+      if (positionYear && rYear && rYear !== String(positionYear)) return false;
+      const id = String(
+        r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit ?? ""
+      ).trim();
+      return id !== "" && id !== "0" && id !== "null" && id !== "undefined";
+    });
+
+  const hasFakultasUnit = directHasUnit || hasUserRoleUnit;
   const [closedGroups, setClosedGroups] = useState({});
 
   const toggleGroup = (groupName) => {
