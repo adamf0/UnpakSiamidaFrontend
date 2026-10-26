@@ -289,10 +289,20 @@ export default function AccountUserPage() {
                     const uId = row?.ID || row?.id;
                     const uUuid = row?.UUID || row?.uuid;
                     const fromRow = row?.UserAbac || row?.user_abac;
-                    const abacs =
+                    const rawAbacs =
                       Array.isArray(fromRow) && fromRow.length > 0
                         ? fromRow
                         : abacMap[uId] || abacMap[uUuid] || [];
+                    const abacs = rawAbacs.filter((item) => {
+                      const r = (
+                        item.ComputedRole ||
+                        item.computed_role ||
+                        item.Role ||
+                        item.role ||
+                        ""
+                      ).toLowerCase();
+                      return ["upms", "upmf", "upml"].includes(r);
+                    });
 
                     if (!abacs || abacs.length === 0) {
                       return <span className="text-gray-400 text-xs italic">-</span>;

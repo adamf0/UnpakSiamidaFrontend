@@ -542,12 +542,13 @@ export default function UserAssignmentModal({
                       <option value="auto">
                         Otomatis (Berdasarkan Unit: {detectedRole.toUpperCase()})
                       </option>
-                      <option value="user">User (Pengguna / Pengelola Unit)</option>
                       <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
                       {(!selectedFakultasUnit || isFakultas) && (
                         <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
                       )}
-                      <option value="upms">UPMS (Unit Penjaminan Mutu Sekolah)</option>
+                      {(!selectedFakultasUnit || !isFakultas) && (
+                        <option value="upms">UPMS (Unit Penjaminan Mutu Sekolah)</option>
+                      )}
                     </select>
 
                     <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">

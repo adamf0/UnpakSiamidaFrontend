@@ -116,6 +116,7 @@ export function AuthProvider({ children }) {
             if (status && status !== "active" && status !== "aktif") return;
 
             const role = (item.ComputedRole || item.computed_role || item.Role || item.role || "").toLowerCase();
+            if (!["upms", "upmf", "upml"].includes(role)) return;
             const tahun = String(item.Tahun || item.tahun || "");
             const fuId = item.IdFakultasUnit || item.id_fakultas_unit;
             const fuNama = item.NamaFakultasUnit || item.nama_fakultas_unit;

@@ -125,7 +125,17 @@ export default function UserAssignmentPage() {
       const res = await apiClient.get(url);
       const list = res?.data ?? res ?? [];
       const safeList = Array.isArray(list) ? list : (list.data || []);
-      setAssignments(safeList);
+      const filtered = safeList.filter((item) => {
+        const r = (
+          item.Role ||
+          item.role ||
+          item.ComputedRole ||
+          item.computed_role ||
+          ""
+        ).toLowerCase();
+        return ["upms", "upmf", "upml"].includes(r);
+      });
+      setAssignments(filtered);
     } catch (err) {
       console.error("Fetch user-abac error:", err);
       addToast(
