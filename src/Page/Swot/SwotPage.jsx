@@ -407,58 +407,13 @@ const SwotPage = () => {
     },
     {
       key: "faktor",
-      label: "Faktor & Deskripsi",
-      minWidth: "240px",
+      label: "Faktor",
+      minWidth: "260px",
       searchable: true,
       renderKey: (r) => (
-        <div className="space-y-1">
-          <div className="text-sm font-semibold text-gray-900">
-            {r.Faktor || "-"}
-          </div>
-          {r.Deskripsi && (
-            <div className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
-              {r.Deskripsi}
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "strategi",
-      label: "Strategi Tindak Lanjut",
-      minWidth: "220px",
-      searchable: true,
-      renderKey: (r) => (
-        <div className="text-xs text-gray-700 leading-relaxed line-clamp-3">
-          {r.Strategi || (
-            <span className="text-gray-400 italic">Belum ada strategi</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "penilaian",
-      label: "Bobot / Rating / Skor",
-      width: "160px",
-      renderKey: (r) => (
-        <div className="text-xs space-y-0.5">
-          <div className="text-gray-600 flex items-center justify-between">
-            <span>Bobot:</span>
-            <span className="font-semibold text-gray-900">
-              {r.Bobot !== null && r.Bobot !== undefined ? r.Bobot : "-"}
-            </span>
-          </div>
-          <div className="text-gray-600 flex items-center justify-between">
-            <span>Rating:</span>
-            <span className="font-semibold text-gray-900">
-              {r.Rating !== null && r.Rating !== undefined ? r.Rating : "-"}
-            </span>
-          </div>
-          <div className="text-purple-700 flex items-center justify-between font-bold pt-0.5 border-t border-gray-150">
-            <span>Skor:</span>
-            <span>{r.Skor !== null && r.Skor !== undefined ? r.Skor : "-"}</span>
-          </div>
-        </div>
+        <span className="text-sm font-semibold text-gray-900">
+          {r.Faktor || "-"}
+        </span>
       ),
     },
   ];

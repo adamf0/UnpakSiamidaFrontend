@@ -1217,6 +1217,10 @@ export default function PemetaanChartCard() {
     };
   }, []);
 
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
     <section className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-300">
       {/* SECTION HEADER */}

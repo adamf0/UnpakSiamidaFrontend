@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useContent } from "@/Providers/ContentProvider";
+import { useAuth } from "@/Providers/AuthProvider";
 import ProkerAnnouncementCard from "./ProkerAnnouncementCard";
 import MonitoringTableCard from "./MonitoringTableCard";
 import PemetaanChartCard from "./PemetaanChartCard";
@@ -22,6 +23,8 @@ const DashboardContent = () => {
     setOpenChangeLevel,
     appVersion,
   } = useContent();
+  const { user } = useAuth();
+  const isAdmin = String(level || user?.level || "").toLowerCase().trim() === "admin";
 
   const showProkerMonitoring = isDashboardProkerVisibleForVersion(appVersion || "v2");
   const showPemetaanChart = (appVersion || "v2") === "v2" || (appVersion || "v2") === "v3";
@@ -52,8 +55,8 @@ const DashboardContent = () => {
               closedAt="25 Januari 2026, 23:59 WIB"
             />
 
-            {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN (Hanya muncul di V2 dan V3) */}
-            {showPemetaanChart && <PemetaanChartCard />}
+            {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN (Hanya muncul untuk Admin) */}
+            {isAdmin && showPemetaanChart && <PemetaanChartCard />}
 
             {/* TABLE CARD (Hanya untuk versi V1 & V2) */}
             <MonitoringTableCard />
@@ -127,8 +130,8 @@ const DashboardContent = () => {
               </div>
             </div>
 
-            {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN */}
-            <PemetaanChartCard />
+            {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN (Hanya muncul untuk Admin) */}
+            {isAdmin && <PemetaanChartCard />}
           </div>
         )}
       </main>

@@ -82,26 +82,10 @@ export default function SwotFormModal({
       fakultas_unit: null,
       kategori: "Kekuatan",
       faktor: "",
-      deskripsi: "",
-      strategi: "",
-      bobot: "",
-      rating: "",
     },
   });
 
   const selectedKategori = watch("kategori");
-  const currentBobot = watch("bobot");
-  const currentRating = watch("rating");
-
-  // Kalkulasi preview skor otomatis
-  const calculatedSkor = (() => {
-    const b = parseFloat(currentBobot);
-    const r = parseFloat(currentRating);
-    if (!isNaN(b) && !isNaN(r)) {
-      return (b * r).toFixed(2);
-    }
-    return "-";
-  })();
 
   const fetchTahunOptions = async () => {
     setLoadingTahun(true);
@@ -177,10 +161,6 @@ export default function SwotFormModal({
           fakultas_unit: selectedUnit,
           kategori: data.Kategori || "Kekuatan",
           faktor: data.Faktor || "",
-          deskripsi: data.Deskripsi || "",
-          strategi: data.Strategi || "",
-          bobot: data.Bobot !== null && data.Bobot !== undefined ? String(data.Bobot) : "",
-          rating: data.Rating !== null && data.Rating !== undefined ? String(data.Rating) : "",
         });
       } else {
         // Mode new
@@ -189,10 +169,6 @@ export default function SwotFormModal({
           fakultas_unit: null,
           kategori: "Kekuatan",
           faktor: "",
-          deskripsi: "",
-          strategi: "",
-          bobot: "",
-          rating: "",
         });
       }
     }
@@ -219,18 +195,6 @@ export default function SwotFormModal({
       fd.append("tahun", form.tahun?.nama || form.tahun?.Tahun || "");
       fd.append("kategori", form.kategori || "Kekuatan");
       fd.append("faktor", form.faktor || "");
-      fd.append("deskripsi", form.deskripsi || "");
-      fd.append("strategi", form.strategi || "");
-
-      if (form.bobot) {
-        fd.append("bobot", form.bobot);
-      }
-      if (form.rating) {
-        fd.append("rating", form.rating);
-      }
-      if (calculatedSkor !== "-") {
-        fd.append("skor", calculatedSkor);
-      }
 
       if (isAdmin) {
         if (form.fakultas_unit) {
@@ -419,80 +383,6 @@ export default function SwotFormModal({
                     />
                   </div>
 
-                  {/* Baris 4: Deskripsi Faktor (Long Text Field) */}
-                  <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/50 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-sm font-bold text-gray-800">
-                        Deskripsi / Uraian Faktor
-                      </label>
-                      <span className="text-[11px] text-gray-500 font-medium">Uraian Komprehensif</span>
-                    </div>
-                    <textarea
-                      rows={3}
-                      placeholder="Jelaskan secara komprehensif faktor yang diidentifikasi..."
-                      className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-600 transition leading-relaxed bg-white shadow-2xs resize-y min-h-[80px]"
-                      {...register("deskripsi")}
-                    />
-                    <p className="text-[11px] text-gray-500 leading-normal">
-                      Detail konteks mengapa faktor ini menjadi kekuatan, kelemahan, peluang, atau ancaman bagi unit.
-                    </p>
-                  </div>
-
-                  {/* Baris 5: Strategi Tindak Lanjut (Long Text Field) */}
-                  <div className="p-4 rounded-xl border border-purple-200/90 bg-purple-50/20 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-sm font-bold text-purple-900">
-                        Strategi Tindak Lanjut / Penanganan
-                      </label>
-                      <span className="text-[11px] text-purple-700 font-medium">Rencana Aksi / Mitigasi</span>
-                    </div>
-                    <textarea
-                      rows={3}
-                      placeholder="Rencana aksi atau strategi konkret (pemanfaatan kekuatan, mitigasi kelemahan/ancaman, rencana pengembangan, dsb)..."
-                      className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-600 transition leading-relaxed bg-white shadow-2xs resize-y min-h-[85px]"
-                      {...register("strategi")}
-                    />
-                    <p className="text-[11px] text-gray-500 leading-normal">
-                      Langkah-langkah strategis terukur yang akan diambil unit kerja untuk menangani atau memanfaatkan faktor ini.
-                    </p>
-                  </div>
-
-                  {/* Baris 6: Bobot, Rating, Skor */}
-                  <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
-                    <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2.5">
-                      Penilaian Kuantitatif (Opsional)
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                      <div>
-                        <TextInput
-                          label="Bobot (0.01 - 1.00)"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1"
-                          placeholder="0.25"
-                          {...register("bobot")}
-                        />
-                      </div>
-                      <div>
-                        <TextInput
-                          label="Rating (1 - 5)"
-                          type="number"
-                          step="1"
-                          min="1"
-                          max="5"
-                          placeholder="4"
-                          {...register("rating")}
-                        />
-                      </div>
-                      <div className="bg-white px-3.5 py-2 rounded-lg border border-gray-200 flex flex-col justify-center shadow-2xs">
-                        <span className="text-xs text-gray-500 font-medium">Skor (Bobot × Rating)</span>
-                        <span className="text-base font-bold text-purple-700">
-                          {calculatedSkor}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* PINNED FOOTER (ALWAYS VISIBLE, NEVER CUT OFF) */}
