@@ -137,7 +137,13 @@ export default function RiskAssessmentFormModal({
   const fetchMetadata = async () => {
     setLoadingMetadata(true);
     try {
-      const res = await apiClient.get("/risk_options");
+      const params = new URLSearchParams();
+      const currentUnitId = userUnit?.UUID || userUnit?.id || userUnit?.rawId || user?.fakultas_unit;
+      if (!isAdmin && currentUnitId) {
+        params.append("fakultas_unit", String(currentUnitId));
+      }
+      const qs = params.toString();
+      const res = await apiClient.get(`/risk_options${qs ? `?${qs}` : ""}`);
       const json = res.data;
       if (json) {
         if (Array.isArray(json.kemungkinan)) {
@@ -174,6 +180,8 @@ export default function RiskAssessmentFormModal({
                 nama: label,
                 mata_program: mpName,
                 id_fakultas_unit: p.id_fakultas_unit,
+                uuid_fakultas_unit: p.uuid_fakultas_unit,
+                nama_fakultas_unit: p.nama_fakultas_unit,
                 id_master_tahun: p.id_master_tahun,
                 tahun: thn,
                 subText: thn ? `Tahun Anggaran: ${thn}` : undefined,
@@ -182,7 +190,12 @@ export default function RiskAssessmentFormModal({
           );
         } else {
           try {
-            const resMp = await apiClient.get("/mataprograms?mode=all");
+            const paramsMp = new URLSearchParams({ mode: "all" });
+            if (!isAdmin && currentUnitId) {
+              paramsMp.append("id_fakultas_unit", String(currentUnitId));
+              paramsMp.append("target", String(currentUnitId));
+            }
+            const resMp = await apiClient.get(`/mataprograms?${paramsMp.toString()}`);
             const jsonMp = resMp.data;
             if (Array.isArray(jsonMp)) {
               setAllPrograms(
@@ -196,6 +209,9 @@ export default function RiskAssessmentFormModal({
                     UUID: p.UUID || p.uuid,
                     nama: label,
                     mata_program: mpName,
+                    id_fakultas_unit: p.FakultasUnitId || p.id_fakultas_unit,
+                    uuid_fakultas_unit: p.FakultasUnitUuid || p.uuid_fakultas_unit,
+                    nama_fakultas_unit: p.FakultasUnit || p.nama_fakultas_unit,
                     id_master_tahun: p.TahunId,
                     tahun: thn,
                     subText: thn ? `Tahun Anggaran: ${thn}` : undefined,
@@ -261,26 +277,63 @@ export default function RiskAssessmentFormModal({
     let list = allPrograms;
 
     if (selectedFakultas) {
-      const fuId = selectedFakultas.rawId || selectedFakultas.ID || selectedFakultas.id;
-      const hasUnitPrograms = list.some((p) => p.id_fakultas_unit);
-      if (hasUnitPrograms) {
-        list = list.filter((p) => !p.id_fakultas_unit || String(p.id_fakultas_unit) === String(fuId));
-      }
+      const fuRawId = selectedFakultas.rawId || selectedFakultas.ID || selectedFakultas.id_numeric;
+      const fuUuid =
+        selectedFakultas.UUID ||
+        selectedFakultas.uuid ||
+        (typeof selectedFakultas.id === "string" && selectedFakultas.id.includes("-")
+          ? selectedFakultas.id
+          : null);
+      const fuName = (
+        selectedFakultas.pureName ||
+        selectedFakultas.nama ||
+        selectedFakultas.label ||
+        ""
+      ).toLowerCase().trim();
+
+      list = list.filter((p) => {
+        const pRawId = p.id_fakultas_unit || p.FakultasUnitId;
+        const pUuid = p.uuid_fakultas_unit || p.UuidFakultasUnit || p.FakultasUnitUuid;
+        const pName = (p.nama_fakultas_unit || p.FakultasUnit || "").toLowerCase().trim();
+
+        // Program MUST match the selected unit
+        if (!pRawId && !pUuid && !pName) {
+          return false;
+        }
+
+        if (fuRawId && pRawId && String(pRawId) === String(fuRawId)) {
+          return true;
+        }
+        if (fuUuid && pUuid && String(pUuid).toLowerCase() === String(fuUuid).toLowerCase()) {
+          return true;
+        }
+        if (fuName && pName && (fuName === pName || fuName.includes(pName) || pName.includes(fuName))) {
+          return true;
+        }
+        if (selectedFakultas.id && pRawId && String(pRawId) === String(selectedFakultas.id)) {
+          return true;
+        }
+
+        return false;
+      });
     }
 
     if (selectedTahun) {
       const thnName = String(selectedTahun.Tahun || selectedTahun.nama || "").trim();
       const thnId = String(selectedTahun.rawId || selectedTahun.ID || "").trim();
-      const filteredByYear = list.filter((p) => {
+      const thnUuid = String(selectedTahun.UUID || selectedTahun.uuid || "").trim();
+
+      list = list.filter((p) => {
         const pThn = String(p.tahun || "").trim();
-        const pThnId = String(p.id_master_tahun || "").trim();
-        if (pThn && thnName) return pThn === thnName;
-        if (pThnId && thnId) return pThnId === thnId;
-        return true;
+        const pThnId = String(p.id_master_tahun || p.TahunId || "").trim();
+        const pThnUuid = String(p.tahunuuid || p.TahunUuid || "").trim();
+
+        if (pThn && thnName && pThn === thnName) return true;
+        if (pThnId && thnId && pThnId === thnId) return true;
+        if (pThnUuid && thnUuid && pThnUuid === thnUuid) return true;
+        if (!pThn && !pThnId) return true;
+        return false;
       });
-      if (filteredByYear.length > 0) {
-        list = filteredByYear;
-      }
     }
 
     return list;

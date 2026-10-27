@@ -217,17 +217,24 @@ const RiskAssessmentPage = () => {
       }
     }
     if (selectedFakultas) {
-      const fuObj = fakultasOptions.find((f) => f.UUID === selectedFakultas);
-      const fuId = fuObj?.rawId || fuObj?.ID;
-      const hasUnit = list.some((p) => p.id_fakultas_unit);
-      if (hasUnit && fuId) {
-        const filteredByUnit = list.filter(
-          (p) => !p.id_fakultas_unit || String(p.id_fakultas_unit) === String(fuId)
-        );
-        if (filteredByUnit.length > 0) {
-          list = filteredByUnit;
-        }
-      }
+      const fuObj = fakultasOptions.find(
+        (f) => f.UUID === selectedFakultas || f.id === selectedFakultas
+      );
+      const fuId = fuObj?.rawId || fuObj?.ID || fuObj?.id_numeric;
+      const fuUuid = fuObj?.UUID || fuObj?.uuid;
+      const fuName = (fuObj?.nama || "").toLowerCase().trim();
+
+      list = list.filter((p) => {
+        const pRawId = p.id_fakultas_unit || p.FakultasUnitId;
+        const pUuid = p.uuid_fakultas_unit || p.UuidFakultasUnit || p.FakultasUnitUuid;
+        const pName = (p.nama_fakultas_unit || p.FakultasUnit || "").toLowerCase().trim();
+
+        if (!pRawId && !pUuid && !pName) return false;
+        if (fuId && pRawId && String(pRawId) === String(fuId)) return true;
+        if (fuUuid && pUuid && String(pUuid).toLowerCase() === String(fuUuid).toLowerCase()) return true;
+        if (fuName && pName && (fuName === pName || fuName.includes(pName) || pName.includes(fuName))) return true;
+        return false;
+      });
     }
 
     return list.map((p) => {
