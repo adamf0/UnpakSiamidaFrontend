@@ -486,7 +486,7 @@ export default function ProkerV3AktivitasPage() {
     setActToRevisi(act);
     const currReal = getRealisasiAnggaran(act);
     const initialVal =
-      currReal !== null && currReal > 0 ? currReal : (Number(act.Anggaran) || 0);
+      currReal !== null && currReal !== undefined ? currReal : (Number(act.Anggaran) || 0);
     setRevisiAnggaran(initialVal);
     setRevisiAnggaranStr(
       initialVal > 0 ? new Intl.NumberFormat("id-ID").format(initialVal) : "0"

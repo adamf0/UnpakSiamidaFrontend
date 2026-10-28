@@ -161,7 +161,7 @@ export function formatRupiah(val, isCensored = false) {
 export function hasRealisasiAnggaran(item) {
   if (!item) return false;
   const val = item.Realisasi !== undefined ? item.Realisasi : item.realisasi;
-  return val !== null && val !== undefined && val !== "" && !isNaN(Number(val)) && Number(val) > 0;
+  return val !== null && val !== undefined && val !== "" && !isNaN(Number(val)) && Number(val) >= 0;
 }
 
 export function getRealisasiAnggaran(item) {
