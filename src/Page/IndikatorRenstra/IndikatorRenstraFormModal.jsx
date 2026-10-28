@@ -12,6 +12,12 @@ import {
 } from "@/Common/Utils";
 import { apiClient, API_BASE_URL } from "@/Common/api";
 
+const TIPE_TARGET_OPTIONS = [
+  { id: "numerik", value: "numerik", label: "Numerik" },
+  { id: "range", value: "range", label: "Range" },
+  { id: "kategori", value: "kategori", label: "Kategori" },
+];
+
 export default function IndikatorRenstraFormModal({
   open,
   mode,
@@ -42,7 +48,7 @@ export default function IndikatorRenstraFormModal({
       indikator: "",
       parent: null,
       tahun: "",
-      tipe_target: "",
+      tipe_target: null,
       operator: null,
     },
   });
@@ -61,12 +67,21 @@ export default function IndikatorRenstraFormModal({
           item.Uuid === data.UuidStandar
       );
 
+      const targetSelected =
+        TIPE_TARGET_OPTIONS.find(
+          (item) =>
+            item.id.toLowerCase() ===
+              String(data.TipeTarget || "").toLowerCase().trim() ||
+            item.label.toLowerCase() ===
+              String(data.TipeTarget || "").toLowerCase().trim()
+        ) || (data.TipeTarget ? { id: data.TipeTarget, label: data.TipeTarget } : null);
+
       reset({
         standar_renstra: standarSelected || null,
         indikator: data.Indikator || "",
         parent: null,
         tahun: data.Tahun ? String(data.Tahun) : "",
-        tipe_target: data.TipeTarget || "",
+        tipe_target: targetSelected,
         operator: data.Operator || null,
       });
 
@@ -79,7 +94,7 @@ export default function IndikatorRenstraFormModal({
         indikator: "",
         parent: null,
         tahun: "",
-        tipe_target: "",
+        tipe_target: null,
         operator: null,
       });
       setIndikatorOptions([]);
@@ -326,11 +341,16 @@ export default function IndikatorRenstraFormModal({
         form.parent?.id ??
         "";
 
+      const rawTipeTarget =
+        form.tipe_target?.value ??
+        form.tipe_target?.id ??
+        (typeof form.tipe_target === "string" ? form.tipe_target : "");
+
       fd.append("standar_renstra", standarUuid);
       fd.append("indikator", form?.indikator ?? "");
       fd.append("parent", parentUuid);
       fd.append("tahun", form?.tahun ?? "");
-      fd.append("tipe_target", form?.tipe_target ?? "");
+      fd.append("tipe_target", rawTipeTarget);
       fd.append("operator", form?.operator ?? "");
 
       if (mode === "edit") {
@@ -431,10 +451,22 @@ export default function IndikatorRenstraFormModal({
                   })}
                 />
 
-                <TextInput
+                <SearchSelect
                   label="Tipe Target"
                   required
+                  options={TIPE_TARGET_OPTIONS}
+                  placeholder="Pilih tipe target"
+                  value={watch("tipe_target")}
                   error={errors.tipe_target?.message}
+                  onChange={(item) =>
+                    setValue("tipe_target", item, {
+                      shouldValidate: true,
+                    })
+                  }
+                />
+
+                <input
+                  type="hidden"
                   {...register("tipe_target", {
                     required: "Tipe Target wajib diisi",
                   })}
