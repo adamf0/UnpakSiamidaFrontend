@@ -83,7 +83,27 @@ export default function ProkerV3AktivitasPage() {
     .trim();
   const isVerifier = ["upml", "upmf", "upms", "fakultas", "evaluator"].includes(curRole);
   const isAnggaran = ["anggaran", "keuangan"].includes(curRole);
+  const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
   const canRevisiAnggaran = isAnggaran || isAdmin;
+
+  // Level verifikator dan role verifikator
+  const isVerifikatorRoleOrLevel = useMemo(() => {
+    if (isAdmin) return false;
+    const normRole = curRole.toLowerCase().trim();
+    const normLevel = String(level || localStorage.getItem("activeLevel") || "").toLowerCase().trim();
+    const userLevel = String(user?.level || "").toLowerCase().trim();
+    const verifierRoles = ["upml", "upmf", "upms", "fakultas", "evaluator", "verifikator"];
+    return (
+      verifierRoles.includes(normRole) ||
+      normRole.includes("verifikator") ||
+      verifierRoles.includes(normLevel) ||
+      normLevel.includes("verifikator") ||
+      userLevel === "verifikator" ||
+      userLevel.includes("verifikator") ||
+      isVerifier ||
+      isEvaluator
+    );
+  }, [curRole, level, user?.level, isAdmin, isVerifier, isEvaluator]);
 
   // Tombol tambah aktivitas hanya boleh muncul jika role aktif adalah "user"
   const isLevelUser = curRole === "user";
@@ -719,9 +739,26 @@ export default function ProkerV3AktivitasPage() {
 
     const promises = selectedActUuids.map(async (uuid) => {
       try {
+        let roleToUse = curRole;
+        if (isAdmin) {
+          const act = activities.find((a) => a.UUID === uuid);
+          if (act) {
+            if (isProdi) {
+              const stUpms = (act.StatusUpms || "").toLowerCase().trim();
+              const stUpmf = (act.StatusUpmf || "").toLowerCase().trim();
+              if (stUpms !== "disetujui") roleToUse = "upms";
+              else if (stUpmf !== "disetujui") roleToUse = "upmf";
+              else roleToUse = "lpm";
+            } else {
+              const stUpml = (act.StatusUpml || "").toLowerCase().trim();
+              if (stUpml !== "disetujui") roleToUse = "upml";
+              else roleToUse = "lpm";
+            }
+          }
+        }
         const fd = new FormData();
         fd.append("status", "disetujui");
-        fd.append("role", curRole);
+        fd.append("role", roleToUse);
         await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, fd);
         return { uuid, success: true };
       } catch (err) {
@@ -797,9 +834,26 @@ export default function ProkerV3AktivitasPage() {
     const reason = batchRejectReason.trim();
     const promises = selectedActUuids.map(async (uuid) => {
       try {
+        let roleToUse = curRole;
+        if (isAdmin) {
+          const act = activities.find((a) => a.UUID === uuid);
+          if (act) {
+            if (isProdi) {
+              const stUpms = (act.StatusUpms || "").toLowerCase().trim();
+              const stUpmf = (act.StatusUpmf || "").toLowerCase().trim();
+              if (stUpms !== "disetujui") roleToUse = "upms";
+              else if (stUpmf !== "disetujui") roleToUse = "upmf";
+              else roleToUse = "lpm";
+            } else {
+              const stUpml = (act.StatusUpml || "").toLowerCase().trim();
+              if (stUpml !== "disetujui") roleToUse = "upml";
+              else roleToUse = "lpm";
+            }
+          }
+        }
         const fd = new FormData();
         fd.append("status", "ditolak");
-        fd.append("role", curRole);
+        fd.append("role", roleToUse);
         fd.append("catatan_penolakan", reason);
         await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, fd);
         return { uuid, success: true };
@@ -1275,7 +1329,9 @@ export default function ProkerV3AktivitasPage() {
                     Total Anggaran Akumulatif
                   </div>
                   <div className="text-base font-extrabold font-mono">
-                    {hasRealisasi && totalAnggaran !== totalRealisasi ? (
+                    {isVerifikatorRoleOrLevel ? (
+                      <span className="tracking-widest text-white/90">***</span>
+                    ) : hasRealisasi && totalAnggaran !== totalRealisasi ? (
                       <div className="flex flex-wrap items-baseline gap-2">
                         <span
                           className="line-through text-purple-200/80 text-xs font-normal decoration-rose-300 decoration-1"
@@ -1431,9 +1487,9 @@ export default function ProkerV3AktivitasPage() {
                   </th>
                   <th className="py-3 px-4 min-w-[170px]">Dokumen Referensi</th>
                   <th className="py-3 px-4 min-w-[210px]">Jadwal & Bukti</th>
-                  <th className="py-3 px-4 min-w-[150px]">Status UPML</th>
+                  <th className="py-3 px-4 min-w-[150px]">Status UPML/UPMS</th>
                   <th className="py-3 px-4 min-w-[150px]">Status UPMF</th>
-                  <th className="py-3 px-4 min-w-[150px]">Status UPMS</th>
+                  <th className="py-3 px-4 min-w-[150px]">Status LPM</th>
                   <th className="py-3 px-4 min-w-[190px] text-center">Aksi</th>
                 </tr>
               </thead>
@@ -1521,7 +1577,11 @@ export default function ProkerV3AktivitasPage() {
 
                           {/* Anggaran */}
                           <td className="py-3.5 px-4 text-right font-mono text-xs whitespace-nowrap">
-                            {isAnggaranRevised(act) ? (
+                            {isVerifikatorRoleOrLevel ? (
+                              <div className="text-center font-bold text-gray-400 tracking-widest">
+                                ***
+                              </div>
+                            ) : isAnggaranRevised(act) ? (
                               <div>
                                 <span
                                   className="line-through text-gray-400 text-[11px] block font-normal decoration-rose-500 decoration-1"
@@ -1611,13 +1671,15 @@ export default function ProkerV3AktivitasPage() {
                             </button>
                           </td>
 
-                          {/* Status UPML */}
+                          {/* Status UPML/UPMS */}
                           <td className="py-3.5 px-4">
                             {(() => {
-                              const stUpml = (act.StatusUpml || "")
-                                .toLowerCase()
-                                .trim();
-                              if (stUpml === "disetujui") {
+                              const curSt = (
+                                isProdi ? act.StatusUpms : act.StatusUpml
+                              )
+                                ?.toLowerCase()
+                                ?.trim() || "";
+                              if (curSt === "disetujui") {
                                 return (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -1625,9 +1687,11 @@ export default function ProkerV3AktivitasPage() {
                                   </span>
                                 );
                               }
-                              if (stUpml === "ditolak") {
-                                const noteUpml =
-                                  act.CatatanTolakUpml ||
+                              if (curSt === "ditolak") {
+                                const note =
+                                  (isProdi
+                                    ? act.CatatanTolakUpms
+                                    : act.CatatanTolakUpml) ||
                                   act.CatatanVerifikator ||
                                   act.CatatanPenolakan;
                                 return (
@@ -1635,19 +1699,19 @@ export default function ProkerV3AktivitasPage() {
                                     <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
                                       DITOLAK
                                     </span>
-                                    {noteUpml && (
+                                    {note && (
                                       <span
                                         className="text-[10px] text-rose-700 italic bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 line-clamp-2 max-w-[160px]"
-                                        title={`Catatan UPML: ${noteUpml}`}
+                                        title={`Catatan: ${note}`}
                                       >
-                                        "{noteUpml}"
+                                        "{note}"
                                       </span>
                                     )}
                                   </div>
                                 );
                               }
                               if (
-                                stUpml === "menunggu" ||
+                                curSt === "menunggu" ||
                                 actStatusStr === "diajukan"
                               ) {
                                 return (
@@ -1678,13 +1742,13 @@ export default function ProkerV3AktivitasPage() {
                                 );
                               }
 
-                              const stUpml = (act.StatusUpml || "")
+                              const stUpms = (act.StatusUpms || "")
                                 .toLowerCase()
                                 .trim();
                               const stUpmf = (act.StatusUpmf || "")
                                 .toLowerCase()
                                 .trim();
-                              const isUpmlApproved = stUpml === "disetujui";
+                              const isUpmsApproved = stUpms === "disetujui";
 
                               if (stUpmf === "disetujui") {
                                 return (
@@ -1715,13 +1779,13 @@ export default function ProkerV3AktivitasPage() {
                                   </div>
                                 );
                               }
-                              if (!isUpmlApproved) {
+                              if (!isUpmsApproved) {
                                 return (
                                   <span
                                     className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
-                                    title="Menunggu verifikasi UPML disetujui"
+                                    title="Menunggu verifikasi UPMS disetujui"
                                   >
-                                    MENUNGGU UPML
+                                    MENUNGGU UPMS
                                   </span>
                                 );
                               }
@@ -1733,7 +1797,7 @@ export default function ProkerV3AktivitasPage() {
                             })()}
                           </td>
 
-                          {/* Status UPMS */}
+                          {/* Status LPM */}
                           <td className="py-3.5 px-4">
                             {(() => {
                               const stUpml = (act.StatusUpml || "")
@@ -1745,11 +1809,22 @@ export default function ProkerV3AktivitasPage() {
                               const stUpms = (act.StatusUpms || "")
                                 .toLowerCase()
                                 .trim();
-                              const isUpmlApproved = stUpml === "disetujui";
-                              const isUpmfApproved =
-                                !isProdi || stUpmf === "disetujui";
+                              const stLpm = (act.StatusLpm || "")
+                                .toLowerCase()
+                                .trim();
+                              const isLpmApproved =
+                                stLpm === "disetujui" ||
+                                (act.StatusVerifikator || "")
+                                  .toLowerCase()
+                                  .trim() === "terima_verifikator" ||
+                                (act.Status || "")
+                                  .toLowerCase()
+                                  .trim() === "disetujui" ||
+                                (act.Status || "")
+                                  .toLowerCase()
+                                  .trim() === "terima_anggaran";
 
-                              if (stUpms === "disetujui") {
+                              if (isLpmApproved) {
                                 return (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
                                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -1757,9 +1832,9 @@ export default function ProkerV3AktivitasPage() {
                                   </span>
                                 );
                               }
-                              if (stUpms === "ditolak") {
-                                const noteUpms =
-                                  act.CatatanTolakUpms ||
+                              if (stLpm === "ditolak") {
+                                const noteLpm =
+                                  act.CatatanTolakLpm ||
                                   act.CatatanVerifikator ||
                                   act.CatatanPenolakan;
                                 return (
@@ -1767,40 +1842,53 @@ export default function ProkerV3AktivitasPage() {
                                     <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
                                       DITOLAK
                                     </span>
-                                    {noteUpms && (
+                                    {noteLpm && (
                                       <span
                                         className="text-[10px] text-rose-700 italic bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 line-clamp-2 max-w-[160px]"
-                                        title={`Catatan UPMS: ${noteUpms}`}
+                                        title={`Catatan LPM: ${noteLpm}`}
                                       >
-                                        "{noteUpms}"
+                                        "{noteLpm}"
                                       </span>
                                     )}
                                   </div>
                                 );
                               }
-                              if (!isUpmlApproved) {
-                                return (
-                                  <span
-                                    className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
-                                    title="Menunggu verifikasi UPML disetujui"
-                                  >
-                                    MENUNGGU UPML
-                                  </span>
-                                );
-                              }
-                              if (isProdi && !isUpmfApproved) {
-                                return (
-                                  <span
-                                    className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
-                                    title="Menunggu verifikasi UPMF disetujui"
-                                  >
-                                    MENUNGGU UPMF
-                                  </span>
-                                );
+                              if (isProdi) {
+                                if (stUpms !== "disetujui") {
+                                  return (
+                                    <span
+                                      className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
+                                      title="Menunggu verifikasi UPMS disetujui"
+                                    >
+                                      MENUNGGU UPMS
+                                    </span>
+                                  );
+                                }
+                                if (stUpmf !== "disetujui") {
+                                  return (
+                                    <span
+                                      className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
+                                      title="Menunggu verifikasi UPMF disetujui"
+                                    >
+                                      MENUNGGU UPMF
+                                    </span>
+                                  );
+                                }
+                              } else {
+                                if (stUpml !== "disetujui") {
+                                  return (
+                                    <span
+                                      className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
+                                      title="Menunggu verifikasi UPML disetujui"
+                                    >
+                                      MENUNGGU UPML
+                                    </span>
+                                  );
+                                }
                               }
                               return (
                                 <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-purple-300 bg-purple-50 text-purple-800 uppercase tracking-wider">
-                                  MENUNGGU UPMS
+                                  MENUNGGU LPM
                                 </span>
                               );
                             })()}
@@ -1812,46 +1900,58 @@ export default function ProkerV3AktivitasPage() {
                               {/* 1. UPML VERIFY / REJECT ACTION */}
                               {curRole === "upml" && (
                                 <>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleVerifySingleRow(act, "upml")
-                                    }
-                                    disabled={
-                                      verifyingRowUuid === act.UUID ||
-                                      isBatchProcessing
-                                    }
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                    title="Setujui verifikasi UPML"
-                                  >
-                                    {verifyingRowUuid === act.UUID ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <Check className="w-3 h-3" />
-                                    )}
-                                    <span>Verifikasi</span>
-                                  </button>
+                                  {isProdi ? (
+                                    <span className="text-[11px] text-gray-400 italic">
+                                      Khusus Non-Prodi
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleVerifySingleRow(act, "upml")
+                                        }
+                                        disabled={
+                                          verifyingRowUuid === act.UUID ||
+                                          isBatchProcessing
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                        title="Setujui verifikasi UPML"
+                                      >
+                                        {verifyingRowUuid === act.UUID ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <Check className="w-3 h-3" />
+                                        )}
+                                        <span>Verifikasi</span>
+                                      </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleOpenSingleRejectModal(act, "upml")
-                                    }
-                                    disabled={
-                                      verifyingRowUuid === act.UUID ||
-                                      isBatchProcessing
-                                    }
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                    title="Tolak verifikasi UPML"
-                                  >
-                                    <X className="w-3 h-3" />
-                                    <span>Tolak</span>
-                                  </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleOpenSingleRejectModal(
+                                            act,
+                                            "upml",
+                                          )
+                                        }
+                                        disabled={
+                                          verifyingRowUuid === act.UUID ||
+                                          isBatchProcessing
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                        title="Tolak verifikasi UPML"
+                                      >
+                                        <X className="w-3 h-3" />
+                                        <span>Tolak</span>
+                                      </button>
+                                    </>
+                                  )}
                                 </>
                               )}
 
                               {/* 2. UPMF VERIFY / REJECT ACTION */}
-                              {curRole === "upmf" && (
+                              {(curRole === "upmf" ||
+                                curRole === "fakultas") && (
                                 <>
                                   {!isProdi ? (
                                     <span className="text-[11px] text-gray-400 italic">
@@ -1859,8 +1959,8 @@ export default function ProkerV3AktivitasPage() {
                                     </span>
                                   ) : (
                                     (() => {
-                                      const isUpmlApproved =
-                                        (act.StatusUpml || "")
+                                      const isUpmsApproved =
+                                        (act.StatusUpms || "")
                                           .toLowerCase()
                                           .trim() === "disetujui";
                                       return (
@@ -1871,15 +1971,15 @@ export default function ProkerV3AktivitasPage() {
                                               handleVerifySingleRow(act, "upmf")
                                             }
                                             disabled={
-                                              !isUpmlApproved ||
+                                              !isUpmsApproved ||
                                               verifyingRowUuid === act.UUID ||
                                               isBatchProcessing
                                             }
                                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                             title={
-                                              !isUpmlApproved
-                                                ? "Menunggu persetujuan UPML terlebih dahulu"
-                                                : "Setujui verifikasi UPMF"
+                                              !isUpmsApproved
+                                                ? "Menunggu persetujuan UPMS terlebih dahulu"
+                                                : "Setujui verifikasi Fakultas (UPMF)"
                                             }
                                           >
                                             {verifyingRowUuid === act.UUID ? (
@@ -1899,15 +1999,15 @@ export default function ProkerV3AktivitasPage() {
                                               )
                                             }
                                             disabled={
-                                              !isUpmlApproved ||
+                                              !isUpmsApproved ||
                                               verifyingRowUuid === act.UUID ||
                                               isBatchProcessing
                                             }
                                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                             title={
-                                              !isUpmlApproved
-                                                ? "Menunggu persetujuan UPML terlebih dahulu"
-                                                : "Tolak verifikasi UPMF"
+                                              !isUpmsApproved
+                                                ? "Menunggu persetujuan UPMS terlebih dahulu"
+                                                : "Tolak verifikasi Fakultas (UPMF)"
                                             }
                                           >
                                             <X className="w-3 h-3" />
@@ -1921,24 +2021,13 @@ export default function ProkerV3AktivitasPage() {
                               )}
 
                               {/* 3. UPMS VERIFY / REJECT ACTION */}
-                              {curRole === "upms" &&
-                                (() => {
-                                  const isUpmlApproved =
-                                    (act.StatusUpml || "")
-                                      .toLowerCase()
-                                      .trim() === "disetujui";
-                                  const isUpmfApproved =
-                                    !isProdi ||
-                                    (act.StatusUpmf || "")
-                                      .toLowerCase()
-                                      .trim() === "disetujui";
-                                  const canUpmsVerify =
-                                    isUpmlApproved && isUpmfApproved;
-                                  const waitReason = !isUpmlApproved
-                                    ? "Menunggu persetujuan UPML"
-                                    : "Menunggu persetujuan UPMF";
-
-                                  return (
+                              {curRole === "upms" && (
+                                <>
+                                  {!isProdi ? (
+                                    <span className="text-[11px] text-gray-400 italic">
+                                      Khusus Prodi
+                                    </span>
+                                  ) : (
                                     <>
                                       <button
                                         type="button"
@@ -1946,16 +2035,11 @@ export default function ProkerV3AktivitasPage() {
                                           handleVerifySingleRow(act, "upms")
                                         }
                                         disabled={
-                                          !canUpmsVerify ||
                                           verifyingRowUuid === act.UUID ||
                                           isBatchProcessing
                                         }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                        title={
-                                          !canUpmsVerify
-                                            ? `${waitReason} terlebih dahulu`
-                                            : "Setujui verifikasi UPMS"
-                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                        title="Setujui verifikasi UPMS"
                                       >
                                         {verifyingRowUuid === act.UUID ? (
                                           <RefreshCw className="w-3 h-3 animate-spin" />
@@ -1974,47 +2058,57 @@ export default function ProkerV3AktivitasPage() {
                                           )
                                         }
                                         disabled={
-                                          !canUpmsVerify ||
                                           verifyingRowUuid === act.UUID ||
                                           isBatchProcessing
                                         }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                        title={
-                                          !canUpmsVerify
-                                            ? `${waitReason} terlebih dahulu`
-                                            : "Tolak verifikasi UPMS"
-                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                        title="Tolak verifikasi UPMS"
                                       >
                                         <X className="w-3 h-3" />
                                         <span>Tolak</span>
                                       </button>
                                     </>
-                                  );
-                                })()}
+                                  )}
+                                </>
+                              )}
 
                               {/* 4. ADMIN VERIFY / REJECT ACTION */}
                               {isAdmin &&
                                 curRole !== "upml" &&
                                 curRole !== "upmf" &&
+                                curRole !== "fakultas" &&
                                 curRole !== "upms" && (
                                   <>
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const stUpml = (act.StatusUpml || "")
-                                          .toLowerCase()
-                                          .trim();
-                                        const stUpmf = (act.StatusUpmf || "")
-                                          .toLowerCase()
-                                          .trim();
-                                        let target = "upms";
-                                        if (stUpml !== "disetujui")
-                                          target = "upml";
-                                        else if (
-                                          isProdi &&
-                                          stUpmf !== "disetujui"
-                                        )
-                                          target = "upmf";
+                                        let target = "lpm";
+                                        if (isProdi) {
+                                          const stUpms = (
+                                            act.StatusUpms || ""
+                                          )
+                                            .toLowerCase()
+                                            .trim();
+                                          const stUpmf = (
+                                            act.StatusUpmf || ""
+                                          )
+                                            .toLowerCase()
+                                            .trim();
+                                          if (stUpms !== "disetujui")
+                                            target = "upms";
+                                          else if (stUpmf !== "disetujui")
+                                            target = "upmf";
+                                          else target = "lpm";
+                                        } else {
+                                          const stUpml = (
+                                            act.StatusUpml || ""
+                                          )
+                                            .toLowerCase()
+                                            .trim();
+                                          if (stUpml !== "disetujui")
+                                            target = "upml";
+                                          else target = "lpm";
+                                        }
                                         handleVerifySingleRow(act, target);
                                       }}
                                       disabled={
@@ -2035,20 +2129,33 @@ export default function ProkerV3AktivitasPage() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const stUpml = (act.StatusUpml || "")
-                                          .toLowerCase()
-                                          .trim();
-                                        const stUpmf = (act.StatusUpmf || "")
-                                          .toLowerCase()
-                                          .trim();
-                                        let target = "upms";
-                                        if (stUpml !== "disetujui")
-                                          target = "upml";
-                                        else if (
-                                          isProdi &&
-                                          stUpmf !== "disetujui"
-                                        )
-                                          target = "upmf";
+                                        let target = "lpm";
+                                        if (isProdi) {
+                                          const stUpms = (
+                                            act.StatusUpms || ""
+                                          )
+                                            .toLowerCase()
+                                            .trim();
+                                          const stUpmf = (
+                                            act.StatusUpmf || ""
+                                          )
+                                            .toLowerCase()
+                                            .trim();
+                                          if (stUpms !== "disetujui")
+                                            target = "upms";
+                                          else if (stUpmf !== "disetujui")
+                                            target = "upmf";
+                                          else target = "lpm";
+                                        } else {
+                                          const stUpml = (
+                                            act.StatusUpml || ""
+                                          )
+                                            .toLowerCase()
+                                            .trim();
+                                          if (stUpml !== "disetujui")
+                                            target = "upml";
+                                          else target = "lpm";
+                                        }
                                         handleOpenSingleRejectModal(
                                           act,
                                           target,

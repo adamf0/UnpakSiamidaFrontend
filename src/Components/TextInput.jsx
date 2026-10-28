@@ -20,16 +20,16 @@ const TextInput = React.forwardRef(
             disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed
             ${
               error
-                ? "border-red-500 focus:ring-0"
+                ? "border-red-500 focus:ring-2 focus:ring-red-400 focus:border-red-500"
                 : "border-gray-300 focus:ring-2 focus:ring-purple-600"
             }
             ${className}
           `}
         />
 
-        {error?.message && (
+        {(typeof error === "string" ? error : error?.message) && (
           <p className="text-xs text-red-500 mt-1">
-            {error.message}
+            {typeof error === "string" ? error : error.message}
           </p>
         )}
       </div>

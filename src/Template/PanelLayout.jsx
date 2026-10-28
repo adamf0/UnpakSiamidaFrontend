@@ -20,7 +20,7 @@ const PanelLayout = () => {
     } else if(userError){
       return <ErrorPage message={userError}/>
     } else{
-      return  <div className="flex flex-col md:flex-row h-screen h-[100svh] max-h-[100svh] overflow-hidden overscroll-none">
+      return  <div className="fixed inset-0 flex flex-col md:flex-row h-screen h-[100svh] max-h-[100svh] overflow-hidden overscroll-none">
                   <Sidebar 
                     isOpen={isSidebarOpen} 
                     toggleSidebar={toggleSidebar} 
@@ -30,7 +30,7 @@ const PanelLayout = () => {
 
                   <div
                       className={`
-                        flex-1 flex flex-col min-w-0 h-full overflow-y-auto overflow-x-hidden overscroll-contain
+                        relative flex-1 flex flex-col min-w-0 h-full overflow-y-auto overflow-x-hidden overscroll-contain
                         transition-all duration-300
                         ${isCollapsed ? "lg:ml-20" : "lg:ml-64"}
                       `}

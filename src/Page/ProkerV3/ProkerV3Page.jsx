@@ -16,7 +16,7 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
 import Tooltip from "@/Components/Tooltip";
 import { formatRupiah } from "./prokerConstants";
-import { formatProdiWithJenjang, cleanDuplicateJenjang } from "@/Common/Utils";
+import { formatProdiWithJenjang, cleanDuplicateJenjang, formatTanggalBulanTahun } from "@/Common/Utils";
 import {
   Plus,
   Pencil,
@@ -129,6 +129,27 @@ export default function ProkerV3Page() {
   const isAnggaran = ["anggaran", "keuangan"].includes(curRole);
   const isAuditee = curRole === "auditee";
   const isLevelUser = curRole === "user";
+  const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
+
+  // Level verifikator dan role verifikator
+  const isVerifikatorRoleOrLevel = useMemo(() => {
+    if (isAdmin) return false;
+    const normRole = curRole.toLowerCase().trim();
+    const normLevel = String(level || localStorage.getItem("activeLevel") || "").toLowerCase().trim();
+    const userLevel = String(user?.level || "").toLowerCase().trim();
+    const verifierRoles = ["upml", "upmf", "upms", "fakultas", "evaluator", "verifikator"];
+    return (
+      verifierRoles.includes(normRole) ||
+      normRole.includes("verifikator") ||
+      verifierRoles.includes(normLevel) ||
+      normLevel.includes("verifikator") ||
+      userLevel === "verifikator" ||
+      userLevel.includes("verifikator") ||
+      isVerifier ||
+      isUpm ||
+      isEvaluator
+    );
+  }, [curRole, level, user?.level, isAdmin, isVerifier, isUpm, isEvaluator]);
 
   const [selectedUnit, setSelectedUnit] = useState("all");
   const [selectedUnitObj, setSelectedUnitObj] = useState(null);
@@ -136,8 +157,8 @@ export default function ProkerV3Page() {
   const [selectedProdi, setSelectedProdi] = useState("all");
   const [selectedProdiObj, setSelectedProdiObj] = useState(null);
 
-  // Tab filter verifikasi & persetujuan ("menunggu" | "terima" | "tolak")
-  const [activeTab, setActiveTab] = useState("menunggu");
+  // Tab filter verifikasi & persetujuan ("semua" | "menunggu" | "terima" | "tolak")
+  const [activeTab, setActiveTab] = useState(isAdmin ? "semua" : "menunggu");
 
   const handleTabChange = (newTab) => {
     setActiveTab(newTab);
@@ -145,8 +166,38 @@ export default function ProkerV3Page() {
   };
 
   useEffect(() => {
-    setActiveTab("menunggu");
-  }, [level]);
+    setActiveTab(isAdmin ? "semua" : "menunggu");
+  }, [level, isAdmin]);
+
+  // Jadwal Proker V3 Status Check
+  const [jadwalStatus, setJadwalStatus] = useState(null);
+  const [loadingJadwalStatus, setLoadingJadwalStatus] = useState(false);
+
+  useEffect(() => {
+    const fetchJadwalStatus = async () => {
+      const targetYear =
+        selectedTahun && selectedTahun !== "all"
+          ? selectedTahun
+          : positionYear || "2027";
+      if (!targetYear || targetYear === "all") {
+        setJadwalStatus(null);
+        return;
+      }
+      setLoadingJadwalStatus(true);
+      try {
+        const res = await apiClient.get(
+          `/proker_v3/jadwal_status?tahun=${targetYear}`,
+        );
+        setJadwalStatus(res?.data || null);
+      } catch (err) {
+        console.error("Gagal memeriksa jadwal proker:", err);
+      } finally {
+        setLoadingJadwalStatus(false);
+      }
+    };
+
+    fetchJadwalStatus();
+  }, [selectedTahun, positionYear]);
 
   // Master Options
   const [unitOptions, setUnitOptions] = useState([]);
@@ -689,6 +740,13 @@ export default function ProkerV3Page() {
     hasTarget &&
     !excludedAddRoles.includes(curRole);
 
+  const isUnitUser = isLevelUser && !isUpmUser && hasTarget;
+  const isVerifikatorUser = isVerifier || isUpm;
+  const isAnggaranUser = isAnggaran;
+  const isScheduleLocked =
+    !isAdmin &&
+    Boolean(jadwalStatus?.has_schedule && !jadwalStatus?.is_open);
+
   // Cek apakah user berhak mengelola (edit/hapus) proker tertentu:
   // HANYA muncul di level user yang memiliki target fakultas_unit (bukan akun UPM dan tahun aktif harus cocok)
   const canManageProker = (r) => {
@@ -855,7 +913,12 @@ export default function ProkerV3Page() {
       if (isFakultasSelected && selectedProdi && selectedProdi !== "all") {
         params.append("filter_prodi", selectedProdi);
       }
-      if ((isVerifier || isAnggaran) && activeTab) {
+      if (
+        (isVerifier || isAnggaran || isAdmin) &&
+        activeTab &&
+        activeTab !== "semua" &&
+        activeTab !== "all"
+      ) {
         params.append(
           "filter_tab",
           isAnggaran ? `anggaran:${activeTab}` : activeTab,
@@ -968,6 +1031,14 @@ export default function ProkerV3Page() {
       );
       return;
     }
+    if (isScheduleLocked) {
+      addToast(
+        "error",
+        jadwalStatus?.message ||
+          "Penambahan program kerja saat ini ditutup sesuai jadwal.",
+      );
+      return;
+    }
     setFormModalMode("create");
     setSelectedRow(null);
     setFormModalOpen(true);
@@ -1002,6 +1073,14 @@ export default function ProkerV3Page() {
 
   // Update Status Proker Handler (Button / Action in table)
   const handleUpdateStatus = async (row, nextStatus) => {
+    if (nextStatus === "diajukan" && isScheduleLocked) {
+      addToast(
+        "error",
+        formatTanggalBulanTahun(jadwalStatus?.message) ||
+          `Pengajuan program kerja tahun ${row?.Tahun || selectedTahun} saat ini belum dibuka atau telah ditutup.`,
+      );
+      return;
+    }
     try {
       const fd = new FormData();
       fd.append("status", nextStatus);
@@ -1012,7 +1091,10 @@ export default function ProkerV3Page() {
       );
       tableRef.current?.reload?.({ resetPage: false });
     } catch (err) {
-      addToast("error", err?.message || "Gagal memperbarui status");
+      addToast(
+        "error",
+        err?.response?.data?.error || err?.message || "Gagal memperbarui status",
+      );
     }
   };
 
@@ -1151,9 +1233,6 @@ export default function ProkerV3Page() {
     }
   };
 
-  const isUnitUser = isLevelUser && !isUpmUser && hasTarget;
-  const isVerifikatorUser = isVerifier || isUpm;
-  const isAnggaranUser = isAnggaran;
   const canUseBatch =
     isUnitUser || isVerifikatorUser || isAnggaranUser || isAdmin;
 
@@ -1224,6 +1303,15 @@ export default function ProkerV3Page() {
 
     // 4. Admin
     if (isAdmin) {
+      if (activeTab === "menunggu") {
+        return !isVerifierApproved && sMain !== "draft";
+      }
+      if (activeTab === "terima") {
+        return isVerifierApproved;
+      }
+      if (activeTab === "tolak") {
+        return sVerif === "ditolak" || sMain.includes("ditolak");
+      }
       return true;
     }
 
@@ -1274,6 +1362,14 @@ export default function ProkerV3Page() {
   // Handler: Batch Ajukan Program Kerja (Khusus user yang memiliki fakultas_unit)
   const handleBatchAjukan = async () => {
     if (selectedUuids.length === 0) return;
+    if (isScheduleLocked) {
+      addToast(
+        "error",
+        formatTanggalBulanTahun(jadwalStatus?.message) ||
+          `Pengajuan program kerja tahun ${selectedTahun} saat ini belum dibuka atau telah ditutup.`,
+      );
+      return;
+    }
     setIsBatchProcessing(true);
     let successCount = 0;
     let failCount = 0;
@@ -1572,7 +1668,7 @@ export default function ProkerV3Page() {
                       <span className="text-[11px] text-gray-400 italic font-medium whitespace-nowrap">
                         {sMain === "draft"
                           ? "Draf (Belum diajukan)"
-                          : "Menunggu verifikator"}
+                          : "Menunggu Verifikator Anggaran"}
                       </span>
                       {historyBtn}
                     </div>
@@ -1633,6 +1729,7 @@ export default function ProkerV3Page() {
                       <Check className="w-3.5 h-3.5" />
                       <span>Terima Anggaran</span>
                     </button>
+                    {/* Tombol Tolak Anggaran di-hide sesuai request (kode di-komentar & tidak dieksekusi)
                     <button
                       type="button"
                       onClick={() => handleOpenRejectModal(r)}
@@ -1642,14 +1739,15 @@ export default function ProkerV3Page() {
                       <X className="w-3.5 h-3.5" />
                       <span>Tolak Anggaran</span>
                     </button>
+                    */}
                     {historyBtn}
                   </div>
                 );
               }
 
-              // 2. Role Verifier (upml, upmf, upms, fakultas, evaluator):
-              // TOMBOL "TERIMA VERIFIKATOR" DAN "TOLAK VERIFIKATOR" HANYA MUNCUL DI LEVEL VERIFIKATOR
-              if (isVerifier) {
+              // 2. Role Verifier (upml, upmf, upms, fakultas, evaluator) & Admin:
+              // TOMBOL "TERIMA VERIFIKATOR" DAN "TOLAK VERIFIKATOR" HANYA MUNCUL DI LEVEL VERIFIKATOR / ADMIN
+              if (isVerifier || isAdmin) {
                 if (isVerifierApproved) {
                   return (
                     <div className="flex items-center gap-1.5 flex-nowrap">
@@ -1745,8 +1843,17 @@ export default function ProkerV3Page() {
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(r, "diajukan")}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition cursor-pointer shrink-0 whitespace-nowrap"
-                          title="Ajukan program kerja ke pimpinan/verifikator"
+                          disabled={isScheduleLocked}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-2xs transition shrink-0 whitespace-nowrap ${
+                            isScheduleLocked
+                              ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
+                              : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                          }`}
+                          title={
+                            isScheduleLocked
+                              ? jadwalStatus?.message || "Pengajuan ditutup sesuai jadwal"
+                              : "Ajukan program kerja ke pimpinan/verifikator"
+                          }
                         >
                           <Send className="w-3 h-3" />
                           <span>Ajukan</span>
@@ -1812,42 +1919,54 @@ export default function ProkerV3Page() {
       key: "aktivitas_dokumen",
       label: "Aktivitas & Dokumen",
       minWidth: "155px",
-      renderKey: (r) => (
-        <div className="flex flex-col gap-1.5 w-full">
-          <button
-            type="button"
-            onClick={() => openAktivitas(r)}
-            className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200/90 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
-            title="Klik untuk membuka kelola aktivitas program kerja"
-          >
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-              <Layers className="w-3.5 h-3.5 text-purple-600 group-hover:text-white shrink-0" />
-              <span>
-                <b className="font-bold">{r.TotalAktivitas || 0}</b> Aktivitas
+      renderKey: (r) => {
+        const sAngg = (r.StatusAnggaran || "").toLowerCase().trim();
+        const sMain = (r.Status || "").toLowerCase().trim();
+        const isDiterimaAnggaran =
+          sAngg === "terima_anggaran" ||
+          sAngg === "disetujui" ||
+          sMain === "terima_anggaran" ||
+          sMain === "terima anggaran";
+
+        return (
+          <div className="flex flex-col gap-1.5 w-full">
+            <button
+              type="button"
+              onClick={() => openAktivitas(r)}
+              className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200/90 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
+              title="Klik untuk membuka kelola aktivitas program kerja"
+            >
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                <Layers className="w-3.5 h-3.5 text-purple-600 group-hover:text-white shrink-0" />
+                <span>
+                  <b className="font-bold">{r.TotalAktivitas || 0}</b> Aktivitas
+                </span>
               </span>
-            </span>
-            <span className="text-[10px] bg-purple-200/90 text-purple-900 group-hover:bg-white group-hover:text-purple-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
-              Kelola →
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => openDokumen(r)}
-            className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/90 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
-            title="Klik untuk membuka kelola dokumen program kerja"
-          >
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-              <FileText className="w-3.5 h-3.5 text-indigo-600 group-hover:text-white shrink-0" />
-              <span>
-                <b className="font-bold">{r.TotalDokumen || 0}</b> Dokumen
+              <span className="text-[10px] bg-purple-200/90 text-purple-900 group-hover:bg-white group-hover:text-purple-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
+                Kelola →
               </span>
-            </span>
-            <span className="text-[10px] bg-indigo-200/90 text-indigo-900 group-hover:bg-white group-hover:text-indigo-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
-              Unggah →
-            </span>
-          </button>
-        </div>
-      ),
+            </button>
+            {isDiterimaAnggaran && (
+              <button
+                type="button"
+                onClick={() => openDokumen(r)}
+                className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/90 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
+                title="Klik untuk membuka kelola dokumen program kerja"
+              >
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                  <FileText className="w-3.5 h-3.5 text-indigo-600 group-hover:text-white shrink-0" />
+                  <span>
+                    <b className="font-bold">{r.TotalDokumen || 0}</b> Dokumen
+                  </span>
+                </span>
+                <span className="text-[10px] bg-indigo-200/90 text-indigo-900 group-hover:bg-white group-hover:text-indigo-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
+                  Unggah →
+                </span>
+              </button>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "status_verifikasi",
@@ -1959,14 +2078,14 @@ export default function ProkerV3Page() {
         ) {
           badgeUpm = (
             <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
-              DITOLAK UPM
+              DITOLAK EVALUATOR
             </span>
           );
         } else if (sVerif === "diajukan" || sMain === "diajukan") {
           badgeUpm = (
             <div className="flex flex-col gap-0.5 items-start">
               <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-300 bg-blue-50 text-blue-800 uppercase tracking-wider">
-                DIAJUKAN UPM
+                DIAJUKAN EVALUATOR
               </span>
               <span className="text-[9px] text-gray-500 font-medium">
                 Menunggu UPML
@@ -1976,7 +2095,7 @@ export default function ProkerV3Page() {
         } else {
           badgeUpm = (
             <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-600 uppercase tracking-wider">
-              DRAF UPM
+              DRAF EVALUATOR
             </span>
           );
         }
@@ -2087,6 +2206,13 @@ export default function ProkerV3Page() {
       label: "Anggaran Program",
       minWidth: "135px",
       renderKey: (r) => {
+        if (isVerifikatorRoleOrLevel) {
+          return (
+            <div className="text-xs font-mono bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200 text-center">
+              <span className="font-bold text-gray-400 tracking-widest">***</span>
+            </div>
+          );
+        }
         const totalAng = Number(r.TotalAnggaran || r.Anggaran || 0);
         const totalReal = Number(r.TotalRealisasi);
         const hasRealDiff = Boolean(
@@ -2305,7 +2431,17 @@ export default function ProkerV3Page() {
               <button
                 type="button"
                 onClick={openCreate}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition cursor-pointer"
+                disabled={isScheduleLocked}
+                className={`px-4 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition ${
+                  isScheduleLocked
+                    ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
+                    : "bg-purple-600 hover:bg-purple-700 text-white shadow-xs cursor-pointer"
+                }`}
+                title={
+                  isScheduleLocked
+                    ? jadwalStatus?.message || "Penambahan program kerja ditutup sesuai jadwal"
+                    : "Tambah Program Kerja"
+                }
               >
                 <Plus className="w-4 h-4" />
                 <span>Tambah Program Kerja</span>
@@ -2448,22 +2584,46 @@ export default function ProkerV3Page() {
           </div>
         </div>
 
-        {/* Tab Verifikasi & Persetujuan (Khusus Role Anggaran, Verifikator, & UPM) */}
-        {(isVerifier || isAnggaran || isUpm) && (
+        {/* Tab Verifikasi & Persetujuan (Khusus Role Anggaran, Verifikator, UPM, & Admin) */}
+        {(isVerifier || isAnggaran || isUpm || isAdmin) && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-3 sm:px-5 sm:py-3.5 rounded-2xl border border-gray-200 shadow-xs">
             {/* Segmented Tab Controls */}
             <div className="inline-flex p-1 bg-gray-100/90 rounded-xl border border-gray-200/80 gap-1 shrink-0 self-start sm:self-auto">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("semua")}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === "semua"
+                      ? "bg-purple-600 text-white shadow-xs"
+                      : "text-gray-600 hover:text-purple-700 hover:bg-purple-50"
+                  }`}
+                >
+                  <Layers
+                    className={`w-3.5 h-3.5 ${activeTab === "semua" ? "text-white" : "text-purple-600"}`}
+                  />
+                  <span>Semua Data</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleTabChange("menunggu")}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === "menunggu"
-                    ? "bg-white text-purple-700 shadow-xs border border-gray-200/80"
+                    ? isAdmin
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "bg-white text-purple-700 shadow-xs border border-gray-200/80"
                     : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
                 }`}
               >
                 <Clock
-                  className={`w-3.5 h-3.5 ${activeTab === "menunggu" ? "text-purple-600" : "text-gray-400"}`}
+                  className={`w-3.5 h-3.5 ${
+                    activeTab === "menunggu"
+                      ? isAdmin
+                        ? "text-white"
+                        : "text-purple-600"
+                      : "text-gray-400"
+                  }`}
                 />
                 <span>Menunggu</span>
               </button>
@@ -2502,26 +2662,68 @@ export default function ProkerV3Page() {
               <span>Menampilkan:</span>
               <span
                 className={`px-2.5 py-1 rounded-lg font-bold text-xs ${
-                  activeTab === "menunggu"
+                  activeTab === "semua"
                     ? "bg-purple-50 text-purple-700 border border-purple-200"
-                    : activeTab === "terima"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-rose-50 text-rose-700 border border-rose-200"
+                    : activeTab === "menunggu"
+                      ? "bg-amber-50 text-amber-800 border border-amber-200"
+                      : activeTab === "terima"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-rose-50 text-rose-700 border border-rose-200"
                 }`}
               >
-                {activeTab === "menunggu"
-                  ? isAnggaran
-                    ? "Menunggu Persetujuan Anggaran"
-                    : "Menunggu Verifikasi UPM"
-                  : activeTab === "terima"
+                {activeTab === "semua"
+                  ? "Semua Program Kerja (Semua Status)"
+                  : activeTab === "menunggu"
                     ? isAnggaran
-                      ? "Diterima Anggaran"
-                      : "Diterima Verifikator"
-                    : isAnggaran
-                      ? "Ditolak Anggaran"
-                      : "Ditolak Verifikator"}
+                      ? "Menunggu Persetujuan Anggaran"
+                      : isAdmin
+                        ? "Menunggu Verifikasi"
+                        : "Menunggu Verifikasi UPM"
+                    : activeTab === "terima"
+                      ? isAnggaran
+                        ? "Diterima Anggaran"
+                        : isAdmin
+                          ? "Diterima / Disetujui"
+                          : "Diterima Verifikator"
+                      : isAnggaran
+                        ? "Ditolak Anggaran"
+                        : isAdmin
+                          ? "Ditolak"
+                          : "Ditolak Verifikator"}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* Jadwal Pengajuan Program Kerja Status Alert */}
+        {jadwalStatus?.has_schedule && (
+          <div
+            className={`p-3.5 sm:px-4 sm:py-3 rounded-2xl border flex items-center justify-between gap-3 text-xs sm:text-sm font-medium ${
+              jadwalStatus.is_open
+                ? "bg-emerald-50/80 border-emerald-200 text-emerald-900"
+                : "bg-rose-50/80 border-rose-200 text-rose-900"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {jadwalStatus.is_open ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              )}
+              <span>
+                <strong>Jadwal Pengajuan Proker {jadwalStatus.tahun}:</strong>{" "}
+                {formatTanggalBulanTahun(jadwalStatus.message)}
+              </span>
+            </div>
+            <span
+              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 border ${
+                jadwalStatus.is_open
+                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                  : "bg-rose-100 text-rose-800 border-rose-300"
+              }`}
+            >
+              {jadwalStatus.status_label || (jadwalStatus.is_open ? "Sedang Dibuka" : "Ditutup")}
+            </span>
           </div>
         )}
 
@@ -2553,9 +2755,17 @@ export default function ProkerV3Page() {
                   <button
                     type="button"
                     onClick={handleBatchAjukan}
-                    disabled={isBatchProcessing}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                    title="Ajukan semua program kerja terpilih ke verifikator"
+                    disabled={isBatchProcessing || isScheduleLocked}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-xs ${
+                      isScheduleLocked
+                        ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
+                        : "bg-blue-600 hover:bg-blue-700 text-white hover:shadow cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    }`}
+                    title={
+                      isScheduleLocked
+                        ? jadwalStatus?.message || "Pengajuan ditutup sesuai jadwal"
+                        : "Ajukan semua program kerja terpilih ke verifikator"
+                    }
                   >
                     {isBatchProcessing ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -2567,7 +2777,9 @@ export default function ProkerV3Page() {
                 )}
 
                 {/* 2. User level verifikator (UPM / Evaluator / Fakultas) & Admin: Tombol Terima & Tolak Verifikator */}
-                {(isVerifikatorUser || isAdmin) && (
+                {(isVerifikatorUser || isAdmin) &&
+                  activeTab !== "terima" &&
+                  activeTab !== "tolak" && (
                   <>
                     <button
                       type="button"
@@ -2616,6 +2828,7 @@ export default function ProkerV3Page() {
                       )}
                       <span>Terima Anggaran ({selectedUuids.length})</span>
                     </button>
+                    {/* Tombol Tolak Anggaran (Batch) di-hide sesuai request (kode di-komentar & tidak dieksekusi)
                     <button
                       type="button"
                       onClick={() => {
@@ -2629,6 +2842,7 @@ export default function ProkerV3Page() {
                       <X className="w-3.5 h-3.5" />
                       <span>Tolak Anggaran ({selectedUuids.length})</span>
                     </button>
+                    */}
                   </>
                 )}
 

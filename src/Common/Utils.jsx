@@ -46,39 +46,54 @@ export const formatTanggalBulanTahun = (value) => {
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
   ];
 
-  // Jika sudah berformat teks Indonesia (misal: "10 Mei 2025" atau "14 Maret 2025")
-  if (bulanIndo.some((b) => str.includes(b))) {
-    return str;
-  }
-
-  // Jika string bukan tanggal (misal status fallback teks seperti "BELUM DIAJUKAN")
+  // Jika string bukan tanggal sama sekali
   if (!/\d{4}/.test(str) && !/\d{1,2}/.test(str)) {
     return str;
   }
 
-  // Handle format YYYY-MM-DD atau YYYY/MM/DD (dengan atau tanpa timestamp)
-  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  // Handle format YYYY-MM-DD atau YYYY/MM/DD persis
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
   if (ymdMatch) {
     const year = ymdMatch[1];
     const monthIdx = parseInt(ymdMatch[2], 10) - 1;
-    const day = parseInt(ymdMatch[3], 10);
+    const day = String(parseInt(ymdMatch[3], 10)).padStart(2, "0");
     const month = bulanIndo[monthIdx] || ymdMatch[2];
     return `${day} ${month} ${year}`;
   }
 
-  // Handle format DD-MM-YYYY atau DD/MM/YYYY
-  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  // Handle format DD-MM-YYYY atau DD/MM/YYYY persis
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (dmyMatch) {
-    const day = parseInt(dmyMatch[1], 10);
+    const day = String(parseInt(dmyMatch[1], 10)).padStart(2, "0");
     const monthIdx = parseInt(dmyMatch[2], 10) - 1;
     const month = bulanIndo[monthIdx] || dmyMatch[2];
     const year = dmyMatch[3];
     return `${day} ${month} ${year}`;
   }
 
+  // Jika berupa kalimat atau rentang tanggal (misal: "2027-12-01 s/d 2027-12-31" atau kalimat pemberitahuan)
+  let res = str;
+  if (/\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/.test(res)) {
+    res = res.replace(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/g, (_, y, m, d) => {
+      const mIdx = parseInt(m, 10) - 1;
+      const dayStr = String(parseInt(d, 10)).padStart(2, "0");
+      return `${dayStr} ${bulanIndo[mIdx] || m} ${y}`;
+    });
+  }
+  if (/\b\d{1,2}[-/]\d{1,2}[-/]\d{4}\b/.test(res)) {
+    res = res.replace(/\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\b/g, (_, d, m, y) => {
+      const mIdx = parseInt(m, 10) - 1;
+      const dayStr = String(parseInt(d, 10)).padStart(2, "0");
+      return `${dayStr} ${bulanIndo[mIdx] || m} ${y}`;
+    });
+  }
+  if (res !== str) {
+    return res;
+  }
+
   const d = new Date(str);
   if (!isNaN(d.getTime())) {
-    const day = d.getDate();
+    const day = String(d.getDate()).padStart(2, "0");
     const month = bulanIndo[d.getMonth()];
     const year = d.getFullYear();
     return `${day} ${month} ${year}`;

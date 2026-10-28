@@ -149,6 +149,11 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
               icon: <HiOutlineClipboardList size={20} />,
             },
             {
+              name: "Jadwal Proker",
+              path: "/jadwal_proker",
+              icon: <IoCalendarOutline size={19} />,
+            },
+            {
               name: "Mata Program",
               path: "/mata_program",
               icon: <IoFileTrayStacked size={20} />,
@@ -296,6 +301,20 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
               path: "/proker_v3",
               icon: <HiOutlineClipboardList size={19} />,
             },
+            ...(currentLevel === "evaluator" || currentLevel.includes("evaluator")
+              ? [
+                  {
+                    name: "Analisis SWOT",
+                    path: "/swot",
+                    icon: <IoStatsChartOutline size={19} />,
+                  },
+                  {
+                    name: "Analisis Risiko",
+                    path: "/risk_assessment",
+                    icon: <IoWarningOutline size={19} />,
+                  },
+                ]
+              : []),
           ],
         },
       ];

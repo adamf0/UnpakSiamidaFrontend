@@ -458,11 +458,16 @@ export default function IndikatorRenstraFormModal({
                   placeholder="Pilih tipe target"
                   value={watch("tipe_target")}
                   error={errors.tipe_target?.message}
-                  onChange={(item) =>
+                  onChange={(item) => {
                     setValue("tipe_target", item, {
                       shouldValidate: true,
-                    })
-                  }
+                    });
+                    if (item?.value === "numerik" || item?.id === "numerik") {
+                      setValue("operator", ">=", { shouldValidate: true });
+                    } else {
+                      setValue("operator", "", { shouldValidate: true });
+                    }
+                  }}
                 />
 
                 <input

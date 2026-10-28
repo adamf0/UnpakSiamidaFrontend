@@ -48,6 +48,8 @@ const RiskAssessmentPage = () => {
   ).toLowerCase().trim();
   const isLevelUser = curRole === "user";
   const isAdmin = curRole === "admin";
+  const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
+  const canFilterUnit = isAdmin || isEvaluator;
 
   // Filter States
   const [selectedTahun, setSelectedTahun] = useState("");
@@ -266,12 +268,12 @@ const RiskAssessmentPage = () => {
       params.append("filter_program", selectedProgram);
     }
 
-    if (isAdmin) {
+    if (canFilterUnit) {
       if (selectedFakultas && selectedFakultas !== "all") {
         params.append("filter_fakultas_unit", selectedFakultas);
       }
     } else {
-      // Non-admin: kunci ke unit kerja sendiri
+      // Non-admin / non-evaluator: kunci ke unit kerja sendiri
       const fu = userUnitData?.UUID || userUnitData?.id || user?.fakultas_unit;
       if (fu) {
         params.append("filter_fakultas_unit", String(fu));
@@ -280,7 +282,7 @@ const RiskAssessmentPage = () => {
 
     const qs = params.toString();
     return `/risk_assessments${qs ? `?${qs}` : ""}`;
-  }, [selectedTahun, selectedLevel, selectedProgram, selectedFakultas, isAdmin, user?.fakultas_unit, userUnitData]);
+  }, [selectedTahun, selectedLevel, selectedProgram, selectedFakultas, canFilterUnit, user?.fakultas_unit, userUnitData]);
 
   const openNew = () => {
     if (!canManage) {
@@ -586,6 +588,8 @@ const RiskAssessmentPage = () => {
           subtitle={
             isAdmin
               ? "Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (Data Seluruh Fakultas & Unit)"
+              : isEvaluator
+              ? "Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (Mode Evaluator - Seluruh Fakultas & Unit)"
               : canManage
               ? `Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (${
                   userUnitData?.nama || "Unit Kerja Terdaftar"
@@ -631,8 +635,8 @@ const RiskAssessmentPage = () => {
               />
             </div>
 
-            {/* Filter Fakultas / Unit (Khusus Admin) */}
-            {isAdmin && (
+            {/* Filter Fakultas / Unit (Khusus Admin & Evaluator) */}
+            {canFilterUnit && (
               <div className="w-56 min-w-[180px]">
                 <SearchSelect
                   icon={Building2}

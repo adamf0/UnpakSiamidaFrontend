@@ -88,11 +88,17 @@ const TemplateDokumenTambahanFormPage = () => {
     setLoad("jenisfile", true);
     setErrorJenisFile(null);
     try {
-      const json = await apiClient.get(
-        `/jenisfiles?filters=tahun:eq:${tahun}`
+      const res = await apiClient.get(
+        tahun ? `/jenisfiles?mode=all&filters=tahun:eq:${tahun}` : `/jenisfiles?mode=all`
       );
+      const raw = res?.data;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.data)
+        ? raw.data
+        : [];
       setJenisFileOptions(
-        (json?.data ?? json ?? []).map((d) => ({
+        list.map((d) => ({
           ...d,
           id: d.UUID,
           nama: d.Nama,
@@ -154,7 +160,7 @@ const TemplateDokumenTambahanFormPage = () => {
   }, [tahun]);
 
   useEffect(() => {
-    if (watchedTahun) fetchJenisFileOptions(watchedTahun);
+    fetchJenisFileOptions(watchedTahun);
   }, [watchedTahun]);
 
   useEffect(() => {

@@ -67,7 +67,28 @@ export default function ProkerV3DokumenPage() {
 
   const curRole = String(level || localStorage.getItem("activeLevel") || user?.level || "").toLowerCase().trim();
   const isAdmin = curRole === "admin";
-  const isAuditee = curRole === "auditee";
+  const isVerifierRole = ["upml", "upmf", "upms", "evaluator", "anggaran", "keuangan"].includes(curRole);
+  const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
+
+  // Cek apakah user memiliki fakultas_unit (langsung atau via penugasan extra_role)
+  const hasFakultasUnit = Boolean(
+    user?.fakultas_unit ||
+    user?.id_fakultas_unit ||
+    user?.FakultasUnit ||
+    user?.uuid_fakultas_unit ||
+    user?.nama_fakultas_unit ||
+    user?.NamaFakultasUnit ||
+    (Array.isArray(user?.extra_role) &&
+      user.extra_role.some(
+        (r) =>
+          r &&
+          (r.fakultas_unit ||
+            r.id_fakultas_unit ||
+            r.IdFakultasUnit ||
+            r.nama_fakultas_unit ||
+            r.NamaFakultasUnit)
+      ))
+  );
 
   // Data states
   const [loading, setLoading] = useState(true);
@@ -76,6 +97,57 @@ export default function ProkerV3DokumenPage() {
   const [selectedActUuid, setSelectedActUuid] = useState(actParamUuid || "");
   const [documents, setDocuments] = useState([]);
   const [activeTab, setActiveTab] = useState("all");
+
+  // Izin unggah dokumen: user yang memiliki fakultas_unit (admin & verifikator tidak dapat mengunggah)
+  const canUploadDokumen = useMemo(() => {
+    if (isAdmin || isVerifierRole || !hasFakultasUnit) return false;
+
+    if (proker) {
+      const prokerFuId = String(proker.IdFakultasUnit || proker.id_fakultas_unit || "").trim();
+      const prokerFuUuid = String(proker.UuidFakultasUnit || proker.uuid_fakultas_unit || "").trim().toLowerCase();
+      const prokerFuName = String(proker.NamaFakultasUnit || proker.nama_fakultas_unit || "").trim().toLowerCase();
+
+      // 1. Cek dari user.extra_role (ABAC)
+      if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+        const match = user.extra_role.some((r) => {
+          const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+          if (rRole && rRole !== "user" && rRole !== "auditee") return false;
+
+          const rFuId = String(r.id_fakultas_unit ?? r.IdFakultasUnit ?? "").trim();
+          if (rFuId && prokerFuId && rFuId === prokerFuId) return true;
+
+          const rFuUuid = String(r.uuid_fakultas_unit ?? r.UuidFakultasUnit ?? "").trim().toLowerCase();
+          if (rFuUuid && prokerFuUuid && rFuUuid === prokerFuUuid) return true;
+
+          const rFuName = String(r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "").trim().toLowerCase();
+          if (rFuName && prokerFuName && (rFuName === prokerFuName || prokerFuName.includes(rFuName) || rFuName.includes(prokerFuName))) return true;
+
+          return false;
+        });
+        if (match) return true;
+      }
+
+      // 2. Cek dari field user langsung
+      const directFu = String(user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit || "").trim();
+      if (directFu) {
+        if (prokerFuId && directFu === prokerFuId) return true;
+        if (prokerFuUuid && directFu.toLowerCase() === prokerFuUuid) return true;
+        if (prokerFuName && directFu.toLowerCase() === prokerFuName) return true;
+      }
+
+      const directFuUuid = String(user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "").trim().toLowerCase();
+      if (directFuUuid && prokerFuUuid && directFuUuid === prokerFuUuid) return true;
+
+      const directFuName = String(user?.nama_fakultas_unit || user?.NamaFakultasUnit || "").trim().toLowerCase();
+      if (directFuName && prokerFuName && (directFuName === prokerFuName || prokerFuName.includes(directFuName) || directFuName.includes(prokerFuName))) return true;
+
+      if (prokerFuId || prokerFuUuid || prokerFuName) {
+        return false;
+      }
+    }
+
+    return true;
+  }, [isAdmin, hasFakultasUnit, isVerifierRole, proker, user]);
 
   // Determine currently active activity
   const currentAktivitas = useMemo(() => {
@@ -214,7 +286,7 @@ export default function ProkerV3DokumenPage() {
   // FORM ROWS MANAGEMENT (MULTIPLE DATA FORM)
   // ========================================================
   const addFormRow = (defaultJenis = "DOCUMENT PENDUKUNG") => {
-    if (!isAuditee) return;
+    if (!canUploadDokumen) return;
     setFormRows((prev) => [
       ...prev,
       {
@@ -227,7 +299,7 @@ export default function ProkerV3DokumenPage() {
   };
 
   const removeFormRow = (rowId) => {
-    if (!isAuditee) return;
+    if (!canUploadDokumen) return;
     if (formRows.length <= 1) {
       setFormRows([
         {
@@ -243,7 +315,7 @@ export default function ProkerV3DokumenPage() {
   };
 
   const updateFormRow = (rowId, updates) => {
-    if (!isAuditee) return;
+    if (!canUploadDokumen) return;
     setFormRows((prev) =>
       prev.map((r) => (r.id === rowId ? { ...r, ...updates } : r))
     );
@@ -251,7 +323,7 @@ export default function ProkerV3DokumenPage() {
 
   // Shortcut to load all 4 mandatory document rows (SK, SOP, PROPOSAL/TOR, LAPORAN)
   const loadMandatoryTemplates = () => {
-    if (!isAuditee) return;
+    if (!canUploadDokumen) return;
     setFormRows([
       { id: `form-sk-${Date.now()}`, jenisDokumen: "SK", file: null, keterangan: "" },
       { id: `form-sop-${Date.now() + 1}`, jenisDokumen: "SOP", file: null, keterangan: "" },
@@ -556,8 +628,8 @@ export default function ProkerV3DokumenPage() {
   // Submit all valid rows from form to the upload queue and start chunked upload
   const handleSubmitAllForms = (e) => {
     if (e) e.preventDefault();
-    if (!isAuditee) {
-      addToast("warning", "Hanya level auditee yang dapat mengunggah dokumen");
+    if (!canUploadDokumen) {
+      addToast("warning", "Pengunggahan dokumen program kerja hanya dapat dilakukan oleh user yang memiliki fakultas_unit");
       return;
     }
 
@@ -666,8 +738,8 @@ export default function ProkerV3DokumenPage() {
   // DELETE DOCUMENT FROM GOLANG & DISK
   // ========================================================
   const handleDeleteDoc = async () => {
-    if (!isAuditee) {
-      addToast("warning", "Hanya level auditee yang dapat menghapus dokumen");
+    if (!canUploadDokumen) {
+      addToast("warning", "Hapus dokumen program kerja hanya dapat dilakukan oleh user yang memiliki fakultas_unit");
       setDeleteDialog(false);
       return;
     }
@@ -860,7 +932,9 @@ export default function ProkerV3DokumenPage() {
                     {currentAktivitas.Anggaran !== undefined && currentAktivitas.Anggaran !== null && (
                       <span className="inline-flex items-center gap-1">
                         <span>Anggaran:</span>{" "}
-                        {isAnggaranRevised(currentAktivitas) ? (
+                        {isEvaluator ? (
+                          <b className="text-emerald-700 font-bold font-mono">***</b>
+                        ) : isAnggaranRevised(currentAktivitas) ? (
                           <span className="inline-flex items-center gap-1 font-mono">
                             <span
                               className="line-through text-gray-400 font-normal decoration-rose-500 decoration-1"
@@ -924,9 +998,9 @@ export default function ProkerV3DokumenPage() {
               <button
                 type="button"
                 onClick={loadMandatoryTemplates}
-                disabled={!isAuditee}
+                disabled={!canUploadDokumen}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
-                  !isAuditee
+                  !canUploadDokumen
                     ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
                     : "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200 cursor-pointer"
                 }`}
@@ -939,9 +1013,9 @@ export default function ProkerV3DokumenPage() {
               <button
                 type="button"
                 onClick={() => addFormRow()}
-                disabled={!isAuditee}
+                disabled={!canUploadDokumen}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                  !isAuditee
+                  !canUploadDokumen
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 }`}
@@ -952,11 +1026,11 @@ export default function ProkerV3DokumenPage() {
             </div>
           </div>
 
-          {!isAuditee && (
+          {!canUploadDokumen && (
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
               <Info className="w-4 h-4 shrink-0 text-amber-600" />
               <span>
-                Form unggah dokumen dinonaktifkan. Pengunggahan dokumen program kerja hanya dapat dilakukan pada level <b>Auditee</b>.
+                Form unggah dokumen dinonaktifkan. Pengunggahan dokumen program kerja hanya dapat dilakukan oleh <b>user yang memiliki fakultas_unit</b>.
               </span>
             </div>
           )}
@@ -967,7 +1041,7 @@ export default function ProkerV3DokumenPage() {
                 <div
                   key={row.id}
                   className={`p-3.5 rounded-xl border grid grid-cols-1 md:grid-cols-12 gap-3 items-center ${
-                    !isAuditee
+                    !canUploadDokumen
                       ? "bg-gray-100/60 border-gray-200 opacity-80"
                       : "bg-gray-50/70 border-gray-200/90"
                   }`}
@@ -985,10 +1059,10 @@ export default function ProkerV3DokumenPage() {
                     </label>
                     <select
                       value={row.jenisDokumen}
-                      disabled={!isAuditee}
+                      disabled={!canUploadDokumen}
                       onChange={(e) => updateFormRow(row.id, { jenisDokumen: e.target.value })}
                       className={`w-full px-3 py-2 text-xs rounded-xl border font-semibold ${
-                        !isAuditee
+                        !canUploadDokumen
                           ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
                           : "bg-white text-gray-800 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                       }`}
@@ -1008,13 +1082,13 @@ export default function ProkerV3DokumenPage() {
                     </label>
                     <input
                       type="file"
-                      disabled={!isAuditee}
+                      disabled={!canUploadDokumen}
                       onChange={(e) => {
                         const file = e.target.files?.[0] || null;
                         updateFormRow(row.id, { file });
                       }}
                       className={`w-full text-xs border rounded-xl ${
-                        !isAuditee
+                        !canUploadDokumen
                           ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed file:cursor-not-allowed file:bg-gray-200 file:text-gray-400"
                           : "bg-white text-gray-500 border-gray-300 cursor-pointer file:cursor-pointer file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                       } file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold`}
@@ -1033,12 +1107,12 @@ export default function ProkerV3DokumenPage() {
                     </label>
                     <input
                       type="text"
-                      disabled={!isAuditee}
+                      disabled={!canUploadDokumen}
                       placeholder="Contoh: SK Rektor penetapan..."
                       value={row.keterangan}
                       onChange={(e) => updateFormRow(row.id, { keterangan: e.target.value })}
                       className={`w-full px-3 py-2 text-xs rounded-xl border ${
-                        !isAuditee
+                        !canUploadDokumen
                           ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
                           : "bg-white text-gray-800 border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       }`}
@@ -1049,14 +1123,14 @@ export default function ProkerV3DokumenPage() {
                   <div className="md:col-span-1 flex justify-end">
                     <button
                       type="button"
-                      disabled={!isAuditee}
+                      disabled={!canUploadDokumen}
                       onClick={() => removeFormRow(row.id)}
                       className={`p-2 rounded-xl transition ${
-                        !isAuditee
+                        !canUploadDokumen
                           ? "text-gray-300 cursor-not-allowed"
                           : "text-gray-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
                       }`}
-                      title={!isAuditee ? "Hanya auditee yang dapat menghapus baris" : "Hapus baris ini"}
+                      title={!canUploadDokumen ? "Hanya user yang memiliki fakultas_unit yang dapat menghapus baris" : "Hapus baris ini"}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1074,10 +1148,10 @@ export default function ProkerV3DokumenPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  disabled={!isAuditee}
+                  disabled={!canUploadDokumen}
                   onClick={() => addFormRow()}
                   className={`px-4 py-2 text-xs font-bold rounded-xl transition ${
-                    !isAuditee
+                    !canUploadDokumen
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                       : "bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer"
                   }`}
@@ -1087,9 +1161,9 @@ export default function ProkerV3DokumenPage() {
 
                 <button
                   type="submit"
-                  disabled={!isAuditee}
+                  disabled={!canUploadDokumen}
                   className={`px-5 py-2 text-xs font-bold rounded-xl transition flex items-center gap-2 ${
-                    !isAuditee
+                    !canUploadDokumen
                       ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
                       : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs cursor-pointer"
                   }`}
@@ -1602,7 +1676,7 @@ export default function ProkerV3DokumenPage() {
                         </Tooltip>
                       )}
 
-                      {isAuditee && (
+                      {canUploadDokumen && (
                         <Tooltip title="Hapus Dokumen Dari Server (Permanen)">
                           <button
                             type="button"

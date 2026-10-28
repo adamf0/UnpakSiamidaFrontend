@@ -31,8 +31,67 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { apiClient, API_BASE_URL } from "@/Common/api";
 
-export const buildRowLabel = (gd, target) =>
+class FormErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("FormErrorBoundary caught error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-8 m-6 bg-red-50 border-2 border-red-500 rounded-xl text-red-800">
+          <h2 className="text-xl font-bold mb-2">Terjadi Error Saat Render (Crash):</h2>
+          <div className="p-4 bg-white rounded border border-red-200 font-mono text-sm whitespace-pre-wrap overflow-x-auto">
+            {this.state.error?.stack || String(this.state.error?.message || this.state.error)}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const buildRowLabel = (gd, target) =>
   `${(gd?.Type || "").toUpperCase()} - ${(gd?.Jenjang || "").toUpperCase()} - ${(target?.Nama || "").toUpperCase()}`;
+
+const scrollToErrorField = (rowKey, fieldPath) => {
+  let targetEl = null;
+
+  if (fieldPath) {
+    targetEl =
+      document.querySelector(`input[name="${fieldPath}"]:not([type="hidden"])`) ||
+      document.querySelector(`[name="${fieldPath}"]`) ||
+      document.querySelector(`label[for="${fieldPath}-minor"]`) ||
+      document.querySelector(`label[for="${fieldPath}-auditor1"]`) ||
+      document.getElementById(`${fieldPath}-minor`) ||
+      document.getElementById(fieldPath);
+  }
+
+  if (!targetEl && rowKey) {
+    const rowEl =
+      document.querySelector(`[data-row-key="${rowKey}"]`) ||
+      document.getElementById(`row-${rowKey}`);
+    if (rowEl) {
+      targetEl =
+        rowEl.querySelector(
+          'input[type="text"]:not([disabled]), input[type="number"]:not([disabled]), label'
+        ) || rowEl;
+    }
+  }
+
+  if (targetEl) {
+    targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (typeof targetEl.focus === "function" && targetEl.tagName !== "LABEL") {
+      targetEl.focus({ preventScroll: true });
+    }
+  }
+};
 
 const TemplateRenstraFormPage = () => {
   const navigate = useNavigate();
@@ -49,6 +108,8 @@ const TemplateRenstraFormPage = () => {
     register,
     handleSubmit,
     setValue,
+    setError: setFormError,
+    getValues,
     watch,
     control,
     trigger,
@@ -87,8 +148,8 @@ const TemplateRenstraFormPage = () => {
 
   const setErr = (key, val) => setError((s) => ({ ...s, [key]: val }));
 
-  const markRowActive = async (rowKey, target, gd) => {
-    const row = watch(`rows.${rowKey}`) || {};
+  const markRowActive = (rowKey, target, gd) => {
+    const row = getValues(`rows.${rowKey}`) || {};
     const hasValues = Boolean(
       row.klasifikasi ||
       (row.satuan !== undefined && row.satuan !== null && String(row.satuan).trim() !== "") ||
@@ -97,27 +158,20 @@ const TemplateRenstraFormPage = () => {
       (row.target_min !== undefined && row.target_min !== null && String(row.target_min).trim() !== "") ||
       (row.target_max !== undefined && row.target_max !== null && String(row.target_max).trim() !== "")
     );
-    setValue(`rows.${rowKey}.enable`, hasValues, { shouldValidate: true });
 
-    if (target?.UUID) {
-      setValue(`rows.${rowKey}.targetUuid`, target.UUID);
-      setValue(`rows.${rowKey}.targetId`, target.ID);
-    }
-    if (gd) {
-      setValue(`rows.${rowKey}.targetType`, gd.Type);
-      setValue(`rows.${rowKey}.targetJenjang`, gd.Jenjang);
-    }
-
-    if (hasValues) {
-      await trigger([
-        `rows.${rowKey}.klasifikasi`,
-        `rows.${rowKey}.satuan`,
-        `rows.${rowKey}.pembagian_tugas`,
-        ...(watch("indikator_renstra")?.TipeTarget === "range"
-          ? [`rows.${rowKey}.target_min`, `rows.${rowKey}.target_max`]
-          : [`rows.${rowKey}.target`]),
-      ]);
-    }
+    setValue(
+      `rows.${rowKey}`,
+      {
+        ...row,
+        enable: hasValues,
+        targetUuid: target?.UUID || row.targetUuid,
+        targetId: target?.ID || row.targetId,
+        targetType: gd?.Type || row.targetType,
+        targetJenjang: gd?.Jenjang || row.targetJenjang,
+        targetNama: target?.Nama || row.targetNama,
+      },
+      { shouldValidate: true, shouldDirty: true }
+    );
   };
 
   const applyToGroup = (field, value) => {
@@ -367,21 +421,22 @@ const TemplateRenstraFormPage = () => {
     fetchFakultasUnit();
   }, []);
 
+  const watchedIndikator = watch("indikator_renstra");
+  const watchedIndikatorUuid = watchedIndikator?.Uuid || watchedIndikator?.uuid;
+
   useEffect(() => {
-    const indikator = watch("indikator_renstra");
-    if (!indikator) return;
+    if (!watchedIndikatorUuid) return;
 
     if (
       mode !== "edit" &&
       prevIndikatorRef.current &&
-      (prevIndikatorRef.current.Uuid || prevIndikatorRef.current.uuid) !==
-        (indikator.Uuid || indikator.uuid)
+      prevIndikatorRef.current !== watchedIndikatorUuid
     ) {
       setValue("rows", {}, { shouldValidate: false });
     }
 
-    prevIndikatorRef.current = indikator;
-  }, [watch("indikator_renstra"), mode]);
+    prevIndikatorRef.current = watchedIndikatorUuid;
+  }, [watchedIndikatorUuid, mode]);
 
   useEffect(() => {
     if (!uuidIndikator) return;
@@ -442,6 +497,63 @@ const TemplateRenstraFormPage = () => {
         "warning",
         "Tidak ada baris data yang diisi atau diaktifkan untuk disimpan"
       );
+      return;
+    }
+
+    const tipeTarget = data.indikator_renstra?.TipeTarget;
+    const clientErrors = [];
+
+    for (const [key, row] of activeEntries) {
+      if (!row.klasifikasi) {
+        clientErrors.push({
+          key,
+          fieldPath: `rows.${key}.klasifikasi`,
+          msg: "Klasifikasi temuan wajib dipilih",
+        });
+      }
+      if (tipeTarget === "range") {
+        if (!row.target_min || !row.target_max) {
+          const field = !row.target_min
+            ? `rows.${key}.target_min`
+            : `rows.${key}.target_max`;
+          clientErrors.push({
+            key,
+            fieldPath: field,
+            msg: "Target min dan max wajib diisi",
+          });
+        }
+      } else {
+        if (
+          row.target === undefined ||
+          row.target === null ||
+          String(row.target).trim() === ""
+        ) {
+          clientErrors.push({
+            key,
+            fieldPath: `rows.${key}.target`,
+            msg: "Target wajib diisi",
+          });
+        }
+      }
+      if (!row.pembagian_tugas) {
+        clientErrors.push({
+          key,
+          fieldPath: `rows.${key}.pembagian_tugas`,
+          msg: "Pembagian tugas wajib dipilih",
+        });
+      }
+    }
+
+    if (clientErrors.length > 0) {
+      clientErrors.forEach((item) => {
+        setFormError(item.fieldPath, {
+          type: "manual",
+          message: item.msg,
+        });
+      });
+      const first = clientErrors[0];
+      addToast("error", `Validasi gagal: ${first.msg}`);
+      scrollToErrorField(first.key, first.fieldPath);
       return;
     }
 
@@ -508,7 +620,6 @@ const TemplateRenstraFormPage = () => {
       fd.append("klasifikasi", row.klasifikasi || "");
       fd.append("satuan", row.satuan ?? "");
 
-      const tipeTarget = data.indikator_renstra?.TipeTarget;
       if (tipeTarget === "range") {
         fd.append("target", "");
         fd.append("targetMin", row?.target_min ?? "");
@@ -536,6 +647,8 @@ const TemplateRenstraFormPage = () => {
     console.log("SUBMIT:", data, payloads);
 
     let successCount = 0;
+    const errorsList = [];
+
     await Promise.all(
       payloads.map(async ({ key, fd }) => {
         try {
@@ -547,33 +660,36 @@ const TemplateRenstraFormPage = () => {
             await apiClient.post("/templaterenstra", fd);
 
             setValue(`rows.${key}.status`, "success");
+            setValue(`rows.${key}.errormessage`, null);
             successCount++;
-            if (successCount >= payloads.length) {
-              addToast("success", "Data berhasil disimpan");
-              if (mode === "add") {
-                navigate(`/template_renstra`);
-              }
-            }
           } catch (err) {
             setValue(`rows.${key}.status`, "error");
 
-            if (isValidationError(err?.code)) {
-              const msg = normalizeValidationMessage(err?.message);
-              setValue(`rows.${key}.errormessage`, msg);
-              addToast("error", msg);
-            } else {
-              setValue(`rows.${key}.errormessage`, err?.message || "Gagal");
-              addToast("error", err?.message || "Gagal");
-            }
+            const msg = isValidationError(err?.code)
+              ? normalizeValidationMessage(err?.message)
+              : err?.message || "Validasi gagal";
+            setValue(`rows.${key}.errormessage`, msg);
+            errorsList.push({ key, msg });
           }
         } catch (err) {
           console.error(err);
           setValue(`rows.${key}.status`, "error");
           setValue(`rows.${key}.errormessage`, err?.message || "Gagal");
-          addToast("error", "Server tidak dapat dihubungi");
+          errorsList.push({ key, msg: "Server tidak dapat dihubungi" });
         }
       })
     );
+
+    if (errorsList.length === 0) {
+      addToast("success", "Data berhasil disimpan");
+      if (mode === "add") {
+        navigate(`/template_renstra`);
+      }
+    } else {
+      const firstErr = errorsList[0];
+      addToast("error", firstErr.msg || "Validasi gagal");
+      scrollToErrorField(firstErr.key);
+    }
   };
 
   return (
@@ -675,7 +791,6 @@ const TemplateRenstraFormPage = () => {
             )}
 
             <SubmitButtonWithLoading
-              groupDatas={groupDatas}
               watch={watch}
               loading={loading}
               isSubmitting={isSubmitting}
@@ -696,9 +811,7 @@ const TemplateRenstraFormPage = () => {
   );
 };
 
-export default TemplateRenstraFormPage;
-
-export const groupDataAdapter = (rows = []) => {
+const groupDataAdapter = (rows = []) => {
   const map = {};
   for (const r of rows) {
     const key = `${r.Type}-${r.Jenjang}`;
@@ -710,7 +823,7 @@ export const groupDataAdapter = (rows = []) => {
   return Object.values(map);
 };
 
-export const GroupDataTable = ({
+const GroupDataTable = ({
   gd,
   watch,
   register,
@@ -722,6 +835,9 @@ export const GroupDataTable = ({
   addToast,
   openModal,
 }) => {
+  const indikator = watch("indikator_renstra");
+  const tipeTarget = indikator?.TipeTarget;
+
   return (
     <div
       key={gd.Type + gd.Jenjang}
@@ -740,7 +856,7 @@ export const GroupDataTable = ({
           <button
             type="button"
             onClick={() => {
-              if (watch("indikator_renstra")) openModalFill(gd);
+              if (indikator) openModalFill(gd);
               else addToast("error", "Pilih dulu indikator");
             }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 border border-purple-200 rounded-lg transition-colors shadow-xs"
@@ -765,7 +881,7 @@ export const GroupDataTable = ({
             </tr>
           </thead>
           <tbody>
-            {watch("indikator_renstra") &&
+            {Boolean(indikator) &&
               gd.Targets.map((target) => {
                 const rowKey = buildRowLabel(gd, target);
                 const rowValues = watch(`rows.${rowKey}`) || {};
@@ -776,8 +892,8 @@ export const GroupDataTable = ({
                 const fieldKlasifikasi = `rows.${rowKey}.klasifikasi`;
                 const fieldPembagianTugas = `rows.${rowKey}.pembagian_tugas`;
                 const fieldSatuan = `rows.${rowKey}.satuan`;
-                const status = watch(`rows.${rowKey}.status`);
-                const errorMessage = watch(`rows.${rowKey}.errormessage`);
+                const status = rowValues.status;
+                const errorMessage = rowValues.errormessage;
 
                 const errorKlasifikasiMessage = get(
                   errors,
@@ -789,21 +905,20 @@ export const GroupDataTable = ({
                 )?.message;
                 const errorSatuanMessage = get(errors, fieldSatuan)?.message;
 
-                const tipeTarget = watch("indikator_renstra")?.TipeTarget;
-                const valKlasifikasi = watch(fieldKlasifikasi);
-                const valSatuan = watch(fieldSatuan);
-                const valPembagianTugas = watch(fieldPembagianTugas);
+                const valKlasifikasi = rowValues.klasifikasi;
+                const valSatuan = rowValues.satuan;
+                const valPembagianTugas = rowValues.pembagian_tugas;
 
                 const hasKlasifikasi = Boolean(valKlasifikasi);
                 const hasSatuan = Boolean(valSatuan && String(valSatuan).trim() !== "");
                 const hasTugas = Boolean(valPembagianTugas);
                 const hasTarget = tipeTarget === "range"
                   ? Boolean(
-                      (watch(`rows.${rowKey}.target_min`) !== undefined && watch(`rows.${rowKey}.target_min`) !== null && String(watch(`rows.${rowKey}.target_min`)).trim() !== "") ||
-                      (watch(`rows.${rowKey}.target_max`) !== undefined && watch(`rows.${rowKey}.target_max`) !== null && String(watch(`rows.${rowKey}.target_max`)).trim() !== "")
+                      (rowValues.target_min !== undefined && rowValues.target_min !== null && String(rowValues.target_min).trim() !== "") ||
+                      (rowValues.target_max !== undefined && rowValues.target_max !== null && String(rowValues.target_max).trim() !== "")
                     )
                   : Boolean(
-                      watch(`rows.${rowKey}.target`) !== undefined && watch(`rows.${rowKey}.target`) !== null && String(watch(`rows.${rowKey}.target`)).trim() !== ""
+                      rowValues.target !== undefined && rowValues.target !== null && String(rowValues.target).trim() !== ""
                     );
 
                 const isRowEmpty = !hasKlasifikasi && !hasSatuan && !hasTugas && !hasTarget;
@@ -820,11 +935,12 @@ export const GroupDataTable = ({
                         step="0.001"
                         placeholder="Min"
                         {...register(fieldTargetMin)}
-                        value={watch(fieldTargetMin) || ""}
+                        value={rowValues.target_min || ""}
                         onChange={(e) => {
                           setValue(fieldTargetMin, e.target.value, {
                             shouldValidate: true,
                           });
+                          clearErrors(fieldTargetMin);
                           onRowChange();
                         }}
                         error={get(errors, fieldTargetMin)?.message}
@@ -836,11 +952,12 @@ export const GroupDataTable = ({
                         step="0.001"
                         placeholder="Max"
                         {...register(fieldTargetMax)}
-                        value={watch(fieldTargetMax) || ""}
+                        value={rowValues.target_max || ""}
                         onChange={(e) => {
                           setValue(fieldTargetMax, e.target.value, {
                             shouldValidate: true,
                           });
+                          clearErrors(fieldTargetMax);
                           onRowChange();
                         }}
                         error={get(errors, fieldTargetMax)?.message}
@@ -855,11 +972,12 @@ export const GroupDataTable = ({
                       type={tipeTarget === "numerik" ? "number" : "text"}
                       min={tipeTarget === "numerik" ? 0 : undefined}
                       {...register(fieldTarget)}
-                      value={watch(fieldTarget) || ""}
+                      value={rowValues.target || ""}
                       onChange={(e) => {
                         setValue(fieldTarget, e.target.value, {
                           shouldValidate: true,
                         });
+                        clearErrors(fieldTarget);
                         onRowChange();
                       }}
                       error={get(errors, fieldTarget)?.message}
@@ -870,6 +988,8 @@ export const GroupDataTable = ({
                 return (
                   <tr
                     key={target.ID}
+                    id={`row-${rowKey}`}
+                    data-row-key={rowKey}
                     className="border-t text-center align-top"
                   >
                     <td className="px-3 py-3 text-sm">{target.Nama}</td>
@@ -877,6 +997,7 @@ export const GroupDataTable = ({
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-4 justify-center">
                         <RadioButton
+                          id={`${fieldKlasifikasi}-minor`}
                           value="minor"
                           text="Minor"
                           {...register(fieldKlasifikasi)}
@@ -884,11 +1005,14 @@ export const GroupDataTable = ({
                           onChange={() => {
                             setValue(fieldKlasifikasi, "minor", {
                               shouldValidate: true,
+                              shouldDirty: true,
                             });
+                            clearErrors(fieldKlasifikasi);
                             onRowChange();
                           }}
                         />
                         <RadioButton
+                          id={`${fieldKlasifikasi}-major`}
                           value="major"
                           text="Major"
                           {...register(fieldKlasifikasi)}
@@ -896,11 +1020,14 @@ export const GroupDataTable = ({
                           onChange={() => {
                             setValue(fieldKlasifikasi, "major", {
                               shouldValidate: true,
+                              shouldDirty: true,
                             });
+                            clearErrors(fieldKlasifikasi);
                             onRowChange();
                           }}
                         />
                         <RadioButton
+                          id={`${fieldKlasifikasi}-observe`}
                           value="observe"
                           text="Observe"
                           {...register(fieldKlasifikasi)}
@@ -908,7 +1035,9 @@ export const GroupDataTable = ({
                           onChange={() => {
                             setValue(fieldKlasifikasi, "observe", {
                               shouldValidate: true,
+                              shouldDirty: true,
                             });
+                            clearErrors(fieldKlasifikasi);
                             onRowChange();
                           }}
                         />
@@ -924,7 +1053,7 @@ export const GroupDataTable = ({
                       <TextInput
                         label={null}
                         {...register(fieldSatuan)}
-                        value={watch(fieldSatuan) || ""}
+                        value={rowValues.satuan || ""}
                         onChange={(e) => {
                           setValue(fieldSatuan, e.target.value, {
                             shouldValidate: true,
@@ -940,6 +1069,7 @@ export const GroupDataTable = ({
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-4 justify-center">
                         <RadioButton
+                          id={`${fieldPembagianTugas}-auditor1`}
                           value="auditor1"
                           text="Auditor1"
                           {...register(fieldPembagianTugas)}
@@ -947,11 +1077,14 @@ export const GroupDataTable = ({
                           onChange={() => {
                             setValue(fieldPembagianTugas, "auditor1", {
                               shouldValidate: true,
+                              shouldDirty: true,
                             });
+                            clearErrors(fieldPembagianTugas);
                             onRowChange();
                           }}
                         />
                         <RadioButton
+                          id={`${fieldPembagianTugas}-auditor2`}
                           value="auditor2"
                           text="Auditor2"
                           {...register(fieldPembagianTugas)}
@@ -959,7 +1092,9 @@ export const GroupDataTable = ({
                           onChange={() => {
                             setValue(fieldPembagianTugas, "auditor2", {
                               shouldValidate: true,
+                              shouldDirty: true,
                             });
+                            clearErrors(fieldPembagianTugas);
                             onRowChange();
                           }}
                         />
@@ -1023,28 +1158,14 @@ export const GroupDataTable = ({
   );
 };
 
-export const SubmitButtonWithLoading = ({
-  groupDatas,
+const SubmitButtonWithLoading = ({
   watch,
   loading,
   isSubmitting = false,
   ...props
 }) => {
-  const { totalRows, totalLoading } = groupDatas.reduce(
-    (acc, gd) => {
-      gd.Targets.forEach((target) => {
-        const rowKey = buildRowLabel(gd, target);
-        acc.totalRows += 1;
-        if (watch(`rows.${rowKey}.status`) === "loading") {
-          acc.totalLoading += 1;
-        }
-      });
-      return acc;
-    },
-    { totalRows: 0, totalLoading: 0 }
-  );
-
-  const isSaving = isSubmitting || totalLoading > 0;
+  const rows = watch("rows") || {};
+  const isSaving = isSubmitting || Object.values(rows).some((r) => r?.status === "loading");
   const isDataLoading = Boolean(loading?.indikator || loading?.template || loading?.fakultas);
   const isLoading = isSaving || isDataLoading;
 
@@ -1071,3 +1192,11 @@ export const SubmitButtonWithLoading = ({
     </button>
   );
 };
+
+const TemplateRenstraFormPageWrapper = () => (
+  <FormErrorBoundary>
+    <TemplateRenstraFormPage />
+  </FormErrorBoundary>
+);
+
+export default TemplateRenstraFormPageWrapper;

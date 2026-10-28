@@ -232,7 +232,7 @@ export default function UserAssignmentPage() {
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
           <School className="w-3.5 h-3.5 text-amber-600" />
           <span>UPMS</span>
-          <span className="text-[10px] font-normal opacity-75">(Sekolah)</span>
+          <span className="text-[10px] font-normal opacity-75">(Prodi)</span>
         </span>
       );
     }
@@ -460,7 +460,7 @@ export default function UserAssignmentPage() {
                 <option value="user">User (Pengguna / Pengelola Unit)</option>
                 <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
                 <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
-                <option value="upms">UPMS (Unit Penjaminan Mutu Sekolah)</option>
+                <option value="upms">UPMS (Unit Penjaminan Mutu Program Studi)</option>
               </select>
             </div>
 

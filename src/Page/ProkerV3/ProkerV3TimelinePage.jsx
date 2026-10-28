@@ -23,6 +23,7 @@ import {
   getRealisasiAnggaran,
   isAnggaranRevised,
 } from "./prokerConstants";
+import { formatTanggalBulanTahun } from "@/Common/Utils";
 import {
   ArrowLeft,
   Building2,
@@ -92,6 +93,24 @@ export default function ProkerV3TimelinePage() {
     .toLowerCase()
     .trim();
   const isLevelUser = curRole === "user";
+  const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
+
+  const isVerifierRoleOrLevel = useMemo(() => {
+    if (isAdmin) return false;
+    const normRole = curRole.toLowerCase().trim();
+    const normLevel = String(level || localStorage.getItem("activeLevel") || "").toLowerCase().trim();
+    const userLevel = String(user?.level || "").toLowerCase().trim();
+    const verifierRoles = ["upml", "upmf", "upms", "fakultas", "evaluator", "verifikator"];
+    return (
+      verifierRoles.includes(normRole) ||
+      normRole.includes("verifikator") ||
+      verifierRoles.includes(normLevel) ||
+      normLevel.includes("verifikator") ||
+      userLevel === "verifikator" ||
+      userLevel.includes("verifikator") ||
+      isEvaluator
+    );
+  }, [curRole, level, user?.level, isAdmin, isEvaluator]);
 
   const isUpmUser = useMemo(() => {
     if (["upml", "upmf", "upms"].includes(curRole)) return true;
@@ -118,6 +137,24 @@ export default function ProkerV3TimelinePage() {
   }, [positionYear, proker?.Tahun, aktivitas?.Tahun]);
 
   const canManageTimeline = isLevelUser && !isUpmUser && isYearMatch;
+
+  const isDiterimaAnggaran = useMemo(() => {
+    const sAnggAct = String(aktivitas?.StatusAnggaran || aktivitas?.status_anggaran || "").toLowerCase().trim();
+    const sMainAct = String(aktivitas?.Status || aktivitas?.status || "").toLowerCase().trim();
+    const sAnggProker = String(proker?.StatusAnggaran || proker?.status_anggaran || "").toLowerCase().trim();
+    const sMainProker = String(proker?.Status || proker?.status || "").toLowerCase().trim();
+
+    return (
+      sAnggAct === "terima_anggaran" ||
+      sAnggAct === "disetujui" ||
+      sMainAct === "terima_anggaran" ||
+      sMainAct === "terima anggaran" ||
+      sAnggProker === "terima_anggaran" ||
+      sAnggProker === "disetujui" ||
+      sMainProker === "terima_anggaran" ||
+      sMainProker === "terima anggaran"
+    );
+  }, [aktivitas, proker]);
 
   // Form Timeline State (Create / Edit)
   const [editingTimelineUuid, setEditingTimelineUuid] = useState(null);
@@ -418,6 +455,10 @@ export default function ProkerV3TimelinePage() {
 
   // Open modal perkembangan realisasi
   const openRealisasiModal = (tl) => {
+    if (!isDiterimaAnggaran) {
+      addToast("warning", "Perkembangan realisasi hanya dapat diisi ketika status anggaran sudah 'Diterima Anggaran'");
+      return;
+    }
     setSelectedTimelineForRealisasi(tl);
     setRealisasiForm({
       tanggal_r_awal: tl.TanggalRAwal ? tl.TanggalRAwal.slice(0, 10) : "",
@@ -519,6 +560,10 @@ export default function ProkerV3TimelinePage() {
 
   // Open modal RAB
   const openRabModal = (tl) => {
+    if (!isDiterimaAnggaran) {
+      addToast("warning", "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'");
+      return;
+    }
     setSelectedTimelineForRab(tl);
     let initialRows = parseTimelineRab(tl);
 
@@ -1152,6 +1197,10 @@ export default function ProkerV3TimelinePage() {
 
   // Mulai upload file-file dari baris dinamis per-chunk
   const handleUploadRowFiles = async (timeline) => {
+    if (!isDiterimaAnggaran) {
+      addToast("warning", "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'");
+      return;
+    }
     const rows = getRowFormRows(timeline.UUID);
     const filledRows = rows.filter((r) => Boolean(r.file));
     if (filledRows.length === 0) {
@@ -1355,7 +1404,9 @@ export default function ProkerV3TimelinePage() {
               </span>
               <span className="text-xs px-2.5 py-1 rounded-full font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                 Anggaran:{" "}
-                {isAnggaranRevised(aktivitas) ? (
+                {isVerifierRoleOrLevel ? (
+                  "***"
+                ) : isAnggaranRevised(aktivitas) ? (
                   <>
                     <span
                       className="line-through text-emerald-800/60 font-normal mr-1.5 decoration-rose-500 decoration-1"
@@ -1908,7 +1959,7 @@ export default function ProkerV3TimelinePage() {
                               title="Nominal Anggaran Tahapan Timeline"
                             >
                               <span>Anggaran:</span>
-                              <span className="font-extrabold">{formatRupiah(tl.Anggaran || tl.anggaran || 0)}</span>
+                              <span className="font-extrabold">{formatRupiah(tl.Anggaran || tl.anggaran || 0, isVerifierRoleOrLevel)}</span>
                             </span>
                           </div>
 
@@ -1922,9 +1973,9 @@ export default function ProkerV3TimelinePage() {
 
                             <div className="inline-flex items-center gap-1">
                               <span className="text-gray-400">Tanggal RK:</span>
-                              <span className="font-semibold text-gray-700 font-mono text-[11px]">
-                                {tl.TanggalRkAwal ? formatDateIndoShort(tl.TanggalRkAwal) : "-"} s/d{" "}
-                                {tl.TanggalRkAkhir ? formatDateIndoShort(tl.TanggalRkAkhir) : "-"}
+                              <span className="font-semibold text-gray-700 text-[11px]">
+                                {tl.TanggalRkAwal ? formatTanggalBulanTahun(tl.TanggalRkAwal) : "-"} s/d{" "}
+                                {tl.TanggalRkAkhir ? formatTanggalBulanTahun(tl.TanggalRkAkhir) : "-"}
                               </span>
                             </div>
 
@@ -1933,9 +1984,9 @@ export default function ProkerV3TimelinePage() {
                                 <span className="text-gray-300 hidden sm:inline">•</span>
                                 <div className="inline-flex items-center gap-1">
                                   <span className="text-emerald-600 font-medium">Realisasi:</span>
-                                  <span className="font-semibold text-emerald-700 font-mono text-[11px]">
-                                    {formatDateIndoShort(tl.TanggalRAwal)} s/d{" "}
-                                    {tl.TanggalRAkhir ? formatDateIndoShort(tl.TanggalRAkhir) : "-"}
+                                  <span className="font-semibold text-emerald-700 text-[11px]">
+                                    {formatTanggalBulanTahun(tl.TanggalRAwal)} s/d{" "}
+                                    {tl.TanggalRAkhir ? formatTanggalBulanTahun(tl.TanggalRAkhir) : "-"}
                                   </span>
                                 </div>
                               </>
@@ -1950,20 +2001,38 @@ export default function ProkerV3TimelinePage() {
                           <button
                             type="button"
                             onClick={() => openRabModal(tl)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer shadow-2xs"
-                            title="Kelola Rencana Anggaran Biaya (RAB) tahapan ini"
+                            disabled={!isDiterimaAnggaran}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs ${
+                              !isDiterimaAnggaran
+                                ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed shadow-none"
+                                : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer"
+                            }`}
+                            title={
+                              !isDiterimaAnggaran
+                                ? "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'"
+                                : "Kelola Rencana Anggaran Biaya (RAB) tahapan ini"
+                            }
                           >
-                            <Calculator className="w-3.5 h-3.5 text-amber-700" />
+                            <Calculator className={`w-3.5 h-3.5 ${!isDiterimaAnggaran ? "text-gray-400" : "text-amber-700"}`} />
                             <span>RAB</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => openRealisasiModal(tl)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition cursor-pointer shadow-2xs"
-                            title="Buka modal perkembangan realisasi (Tanggal R & Status)"
+                            disabled={!isDiterimaAnggaran}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs ${
+                              !isDiterimaAnggaran
+                                ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed shadow-none"
+                                : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-pointer"
+                            }`}
+                            title={
+                              !isDiterimaAnggaran
+                                ? "Perkembangan realisasi hanya dapat diisi ketika status anggaran sudah 'Diterima Anggaran'"
+                                : "Buka modal perkembangan realisasi (Tanggal R & Status)"
+                            }
                           >
-                            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                            <TrendingUp className={`w-3.5 h-3.5 ${!isDiterimaAnggaran ? "text-gray-400" : "text-emerald-600"}`} />
                             <span>Perkembangan Realisasi</span>
                           </button>
 
@@ -2074,7 +2143,7 @@ export default function ProkerV3TimelinePage() {
                                 Rincian Rencana Anggaran Biaya (RAB)
                               </span>
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
-                                {formatRupiah(totalItemRab > 0 ? totalItemRab : nominalTimeline)}
+                                {formatRupiah(totalItemRab > 0 ? totalItemRab : nominalTimeline, isVerifierRoleOrLevel)}
                               </span>
                             </div>
 
@@ -2082,8 +2151,17 @@ export default function ProkerV3TimelinePage() {
                               <button
                                 type="button"
                                 onClick={() => openRabModal(tl)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition shadow-2xs cursor-pointer"
-                                title="Edit kembali data RAB tahapan ini"
+                                disabled={!isDiterimaAnggaran}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition shadow-2xs ${
+                                  !isDiterimaAnggaran
+                                    ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
+                                    : "bg-amber-500 hover:bg-amber-600 text-white cursor-pointer"
+                                }`}
+                                title={
+                                  !isDiterimaAnggaran
+                                    ? "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'"
+                                    : "Edit kembali data RAB tahapan ini"
+                                }
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                                 <span>{rabItems.length > 0 ? "Edit RAB" : "Kelola RAB"}</span>
@@ -2095,13 +2173,23 @@ export default function ProkerV3TimelinePage() {
                             <div className="p-3 text-center text-xs text-amber-800/80 bg-white/80 rounded-xl border border-dashed border-amber-300 flex flex-col sm:flex-row items-center justify-between gap-2">
                               <span>
                                 Belum ada rincian item RAB untuk tahapan ini. Total anggaran saat ini:{" "}
-                                <b className="font-mono text-amber-950">{formatRupiah(nominalTimeline)}</b>
+                                <b className="font-mono text-amber-950">{formatRupiah(nominalTimeline, isVerifierRoleOrLevel)}</b>
                               </span>
                               {canManageTimeline && (
                                 <button
                                   type="button"
                                   onClick={() => openRabModal(tl)}
-                                  className="text-amber-800 hover:text-amber-950 font-bold underline text-xs cursor-pointer"
+                                  disabled={!isDiterimaAnggaran}
+                                  className={`font-bold text-xs ${
+                                    !isDiterimaAnggaran
+                                      ? "text-gray-400 cursor-not-allowed no-underline"
+                                      : "text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                                  }`}
+                                  title={
+                                    !isDiterimaAnggaran
+                                      ? "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'"
+                                      : undefined
+                                  }
                                 >
                                   + Buat Rincian RAB Sekarang
                                 </button>
@@ -2147,10 +2235,10 @@ export default function ProkerV3TimelinePage() {
                                           {item.qty_paket}
                                         </td>
                                         <td className="p-2 text-right font-mono border-r border-amber-100">
-                                          {formatRupiah(item.harga_satuan)}
+                                          {formatRupiah(item.harga_satuan, isVerifierRoleOrLevel)}
                                         </td>
                                         <td className="p-2 text-right font-mono font-bold text-amber-950 border-r border-amber-100 bg-amber-50/20">
-                                          {formatRupiah(item.total)}
+                                          {formatRupiah(item.total, isVerifierRoleOrLevel)}
                                         </td>
                                         <td className="p-2 text-center">
                                           {proofUrl ? (
@@ -2178,7 +2266,7 @@ export default function ProkerV3TimelinePage() {
                                       Total Keseluruhan RAB:
                                     </td>
                                     <td className="p-2.5 text-right font-mono font-extrabold text-amber-950 bg-amber-100/70 border-r border-amber-200 text-xs">
-                                      {formatRupiah(totalItemRab)}
+                                      {formatRupiah(totalItemRab, isVerifierRoleOrLevel)}
                                     </td>
                                     <td className="p-2.5 text-center text-[10px] text-gray-500 font-normal">
                                       {rabItems.length} item
@@ -2275,16 +2363,33 @@ export default function ProkerV3TimelinePage() {
 
                       {/* Inline Upload Form (Dynamic Multi-Row Form Berkas & Keterangan) */}
                       <div className="p-3.5 bg-white rounded-xl border border-purple-200 shadow-2xs space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-                            <Upload className="w-4 h-4 text-purple-600" />
-                            <span>Unggah Berkas Bukti Baru (Multi File & Keterangan Dinamis):</span>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
+                              <Upload className="w-4 h-4 text-purple-600" />
+                              <span>Unggah Berkas Bukti Baru (Multi File & Keterangan Dinamis):</span>
+                            </div>
+                            {!isDiterimaAnggaran && (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md font-semibold">
+                                Terkunci (Menunggu Diterima Anggaran)
+                              </span>
+                            )}
                           </div>
 
                           <button
                             type="button"
                             onClick={() => addRowFormRow(tl.UUID)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition cursor-pointer"
+                            disabled={!isDiterimaAnggaran}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition ${
+                              !isDiterimaAnggaran
+                                ? "text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed"
+                                : "text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 cursor-pointer"
+                            }`}
+                            title={
+                              !isDiterimaAnggaran
+                                ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
+                                : undefined
+                            }
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span>Tambah Baris</span>
@@ -2307,6 +2412,7 @@ export default function ProkerV3TimelinePage() {
                               <div className="flex-1 min-w-0">
                                 <input
                                   type="file"
+                                  disabled={!isDiterimaAnggaran}
                                   onChange={(e) =>
                                     updateRowFormField(
                                       tl.UUID,
@@ -2315,7 +2421,11 @@ export default function ProkerV3TimelinePage() {
                                       e.target.files?.[0] || null
                                     )
                                   }
-                                  className="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer border border-gray-200 rounded-xl bg-white"
+                                  className={`w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold border border-gray-200 rounded-xl bg-white ${
+                                    !isDiterimaAnggaran
+                                      ? "file:bg-gray-300 file:text-gray-500 cursor-not-allowed opacity-60"
+                                      : "file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
+                                  }`}
                                 />
                                 {rowItem.file && (
                                   <span
@@ -2331,6 +2441,7 @@ export default function ProkerV3TimelinePage() {
                               <div className="flex-1 min-w-0">
                                 <input
                                   type="text"
+                                  disabled={!isDiterimaAnggaran}
                                   placeholder="Keterangan berkas bukti (opsional)..."
                                   value={rowItem.keterangan || ""}
                                   onChange={(e) =>
@@ -2341,15 +2452,24 @@ export default function ProkerV3TimelinePage() {
                                       e.target.value
                                     )
                                   }
-                                  className="w-full px-3 py-1.5 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                  className={`w-full px-3 py-1.5 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none ${
+                                    !isDiterimaAnggaran
+                                      ? "cursor-not-allowed bg-gray-50 text-gray-400"
+                                      : "focus:ring-2 focus:ring-purple-500"
+                                  }`}
                                 />
                               </div>
 
                               {/* Tombol Hapus Baris */}
                               <button
                                 type="button"
+                                disabled={!isDiterimaAnggaran}
                                 onClick={() => removeRowFormRow(tl.UUID, rowItem.id)}
-                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer self-end sm:self-center shrink-0"
+                                className={`p-1.5 rounded-lg transition shrink-0 ${
+                                  !isDiterimaAnggaran
+                                    ? "text-gray-300 cursor-not-allowed"
+                                    : "text-gray-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                } self-end sm:self-center`}
                                 title="Hapus baris ini"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -2369,7 +2489,17 @@ export default function ProkerV3TimelinePage() {
                             <button
                               type="button"
                               onClick={() => addRowFormRow(tl.UUID)}
-                              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer flex items-center gap-1"
+                              disabled={!isDiterimaAnggaran}
+                              className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition flex items-center gap-1 ${
+                                !isDiterimaAnggaran
+                                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                  : "bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer"
+                              }`}
+                              title={
+                                !isDiterimaAnggaran
+                                  ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
+                                  : undefined
+                              }
                             >
                               <Plus className="w-3.5 h-3.5" />
                               <span>Tambah Berkas</span>
@@ -2379,9 +2509,19 @@ export default function ProkerV3TimelinePage() {
                               type="button"
                               onClick={() => handleUploadRowFiles(tl)}
                               disabled={
+                                !isDiterimaAnggaran ||
                                 getRowFormRows(tl.UUID).filter((r) => Boolean(r.file)).length === 0
                               }
-                              className="px-4 py-1.5 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-2xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                              className={`px-4 py-1.5 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs ${
+                                !isDiterimaAnggaran
+                                  ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
+                                  : "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer disabled:opacity-50"
+                              }`}
+                              title={
+                                !isDiterimaAnggaran
+                                  ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
+                                  : undefined
+                              }
                             >
                               <Upload className="w-3.5 h-3.5" />
                               <span>
@@ -2582,9 +2722,9 @@ export default function ProkerV3TimelinePage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Rencana Jadwal [RK]:</span>
-                  <span className="font-mono text-gray-700">
-                    {selectedTimelineForRealisasi?.TanggalRkAwal ? selectedTimelineForRealisasi.TanggalRkAwal.slice(0, 10) : "-"} s/d{" "}
-                    {selectedTimelineForRealisasi?.TanggalRkAkhir ? selectedTimelineForRealisasi.TanggalRkAkhir.slice(0, 10) : "-"}
+                  <span className="font-semibold text-gray-800">
+                    {selectedTimelineForRealisasi?.TanggalRkAwal ? formatTanggalBulanTahun(selectedTimelineForRealisasi.TanggalRkAwal) : "-"} s/d{" "}
+                    {selectedTimelineForRealisasi?.TanggalRkAkhir ? formatTanggalBulanTahun(selectedTimelineForRealisasi.TanggalRkAkhir) : "-"}
                   </span>
                 </div>
               </div>

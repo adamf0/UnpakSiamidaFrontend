@@ -67,48 +67,50 @@ export default function UserAssignmentModal({
 
   const watchRole = watch("role");
 
+  // Helper cek apakah target merupakan prodi
+  const checkIsProdi = (fu) => {
+    if (!fu) return false;
+    const type = String(
+      fu.type || fu.Type || fu.TypeFakultasUnit || fu.type_fakultas_unit || ""
+    ).toLowerCase().trim();
+    const nama = String(
+      fu.pureName || fu.nama || fu.Nama || fu.NamaFakultasUnit || fu.nama_fak_prod_unit || ""
+    ).toLowerCase().trim();
+    if (type === "prodi") return true;
+    if (type === "fakultas" || type === "unit") return false;
+    return (
+      nama.includes("(prodi)") ||
+      nama.startsWith("prodi") ||
+      nama.startsWith("program studi")
+    );
+  };
+
   // Helper cek apakah target merupakan fakultas
   const checkIsFakultas = (fu) => {
     if (!fu) return false;
     const type = String(
-      fu.type ||
-      fu.Type ||
-      fu.TypeFakultasUnit ||
-      fu.type_fakultas_unit ||
-      ""
-    ).toLowerCase();
+      fu.type || fu.Type || fu.TypeFakultasUnit || fu.type_fakultas_unit || ""
+    ).toLowerCase().trim();
     const nama = String(
-      fu.pureName ||
-      fu.nama ||
-      fu.Nama ||
-      fu.NamaFakultasUnit ||
-      fu.nama_fak_prod_unit ||
-      ""
-    ).toLowerCase();
+      fu.pureName || fu.nama || fu.Nama || fu.NamaFakultasUnit || fu.nama_fak_prod_unit || ""
+    ).toLowerCase().trim();
 
     if (type === "fakultas") return true;
-    if (nama.includes("(fakultas)") || nama.startsWith("fakultas")) return true;
-    return false;
+    if (type === "prodi" || type === "unit") return false;
+    return nama.includes("(fakultas)") || nama.startsWith("fakultas");
   };
 
-  // Helper untuk deteksi role dari Fakultas/Unit
+  // Helper cek apakah target merupakan unit / lembaga
+  const checkIsUnit = (fu) => {
+    if (!fu) return false;
+    return !checkIsProdi(fu) && !checkIsFakultas(fu);
+  };
+
+  // Helper untuk deteksi role dari target sasaran
   const detectRoleFromFu = (fu) => {
     if (!fu) return "upmf";
-    if (checkIsFakultas(fu)) {
-      return "upmf";
-    }
-
-    const type = (fu.type || fu.Type || "").toLowerCase();
-    const nama = (fu.pureName || fu.nama || fu.Nama || fu.nama_fak_prod_unit || "").toLowerCase();
-
-    if (
-      nama.includes("pascasarjana") ||
-      nama.includes("vokasi") ||
-      nama.includes("sekolah") ||
-      type === "sekolah"
-    ) {
-      return "upms";
-    }
+    if (checkIsProdi(fu)) return "upms";
+    if (checkIsFakultas(fu)) return "upmf";
     return "upml";
   };
 
@@ -254,7 +256,19 @@ export default function UserAssignmentModal({
     }
   }, [open, mode, data, defaultUser, usersOptions, fakultasOptions, defaultYear]);
 
-  const isFakultas = useMemo(() => checkIsFakultas(selectedFakultasUnit), [selectedFakultasUnit]);
+  // Filter target options berdasarkan role yang dipilih
+  const filteredFakultasOptions = useMemo(() => {
+    if (watchRole === "upms") {
+      return fakultasOptions.filter(checkIsProdi);
+    }
+    if (watchRole === "upmf") {
+      return fakultasOptions.filter(checkIsFakultas);
+    }
+    if (watchRole === "upml") {
+      return fakultasOptions.filter((fu) => checkIsFakultas(fu) || checkIsUnit(fu));
+    }
+    return fakultasOptions;
+  }, [fakultasOptions, watchRole]);
 
   // Update detected role when unit changes
   const handleSelectUnit = (unit) => {
@@ -262,32 +276,23 @@ export default function UserAssignmentModal({
     if (unit) {
       const r = detectRoleFromFu(unit);
       setDetectedRole(r);
-      const isFak = checkIsFakultas(unit);
-      // Validasi rule: jika fakultas hanya upml & upmf, jika bukan fakultas hanya upml & upms
-      if (isFak && watchRole === "upms") {
-        setValue("role", "auto");
-      } else if (!isFak && watchRole === "upmf") {
-        setValue("role", "auto");
-      }
     }
   };
 
+  // Reset target jika role yang dipilih tidak cocok dengan target yang sedang aktif
   useEffect(() => {
-    if (selectedFakultasUnit) {
-      const isFak = checkIsFakultas(selectedFakultasUnit);
-      if (isFak && watchRole === "upms") {
-        setValue("role", "auto");
-      } else if (!isFak && watchRole === "upmf") {
-        setValue("role", "auto");
-      }
+    if (!selectedFakultasUnit) return;
+    if (watchRole === "upms" && !checkIsProdi(selectedFakultasUnit)) {
+      setSelectedFakultasUnit(null);
+    } else if (watchRole === "upmf" && !checkIsFakultas(selectedFakultasUnit)) {
+      setSelectedFakultasUnit(null);
+    } else if (watchRole === "upml" && checkIsProdi(selectedFakultasUnit)) {
+      setSelectedFakultasUnit(null);
     }
-  }, [selectedFakultasUnit, watchRole]);
+  }, [watchRole]);
 
   const effectiveRole = useMemo(() => {
     if (watchRole && watchRole !== "auto") {
-      if (watchRole === "upms") {
-        return "upms";
-      }
       return watchRole;
     }
     return detectedRole;
@@ -300,14 +305,30 @@ export default function UserAssignmentModal({
     }
 
     const effRole = effectiveRole;
-    if (effRole === "upmf" && !selectedFakultasUnit) {
-      addToast("error", "Target Fakultas wajib dipilih untuk role UPMF");
+    if (!selectedFakultasUnit) {
+      if (effRole === "upms") {
+        addToast("error", "Target Program Studi (Prodi) wajib dipilih untuk role UPMS");
+      } else if (effRole === "upmf") {
+        addToast("error", "Target Fakultas wajib dipilih untuk role UPMF");
+      } else {
+        addToast("error", "Target Fakultas / Unit wajib dipilih untuk role UPML");
+      }
       return;
     }
-    if (effRole !== "upms" && !selectedFakultasUnit) {
-      addToast("error", "Pilih fakultas / unit / target penugasan");
+
+    if (effRole === "upms" && !checkIsProdi(selectedFakultasUnit)) {
+      addToast("error", "Target untuk role UPMS harus berupa Program Studi (Prodi)");
       return;
     }
+    if (effRole === "upmf" && !checkIsFakultas(selectedFakultasUnit)) {
+      addToast("error", "Target untuk role UPMF harus berupa Fakultas");
+      return;
+    }
+    if (effRole === "upml" && checkIsProdi(selectedFakultasUnit)) {
+      addToast("error", "Target untuk role UPML harus berupa Fakultas atau Unit (bukan Program Studi)");
+      return;
+    }
+
     if (isEmpty(formValues.tahun)) {
       addToast("error", "Tahun penugasan wajib diisi");
       return;
@@ -456,29 +477,90 @@ export default function UserAssignmentModal({
                   )}
                 </div>
 
-                {/* TARGET FAKULTAS / UNIT */}
+                {/* ROLE PENUGASAN (PILIH ROLE DAHULU UNTUK MEMFILTER TARGET) */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Role Penugasan <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <select
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-500 transition font-medium"
+                      {...register("role")}
+                    >
+                      <option value="auto">
+                        Otomatis (Berdasarkan Target Unit: {detectedRole.toUpperCase()})
+                      </option>
+                      <option value="upms">UPMS (Unit Penjaminan Mutu Program Studi)</option>
+                      <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
+                      <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
+                    </select>
+
+                    <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                      <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div className="text-xs">
+                        <span className="text-gray-500">Role Efektif: </span>
+                        <span className="font-bold text-emerald-800 uppercase">
+                          {effectiveRole}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-gray-500 mt-1 block">
+                    {watchRole === "upms" ? (
+                      <span>
+                        • <b>UPMS:</b> Khusus Program Studi (Prodi). Pilihan target di bawah otomatis difilter ke daftar prodi saja.
+                      </span>
+                    ) : watchRole === "upmf" ? (
+                      <span>
+                        • <b>UPMF:</b> Khusus Fakultas. Pilihan target di bawah otomatis difilter ke daftar fakultas saja.
+                      </span>
+                    ) : watchRole === "upml" ? (
+                      <span>
+                        • <b>UPML:</b> Lembaga / Unit kerja dan Fakultas. Pilihan target difilter ke fakultas dan unit.
+                      </span>
+                    ) : (
+                      <span>
+                        • <b>Otomatis:</b> Menampilkan semua target sasaran (Prodi: UPMS, Fakultas: UPMF, Unit: UPML).
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {/* TARGET FAKULTAS / UNIT / PRODI */}
                 <div>
                   <SearchSelect
                     label={
-                      effectiveRole === "upms"
-                        ? "Target Fakultas / Unit / Lembaga (Opsional untuk UPMS)"
-                        : "Target Fakultas / Unit / Lembaga"
+                      watchRole === "upms"
+                        ? "Target Program Studi (Prodi)"
+                        : watchRole === "upmf"
+                          ? "Target Fakultas"
+                          : watchRole === "upml"
+                            ? "Target Fakultas / Unit / Lembaga"
+                            : "Target Fakultas / Unit / Lembaga / Prodi"
                     }
                     placeholder={
-                      effectiveRole === "upms"
-                        ? "Opsional (kosongkan untuk tingkat Universitas / Sekolah)..."
-                        : "Pilih unit kerja atau fakultas sasaran..."
+                      watchRole === "upms"
+                        ? "Pilih program studi sasaran..."
+                        : watchRole === "upmf"
+                          ? "Pilih fakultas sasaran..."
+                          : watchRole === "upml"
+                            ? "Pilih fakultas atau unit kerja sasaran..."
+                            : "Pilih unit kerja, fakultas, atau prodi sasaran..."
                     }
-                    options={fakultasOptions}
+                    options={filteredFakultasOptions}
                     value={selectedFakultasUnit}
                     onChange={handleSelectUnit}
                     loading={loadingFakultas}
-                    required={effectiveRole !== "upms"}
+                    required
                   />
                   <span className="text-[11px] text-gray-500 mt-0.5 block">
-                    {effectiveRole === "upms"
-                      ? "Role UPMS bersifat menyeluruh (tidak wajib target unit, berlaku tingkat universitas / sekolah)."
-                      : "Role akan disesuaikan secara otomatis berdasarkan tipe target yang dipilih."}
+                    {watchRole === "upms"
+                      ? "Menampilkan data Program Studi saja sesuai role UPMS."
+                      : watchRole === "upmf"
+                        ? "Menampilkan data Fakultas saja sesuai role UPMF."
+                        : watchRole === "upml"
+                          ? "Menampilkan data Fakultas dan Unit kerja sesuai role UPML."
+                          : "Role akan disesuaikan secara otomatis berdasarkan tipe target yang dipilih."}
                   </span>
                 </div>
 
@@ -527,55 +609,6 @@ export default function UserAssignmentModal({
                       <option value="inactive">Tidak Aktif (Dinonaktifkan)</option>
                     </select>
                   </div>
-                </div>
-
-                {/* OVERRIDE ROLE / DETECTED ROLE */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Role Penugasan (Hasil Otomatisasi ABAC)
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <select
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-500 transition"
-                      {...register("role")}
-                    >
-                      <option value="auto">
-                        Otomatis (Berdasarkan Unit: {detectedRole.toUpperCase()})
-                      </option>
-                      <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
-                      {(!selectedFakultasUnit || isFakultas) && (
-                        <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
-                      )}
-                      {(!selectedFakultasUnit || !isFakultas) && (
-                        <option value="upms">UPMS (Unit Penjaminan Mutu Sekolah)</option>
-                      )}
-                    </select>
-
-                    <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-                      <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <div className="text-xs">
-                        <span className="text-gray-500">Role Efektif: </span>
-                        <span className="font-bold text-emerald-800 uppercase">
-                          {effectiveRole}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[11px] text-gray-500 mt-1 block">
-                    {isFakultas ? (
-                      <span>
-                        • <b>Target Fakultas:</b> Hanya tersedia pilihan role <b>UPML</b> atau <b>UPMF</b>.
-                      </span>
-                    ) : selectedFakultasUnit ? (
-                      <span>
-                        • <b>Target Non-Fakultas:</b> Hanya tersedia pilihan role <b>UPML</b> atau <b>UPMS</b>.
-                      </span>
-                    ) : (
-                      <span>
-                        • Pilih target terlebih dahulu (Fakultas: UPML/UPMF, Non-Fakultas: UPML/UPMS).
-                      </span>
-                    )}
-                  </span>
                 </div>
 
                 {/* PREVIEW KOTAK INFO */}

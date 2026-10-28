@@ -82,6 +82,8 @@ const SwotPage = () => {
   ).toLowerCase().trim();
   const isLevelUser = curRole === "user";
   const isAdmin = curRole === "admin";
+  const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
+  const canFilterUnit = isAdmin || isEvaluator;
 
   // Filter States
   const [selectedTahun, setSelectedTahun] = useState("");
@@ -226,7 +228,7 @@ const SwotPage = () => {
       if (selectedTahun && selectedTahun !== "all") {
         params.append("filter_tahun", selectedTahun);
       }
-      if (isAdmin) {
+      if (canFilterUnit) {
         if (selectedFakultas && selectedFakultas !== "all") {
           params.append("filter_fakultas_unit", selectedFakultas);
         }
@@ -258,7 +260,7 @@ const SwotPage = () => {
 
   useEffect(() => {
     fetchSwotCounts();
-  }, [getValidToken, selectedTahun, selectedFakultas, isAdmin, user?.fakultas_unit, userUnitData]);
+  }, [getValidToken, selectedTahun, selectedFakultas, canFilterUnit, user?.fakultas_unit, userUnitData]);
 
   // Mapped Options for SearchSelect Filters
   const tahunOptions = useMemo(() => {
@@ -290,12 +292,12 @@ const SwotPage = () => {
       params.append("filter_kategori", selectedKategori);
     }
 
-    if (isAdmin) {
+    if (canFilterUnit) {
       if (selectedFakultas && selectedFakultas !== "all") {
         params.append("filter_fakultas_unit", selectedFakultas);
       }
     } else {
-      // Non-admin: kunci ke unit kerja sendiri
+      // Non-admin / non-evaluator: kunci ke unit kerja sendiri
       const fu = userUnitData?.UUID || userUnitData?.id || user?.fakultas_unit;
       if (fu) {
         params.append("filter_fakultas_unit", String(fu));
@@ -304,7 +306,7 @@ const SwotPage = () => {
 
     const qs = params.toString();
     return `/swots${qs ? `?${qs}` : ""}`;
-  }, [selectedTahun, selectedKategori, selectedFakultas, isAdmin, user?.fakultas_unit, userUnitData]);
+  }, [selectedTahun, selectedKategori, selectedFakultas, canFilterUnit, user?.fakultas_unit, userUnitData]);
 
   const openNew = () => {
     if (!canManage) {
@@ -458,6 +460,8 @@ const SwotPage = () => {
                   className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
                     isAdmin
                       ? "bg-indigo-100 text-indigo-800"
+                      : isEvaluator
+                      ? "bg-purple-100 text-purple-800"
                       : canManage
                       ? "bg-emerald-100 text-emerald-800"
                       : "bg-gray-100 text-gray-700"
@@ -465,13 +469,15 @@ const SwotPage = () => {
                 >
                   {isAdmin
                     ? "Admin (Semua Unit)"
+                    : isEvaluator
+                    ? "Evaluator (Semua Unit)"
                     : canManage
                     ? "Pengelola Unit"
                     : "Pratinjau (Lihat Saja)"}
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-gray-700 font-medium mt-0.5">
-                {isAdmin
+                {canFilterUnit
                   ? "Menampilkan seluruh data analisis SWOT universitas. Anda dapat memfilter per fakultas/unit."
                   : canManage
                   ? `Tabel secara otomatis menampilkan data khusus unit Anda (${
@@ -499,8 +505,8 @@ const SwotPage = () => {
               />
             </div>
 
-            {/* Filter Fakultas / Unit (Hanya aktif untuk Admin) */}
-            {isAdmin && (
+            {/* Filter Fakultas / Unit (Aktif untuk Admin & Evaluator) */}
+            {canFilterUnit && (
               <div className="w-56 min-w-[180px]">
                 <SearchSelect
                   icon={Building2}

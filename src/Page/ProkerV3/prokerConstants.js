@@ -148,7 +148,8 @@ export function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-export function formatRupiah(val) {
+export function formatRupiah(val, isCensored = false) {
+  if (isCensored) return "***";
   if (!val && val !== 0) return "-";
   return new Intl.NumberFormat("id-ID", {
     style: "currency",

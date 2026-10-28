@@ -39,6 +39,7 @@ import ProkerV3Page from "./Page/ProkerV3/ProkerV3Page";
 import ProkerV3AktivitasPage from "./Page/ProkerV3/ProkerV3AktivitasPage";
 import ProkerV3DokumenPage from "./Page/ProkerV3/ProkerV3DokumenPage";
 import ProkerV3TimelinePage from "./Page/ProkerV3/ProkerV3TimelinePage";
+import JadwalProkerV3Page from "./Page/ProkerV3/JadwalProkerV3Page";
 
 export default function App() {
   return (
@@ -82,6 +83,7 @@ export default function App() {
                       <Route path="/analisis_resiko" element={<RiskAssessmentPage />} />
                       <Route path="/analisis_risiko" element={<RiskAssessmentPage />} />
                       <Route path="/proker_v3" element={<ProkerV3Page />} />
+                      <Route path="/jadwal_proker" element={<JadwalProkerV3Page />} />
                       <Route path="/proker_v3/:uuid/aktivitas" element={<ProkerV3AktivitasPage />} />
                       <Route path="/proker_v3/:uuid/aktivitas/:actUuid/timeline" element={<ProkerV3TimelinePage />} />
                       <Route path="/proker_v3/aktivitas/:actUuid/timeline" element={<ProkerV3TimelinePage />} />
