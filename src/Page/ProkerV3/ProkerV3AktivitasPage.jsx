@@ -88,30 +88,59 @@ export default function ProkerV3AktivitasPage() {
   // Tombol tambah aktivitas hanya boleh muncul jika role aktif adalah "user"
   const isLevelUser = curRole === "user";
 
+  // Cek apakah akun ini merupakan akun verifikator UPM (upml, upmf, upms)
+  const isUpmUser = useMemo(() => {
+    if (["upml", "upmf", "upms"].includes(curRole)) return true;
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      return user.extra_role.some((r) =>
+        ["upml", "upmf", "upms"].includes(
+          String(r.role ?? r.Role ?? "").toLowerCase().trim(),
+        ),
+      );
+    }
+    return false;
+  }, [curRole, user?.extra_role]);
+
   // Data state
   const [loading, setLoading] = useState(true);
   const [proker, setProker] = useState(null);
   const [activities, setActivities] = useState([]);
 
+  // Pastikan tahun aktif di navbar (positionYear) cocok dengan tahun proker
+  const isYearMatch = useMemo(() => {
+    if (!positionYear || !proker?.Tahun) return true;
+    return String(positionYear).trim() === String(proker.Tahun).trim();
+  }, [positionYear, proker?.Tahun]);
+
   // Cek apakah proker ini sesuai target unit yang ditugaskan kepada user
   const hasAssignedTarget = useMemo(() => {
     if (!proker) return false;
+    // Akun UPM (verifikator) tidak memiliki izin mengelola/edit/hapus aktivitas
+    if (isUpmUser) return false;
+
+    // Jika tahun di navbar tidak sama dengan tahun proker, tolak akses kelola
+    const prokerYear = String(proker.Tahun || "").trim();
+    const activeYearStr = String(positionYear || "").trim();
+    if (prokerYear && activeYearStr && prokerYear !== activeYearStr) {
+      return false;
+    }
 
     const prokerFuId = proker.IdFakultasUnit ? String(proker.IdFakultasUnit) : "";
     const prokerFuUuid = proker.UuidFakultasUnit ? String(proker.UuidFakultasUnit).toLowerCase() : "";
     const prokerFuName = proker.NamaFakultasUnit ? String(proker.NamaFakultasUnit).trim().toLowerCase() : "";
-    const effYear = String(proker.Tahun || positionYear || "").trim();
+    const effYear = prokerYear || activeYearStr;
 
     // 1. Cek dari user.extra_role (penugasan ABAC)
     if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
       const match = user.extra_role.some((r) => {
-        const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
-        if (rYear && effYear && rYear !== effYear) {
+        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        // Hanya role "user" / operator yang berhak mengelola aktivitas
+        if (rRole && rRole !== "user") {
           return false;
         }
 
-        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
-        if (rRole === "auditor1" || rRole === "auditor2") {
+        const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+        if (rYear && effYear && rYear !== effYear) {
           return false;
         }
 
@@ -130,25 +159,27 @@ export default function ProkerV3AktivitasPage() {
       if (match) return true;
     }
 
-    // 2. Cek dari field user langsung
-    const directFu = String(user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit || "");
-    if (directFu) {
-      if (prokerFuId && directFu === prokerFuId) return true;
-      if (prokerFuUuid && directFu.toLowerCase() === prokerFuUuid) return true;
-      if (prokerFuName && directFu.toLowerCase() === prokerFuName) return true;
+    // 2. Cek dari field user langsung (hanya untuk operator biasa, bukan akun UPM)
+    if (!isUpmUser) {
+      const directFu = String(user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit || "");
+      if (directFu) {
+        if (prokerFuId && directFu === prokerFuId) return true;
+        if (prokerFuUuid && directFu.toLowerCase() === prokerFuUuid) return true;
+        if (prokerFuName && directFu.toLowerCase() === prokerFuName) return true;
+      }
+
+      const directFuUuid = String(user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "").toLowerCase();
+      if (directFuUuid && prokerFuUuid && directFuUuid === prokerFuUuid) return true;
+
+      const directFuName = String(user?.nama_fakultas_unit || user?.NamaFakultasUnit || "").trim().toLowerCase();
+      if (directFuName && prokerFuName && directFuName === prokerFuName) return true;
     }
 
-    const directFuUuid = String(user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "").toLowerCase();
-    if (directFuUuid && prokerFuUuid && directFuUuid === prokerFuUuid) return true;
-
-    const directFuName = String(user?.nama_fakultas_unit || user?.NamaFakultasUnit || "").trim().toLowerCase();
-    if (directFuName && prokerFuName && directFuName === prokerFuName) return true;
-
     return false;
-  }, [user, proker, positionYear]);
+  }, [user, proker, positionYear, isUpmUser]);
 
-  // Tombol tambah aktivitas HANYA muncul di level user dengan target yang ditugaskan (bukan di level lain/role lain)
-  const canAddAktivitas = isLevelUser && hasAssignedTarget;
+  // Tombol tambah/edit/hapus aktivitas HANYA muncul di level user dengan target yang ditugaskan (bukan akun UPM dan tahun aktif harus cocok)
+  const canAddAktivitas = isLevelUser && !isUpmUser && isYearMatch && hasAssignedTarget;
 
   // State History Drawer State
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -1136,7 +1167,7 @@ export default function ProkerV3AktivitasPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-gray-500 font-semibold">
                     Status Program Kerja:
                   </span>
@@ -1157,6 +1188,27 @@ export default function ProkerV3AktivitasPage() {
                   )}
                 </div>
               </div>
+
+              {prokerStatusClean.includes("ditolak") &&
+                (proker.CatatanVerifikator ||
+                  proker.CatatanAnggaran ||
+                  proker.CatatanPenolakan) && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs shadow-2xs">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-bold text-rose-800 text-[10px] uppercase tracking-wider">
+                        Catatan Penolakan Program Kerja:
+                      </span>
+                      <p className="italic text-rose-700">
+                        "
+                        {proker.CatatanVerifikator ||
+                          proker.CatatanAnggaran ||
+                          proker.CatatanPenolakan}
+                        "
+                      </p>
+                    </div>
+                  </div>
+                )}
 
               <div>
                 <h1 className="text-lg sm:text-xl font-extrabold text-gray-900 leading-snug">
@@ -1574,17 +1626,21 @@ export default function ProkerV3AktivitasPage() {
                                 );
                               }
                               if (stUpml === "ditolak") {
+                                const noteUpml =
+                                  act.CatatanTolakUpml ||
+                                  act.CatatanVerifikator ||
+                                  act.CatatanPenolakan;
                                 return (
                                   <div className="flex flex-col gap-1 items-start">
                                     <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
                                       DITOLAK
                                     </span>
-                                    {act.CatatanTolakUpml && (
+                                    {noteUpml && (
                                       <span
                                         className="text-[10px] text-rose-700 italic bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 line-clamp-2 max-w-[160px]"
-                                        title={`Catatan UPML: ${act.CatatanTolakUpml}`}
+                                        title={`Catatan UPML: ${noteUpml}`}
                                       >
-                                        "{act.CatatanTolakUpml}"
+                                        "{noteUpml}"
                                       </span>
                                     )}
                                   </div>
@@ -1639,17 +1695,21 @@ export default function ProkerV3AktivitasPage() {
                                 );
                               }
                               if (stUpmf === "ditolak") {
+                                const noteUpmf =
+                                  act.CatatanTolakUpmf ||
+                                  act.CatatanVerifikator ||
+                                  act.CatatanPenolakan;
                                 return (
                                   <div className="flex flex-col gap-1 items-start">
                                     <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
                                       DITOLAK
                                     </span>
-                                    {act.CatatanTolakUpmf && (
+                                    {noteUpmf && (
                                       <span
                                         className="text-[10px] text-rose-700 italic bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 line-clamp-2 max-w-[160px]"
-                                        title={`Catatan UPMF: ${act.CatatanTolakUpmf}`}
+                                        title={`Catatan UPMF: ${noteUpmf}`}
                                       >
-                                        "{act.CatatanTolakUpmf}"
+                                        "{noteUpmf}"
                                       </span>
                                     )}
                                   </div>
@@ -1698,17 +1758,21 @@ export default function ProkerV3AktivitasPage() {
                                 );
                               }
                               if (stUpms === "ditolak") {
+                                const noteUpms =
+                                  act.CatatanTolakUpms ||
+                                  act.CatatanVerifikator ||
+                                  act.CatatanPenolakan;
                                 return (
                                   <div className="flex flex-col gap-1 items-start">
                                     <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
                                       DITOLAK
                                     </span>
-                                    {act.CatatanTolakUpms && (
+                                    {noteUpms && (
                                       <span
                                         className="text-[10px] text-rose-700 italic bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 line-clamp-2 max-w-[160px]"
-                                        title={`Catatan UPMS: ${act.CatatanTolakUpms}`}
+                                        title={`Catatan UPMS: ${noteUpms}`}
                                       >
-                                        "{act.CatatanTolakUpms}"
+                                        "{noteUpms}"
                                       </span>
                                     )}
                                   </div>

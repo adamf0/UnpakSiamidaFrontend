@@ -29,6 +29,7 @@ const RemoteTable = forwardRef(function RemoteTable(
     disableGlobalSearch=true,
     token,
     filterFn,
+    onDataLoaded,
   },
   ref
 ) {
@@ -185,7 +186,11 @@ const RemoteTable = forwardRef(function RemoteTable(
         const json = await res.json();
         const rawData = json?.data ?? json?.Data ?? (Array.isArray(json) ? json : []);
         const items = Array.isArray(rawData) ? rawData : [];
-        setRows(applyAdapter(items));
+        const adapted = applyAdapter(items);
+        setRows(adapted);
+        if (typeof onDataLoaded === "function") {
+          onDataLoaded(adapted, json);
+        }
         const totalCount = json?.total ?? json?.Total ?? items.length;
         setTotal(typeof totalCount === "number" ? totalCount : (Number(totalCount) || 0));
         return;
@@ -261,6 +266,7 @@ const RemoteTable = forwardRef(function RemoteTable(
       loadData();
     },
     getError: () => error,
+    getRows: () => rows,
   }));
 
   /* =========================

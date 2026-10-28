@@ -16,6 +16,7 @@ import {
   getSlotsFromDateRange,
   getTimelineRkSlots,
   getTimelineRSlots,
+  summarizeSlots,
   formatBytes,
   formatRupiah,
   hasRealisasiAnggaran,
@@ -48,6 +49,8 @@ import {
   Paperclip,
   GripVertical,
   TrendingUp,
+  Calculator,
+  User,
   X,
   Play,
   Pause,
@@ -79,15 +82,42 @@ export default function ProkerV3TimelinePage() {
     openChangeLevel,
     setOpenChangeLevel,
     changeLevel,
+    positionYear,
   } = useContent();
 
   const isAdmin = level === "admin" || user?.level === "admin";
+  const curRole = String(
+    level || localStorage.getItem("activeLevel") || user?.level || ""
+  )
+    .toLowerCase()
+    .trim();
+  const isLevelUser = curRole === "user";
+
+  const isUpmUser = useMemo(() => {
+    if (["upml", "upmf", "upms"].includes(curRole)) return true;
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      return user.extra_role.some((r) =>
+        ["upml", "upmf", "upms"].includes(
+          String(r.role ?? r.Role ?? "").toLowerCase().trim(),
+        ),
+      );
+    }
+    return false;
+  }, [curRole, user?.extra_role]);
 
   // Data states
   const [loading, setLoading] = useState(true);
   const [aktivitas, setAktivitas] = useState(null);
   const [proker, setProker] = useState(null);
   const [timelines, setTimelines] = useState([]);
+
+  const isYearMatch = useMemo(() => {
+    const pYear = proker?.Tahun || aktivitas?.Tahun;
+    if (!positionYear || !pYear) return true;
+    return String(positionYear).trim() === String(pYear).trim();
+  }, [positionYear, proker?.Tahun, aktivitas?.Tahun]);
+
+  const canManageTimeline = isLevelUser && !isUpmUser && isYearMatch;
 
   // Form Timeline State (Create / Edit)
   const [editingTimelineUuid, setEditingTimelineUuid] = useState(null);
@@ -149,6 +179,12 @@ export default function ProkerV3TimelinePage() {
   });
   const [savingRealisasi, setSavingRealisasi] = useState(false);
 
+  // RAB Modal State
+  const [rabModalOpen, setRabModalOpen] = useState(false);
+  const [selectedTimelineForRab, setSelectedTimelineForRab] = useState(null);
+  const [rabRows, setRabRows] = useState([]);
+  const [savingRab, setSavingRab] = useState(false);
+
   // Drag and drop state for table ordering
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
@@ -179,7 +215,25 @@ export default function ProkerV3TimelinePage() {
 
       setAktivitas(json.aktivitas || null);
       setProker(json.proker || null);
-      setTimelines(json.data || json.timelines || []);
+
+      const rawList = json.data || json.timelines || [];
+      const mergedList = rawList.map((tl) => {
+        const uid = tl.UUID || tl.uuid;
+        let rabVal = tl.RAB || tl.rab;
+        if (!rabVal && uid) {
+          try {
+            const cached = localStorage.getItem(`rab_${uid}`);
+            if (cached) rabVal = cached;
+          } catch (e) {
+            // ignore
+          }
+        }
+        return {
+          ...tl,
+          RAB: rabVal,
+        };
+      });
+      setTimelines(mergedList);
 
       // Set default form if pristine (tanpa set value nama aktivitas awal)
       if (!editingTimelineUuid) {
@@ -208,6 +262,72 @@ export default function ProkerV3TimelinePage() {
       month: "long",
       year: "numeric",
     }).format(d);
+  };
+
+  // Helper format tanggal ringkas: Tanggal BulanSingkat Tahun
+  const formatDateIndoShort = (dateStr) => {
+    if (!dateStr) return "-";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return new Intl.DateTimeFormat("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(d);
+  };
+
+  // Helper render status aktivitas badge dengan gaya badge yang rapi & ramah pengguna
+  const formatAktivitasStatusBadge = (statusStr) => {
+    const raw = String(statusStr || "Draf").trim();
+    const lower = raw.toLowerCase();
+
+    let label = raw;
+    let badgeClass = "bg-gray-100 text-gray-700 border-gray-200";
+    let icon = <Info className="w-3.5 h-3.5 text-gray-500 shrink-0" />;
+
+    if (lower === "disetujui" || lower === "approved") {
+      label = "Disetujui";
+      badgeClass = "bg-emerald-50 text-emerald-800 border-emerald-300";
+      icon = <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+    } else if (lower.startsWith("ditolak") || lower === "rejected") {
+      label = raw
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .replace(/Upml/i, "UPML")
+        .replace(/Upmf/i, "UPMF")
+        .replace(/Upms/i, "UPMS");
+      badgeClass = "bg-rose-50 text-rose-800 border-rose-300";
+      icon = <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />;
+    } else if (lower.startsWith("menunggu") || lower.startsWith("pending")) {
+      label = raw
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .replace(/Upml/i, "UPML")
+        .replace(/Upmf/i, "UPMF")
+        .replace(/Upms/i, "UPMS");
+      badgeClass = "bg-amber-50 text-amber-900 border-amber-300";
+      icon = <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+    } else if (lower === "draft" || lower === "draf") {
+      label = "Draf";
+      badgeClass = "bg-gray-100 text-gray-700 border-gray-300";
+      icon = <Info className="w-3.5 h-3.5 text-gray-500 shrink-0" />;
+    } else {
+      label = raw
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .replace(/Upml/i, "UPML")
+        .replace(/Upmf/i, "UPMF")
+        .replace(/Upms/i, "UPMS");
+    }
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border shadow-2xs tracking-wide ${badgeClass}`}
+      >
+        {icon}
+        <span>{label}</span>
+      </span>
+    );
   };
 
   useEffect(() => {
@@ -341,6 +461,252 @@ export default function ProkerV3TimelinePage() {
     }
   };
 
+  // Helper untuk parsing rincian RAB dari objek timeline
+  const parseTimelineRab = (tl) => {
+    if (!tl) return [];
+    const uid = tl.UUID || tl.uuid;
+    let raw = tl.RAB || tl.rab;
+    if (!raw && uid) {
+      try {
+        raw = localStorage.getItem(`rab_${uid}`);
+      } catch (e) {
+        // ignore
+      }
+    }
+    if (!raw) return [];
+    try {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((item, idx) => {
+          const qSatuan = Number(
+            item.qty_satuan !== undefined
+              ? item.qty_satuan
+              : (item.qtySatuan !== undefined ? item.qtySatuan : 1)
+          ) || 0;
+          const qPaket = Number(
+            item.qty_paket !== undefined
+              ? item.qty_paket
+              : (item.qtyPaket !== undefined ? item.qtyPaket : 1)
+          ) || 0;
+          const hSatuan = Number(
+            item.harga_satuan !== undefined
+              ? item.harga_satuan
+              : (item.hargaSatuan !== undefined ? item.hargaSatuan : 0)
+          ) || 0;
+          const rowTotal =
+            item.total !== undefined
+              ? Number(item.total)
+              : qSatuan * qPaket * hSatuan;
+
+          return {
+            id: item.id || `rab-${idx}`,
+            keterangan: item.keterangan || "",
+            qty_satuan: qSatuan,
+            qty_paket: qPaket,
+            harga_satuan: hSatuan,
+            total: rowTotal,
+            bukti_url: item.bukti_url || item.buktiUrl || "",
+            bukti_name: item.bukti_name || item.buktiName || "",
+            file_obj: null,
+          };
+        });
+      }
+    } catch (e) {
+      console.warn("Gagal parse RAB timeline:", e);
+    }
+    return [];
+  };
+
+  // Open modal RAB
+  const openRabModal = (tl) => {
+    setSelectedTimelineForRab(tl);
+    let initialRows = parseTimelineRab(tl);
+
+    if (initialRows.length === 0) {
+      const currentAnggaran = Number(tl.Anggaran ?? tl.anggaran ?? 0);
+      initialRows = [
+        {
+          id: `rab-${Date.now()}-0`,
+          keterangan: tl.NamaAktivitas ? `Biaya ${tl.NamaAktivitas}` : "",
+          qty_satuan: 1,
+          qty_paket: 1,
+          harga_satuan: currentAnggaran,
+          total: currentAnggaran,
+          bukti_url: "",
+          bukti_name: "",
+          file_obj: null,
+        },
+      ];
+    }
+    setRabRows(initialRows);
+    setRabModalOpen(true);
+  };
+
+  const handleRabRowChange = (index, field, value) => {
+    setRabRows((prev) => {
+      const updated = [...prev];
+      const row = { ...updated[index], [field]: value };
+      const satuan = Number(row.qty_satuan) || 0;
+      const paket = Number(row.qty_paket) || 0;
+      const harga = Number(row.harga_satuan) || 0;
+      row.total = satuan * paket * harga;
+      updated[index] = row;
+      return updated;
+    });
+  };
+
+  const handleAddRabRow = () => {
+    setRabRows((prev) => [
+      ...prev,
+      {
+        id: `rab-${Date.now()}-${prev.length}`,
+        keterangan: "",
+        qty_satuan: 1,
+        qty_paket: 1,
+        harga_satuan: 0,
+        total: 0,
+        bukti_url: "",
+        bukti_name: "",
+        file_obj: null,
+      },
+    ]);
+  };
+
+  const handleRemoveRabRow = (index) => {
+    setRabRows((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      if (updated.length === 0) {
+        return [
+          {
+            id: `rab-${Date.now()}-0`,
+            keterangan: "",
+            qty_satuan: 1,
+            qty_paket: 1,
+            harga_satuan: 0,
+            total: 0,
+            bukti_url: "",
+            bukti_name: "",
+            file_obj: null,
+          },
+        ];
+      }
+      return updated;
+    });
+  };
+
+  const handleRabFileChange = (index, file) => {
+    if (!file) return;
+    setRabRows((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        file_obj: file,
+        bukti_name: file.name,
+      };
+      return updated;
+    });
+  };
+
+  const totalRab = useMemo(() => {
+    return rabRows.reduce((acc, r) => acc + (Number(r.total) || 0), 0);
+  }, [rabRows]);
+
+  const handleSaveRab = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedTimelineForRab) return;
+
+    const maxPagu = maxAnggaran;
+    if (maxPagu > 0 && totalRab > maxPagu) {
+      addToast(
+        "error",
+        `Total RAB (${formatRupiah(totalRab)}) melebihi batas anggaran realisasi kegiatan (${formatRupiah(maxPagu)})`
+      );
+      return;
+    }
+
+    const tlUuid = selectedTimelineForRab.UUID || selectedTimelineForRab.uuid;
+    if (!tlUuid) {
+      addToast("error", "UUID tahapan tidak valid");
+      return;
+    }
+
+    setSavingRab(true);
+    try {
+      // 1. Upload berkas bukti jika ada file baru yang dipilih
+      const finalRows = [];
+      for (const row of rabRows) {
+        let fileUrl = row.bukti_url || "";
+        let fileName = row.bukti_name || "";
+
+        if (row.file_obj) {
+          const fileFd = new FormData();
+          fileFd.append("files", row.file_obj);
+          fileFd.append("keterangan", `Bukti RAB: ${row.keterangan || "Item RAB"}`);
+          try {
+            const uploadRes = await apiClient.post(
+              `/proker_v3/timeline/${tlUuid}/files`,
+              fileFd,
+              { headers: { "Content-Type": "multipart/form-data" } }
+            );
+            if (uploadRes.data?.data && uploadRes.data.data.length > 0) {
+              const uploaded = uploadRes.data.data[0];
+              fileUrl = uploaded.FileURL || uploaded.file_url || "";
+              fileName = uploaded.NamaFile || uploaded.nama_file || row.file_obj.name;
+            }
+          } catch (uploadErr) {
+            console.error("Gagal mengunggah berkas bukti RAB:", uploadErr);
+          }
+        }
+
+        finalRows.push({
+          id: row.id,
+          keterangan: (row.keterangan || "").trim(),
+          qty_satuan: Number(row.qty_satuan) || 0,
+          qty_paket: Number(row.qty_paket) || 0,
+          harga_satuan: Number(row.harga_satuan) || 0,
+          total: Number(row.total) || 0,
+          bukti_url: fileUrl,
+          bukti_name: fileName,
+        });
+      }
+
+      const rabJson = JSON.stringify(finalRows);
+
+      // Simpan cadangan ke localStorage
+      try {
+        localStorage.setItem(`rab_${tlUuid}`, rabJson);
+      } catch (lsErr) {
+        console.warn("Gagal simpan ke localStorage:", lsErr);
+      }
+
+      // 2. Simpan ke timeline via PUT
+      const updateFd = new FormData();
+      updateFd.append("anggaran", String(totalRab));
+      updateFd.append("rab", rabJson);
+
+      await apiClient.put(`/proker_v3/timeline/${tlUuid}`, updateFd);
+
+      // Optimistic update state timelines
+      setTimelines((prev) =>
+        prev.map((item) =>
+          (item.UUID === tlUuid || item.uuid === tlUuid)
+            ? { ...item, Anggaran: totalRab, anggaran: totalRab, RAB: rabJson, rab: rabJson }
+            : item
+        )
+      );
+
+      addToast("success", `RAB tahapan berhasil disimpan (Total: ${formatRupiah(totalRab)})`);
+      setRabModalOpen(false);
+      setSelectedTimelineForRab(null);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast("error", err?.response?.data?.message || err?.message || "Gagal menyimpan RAB");
+    } finally {
+      setSavingRab(false);
+    }
+  };
+
   // Drag and Drop reordering handlers
   const handleDragStart = (e, index) => {
     setDraggedIndex(index);
@@ -434,6 +800,13 @@ export default function ProkerV3TimelinePage() {
   // Submit Timeline Form (POST or PUT)
   const handleSubmitTimeline = async (e) => {
     e.preventDefault();
+    if (!canManageTimeline) {
+      addToast(
+        "warning",
+        "Akses ditolak: Anda tidak memiliki izin untuk mengelola tahapan timeline",
+      );
+      return;
+    }
     if (!formTimeline.nama_aktivitas.trim()) {
       addToast("warning", "Nama aktivitas / tahapan wajib diisi");
       return;
@@ -504,6 +877,14 @@ export default function ProkerV3TimelinePage() {
 
   // Delete Timeline Handler
   const handleDeleteTimeline = async () => {
+    if (!canManageTimeline) {
+      addToast(
+        "warning",
+        "Akses ditolak: Anda tidak memiliki izin untuk menghapus tahapan timeline",
+      );
+      setDeleteTimelineDialog(false);
+      return;
+    }
     if (!timelineToDelete?.UUID) return;
     setDeletingTimeline(true);
     try {
@@ -993,16 +1374,17 @@ export default function ProkerV3TimelinePage() {
                   formatRupiah(hasRealisasiAnggaran(aktivitas) ? getRealisasiAnggaran(aktivitas) : aktivitas?.Anggaran)
                 )}
               </span>
+              {formatAktivitasStatusBadge(aktivitas?.Status)}
             </div>
           </div>
 
-          {/* Context Details Grid (Tanpa Target Capaian) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+          {/* Context Details Grid (Rapi dengan PIC & Status terpisah) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
             <div className="p-3 bg-purple-50/40 rounded-xl border border-purple-100 space-y-1">
               <span className="text-gray-400 text-[10px] block font-bold uppercase tracking-wider text-purple-700">
                 Program Kerja Induk:
               </span>
-              <p className="font-semibold text-gray-800 line-clamp-2">
+              <p className="font-semibold text-gray-800 line-clamp-2" title={proker?.NamaProgram}>
                 {proker?.NamaProgram || "-"}
               </p>
             </div>
@@ -1011,24 +1393,34 @@ export default function ProkerV3TimelinePage() {
               <span className="text-gray-400 text-[10px] block font-bold uppercase tracking-wider text-blue-700">
                 Standar & Indikator:
               </span>
-              <p className="font-semibold text-gray-800 line-clamp-1">
+              <p className="font-semibold text-gray-800 line-clamp-1" title={proker?.StandarSubStandar}>
                 {proker?.StandarSubStandar || "-"}
               </p>
-              <p className="text-[11px] text-gray-500 italic line-clamp-1">
+              <p className="text-[11px] text-gray-500 italic line-clamp-1" title={proker?.IndikatorKinerja}>
                 {proker?.IndikatorKinerja || "-"}
               </p>
             </div>
 
-            <div className="p-3 bg-amber-50/40 rounded-xl border border-amber-100 space-y-1">
-              <span className="text-gray-400 text-[10px] block font-bold uppercase tracking-wider text-amber-700">
-                PIC & Status Aktivitas:
+            <div className="p-3 bg-emerald-50/40 rounded-xl border border-emerald-100 space-y-1">
+              <span className="text-[10px] block font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+                <User className="w-3 h-3 text-emerald-600" />
+                <span>Penanggung Jawab (PIC):</span>
               </span>
-              <p className="font-bold text-gray-800">
-                PIC: {aktivitas?.PIC || "-"}
+              <p className="font-bold text-gray-900 text-sm">
+                {aktivitas?.PIC || "-"}
               </p>
-              <p className="text-[11px] font-semibold text-purple-700 uppercase">
-                Status: {aktivitas?.Status || "Draf"}
+              <p className="text-[11px] text-gray-500 truncate">
+                {proker?.NamaFakultasUnit || "Unit Kerja"}
               </p>
+            </div>
+
+            <div className="p-3 bg-amber-50/40 rounded-xl border border-amber-100 space-y-1.5 flex flex-col justify-between">
+              <span className="text-[10px] block font-bold uppercase tracking-wider text-amber-800">
+                Status Verifikasi:
+              </span>
+              <div className="pt-0.5">
+                {formatAktivitasStatusBadge(aktivitas?.Status)}
+              </div>
             </div>
           </div>
         </div>
@@ -1036,6 +1428,7 @@ export default function ProkerV3TimelinePage() {
         {/* ======================================================== */}
         {/* FORM INPUT TIMELINE AKTIVITAS                           */}
         {/* ======================================================== */}
+        {canManageTimeline && (
         <div id="form-timeline-section" className="bg-white rounded-2xl border border-gray-200 shadow-xs p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
             <div className="flex items-center gap-2">
@@ -1047,7 +1440,7 @@ export default function ProkerV3TimelinePage() {
                     : "Form Tambah Tahapan Timeline Baru"}
                 </h3>
                 <p className="text-xs text-gray-500">
-                  Isi nama tahapan, titik kontrol, rentang tanggal rencana kerja [RK], serta capaian & kendala.
+                  Isi nama tahapan serta rentang tanggal rencana kerja [RK]. Rencana Anggaran Biaya (RAB) dikelola pada tombol aksi "RAB" di daftar tahapan bawah.
                 </p>
               </div>
             </div>
@@ -1065,101 +1458,21 @@ export default function ProkerV3TimelinePage() {
           </div>
 
           <form onSubmit={handleSubmitTimeline} className="space-y-4">
-            {/* Grid 1: Kolom Inti Identitas Timeline (Nama Tahapan, Titik Kontrol, Nominal Anggaran) */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
-              {/* Nama Tahapan / Aktivitas */}
-              <div className="sm:col-span-5">
-                <label className="block text-[11px] font-bold text-gray-700 mb-1">
-                  Nama Tahapan / Aktivitas <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nama tahapan / kegiatan baru..."
-                  value={formTimeline.nama_aktivitas}
-                  onChange={(e) =>
-                    setFormTimeline({ ...formTimeline, nama_aktivitas: e.target.value })
-                  }
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
-                  required
-                />
-              </div>
-
-              {/* Titik Kontrol */}
-              <div className="sm:col-span-3">
-                <label className="block text-[11px] font-bold text-gray-700 mb-1">
-                  Titik Kontrol
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: RK / R / Persiapan / Evaluasi..."
-                  value={formTimeline.titik_kontrol}
-                  onChange={(e) =>
-                    setFormTimeline({ ...formTimeline, titik_kontrol: e.target.value })
-                  }
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
-                />
-              </div>
-
-              {/* Nominal Anggaran (Rp) */}
-              <div className="sm:col-span-4">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-bold text-gray-700">
-                    Nominal Anggaran (Rp)
-                  </label>
-                  {maxAnggaran > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleSetMaxAnggaran}
-                      className="text-[10px] text-purple-600 hover:text-purple-800 font-semibold cursor-pointer underline"
-                      title={`Set ke anggaran realisasi kegiatan (${formatRupiah(maxAnggaran)})`}
-                    >
-                      Maks Realisasi
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500 font-bold text-xs font-mono">
-                    Rp
-                  </div>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0"
-                    value={anggaranInputStr}
-                    onChange={handleAnggaranChange}
-                    className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border bg-white focus:outline-none focus:ring-2 font-mono font-bold transition shadow-2xs ${
-                      isAnggaranOverLimit
-                        ? "border-rose-400 focus:ring-rose-500 text-rose-700 bg-rose-50/30"
-                        : "border-gray-300 focus:ring-purple-500 text-gray-900"
-                    }`}
-                  />
-                </div>
-                <div className="mt-1 text-[10px]">
-                  {isAnggaranOverLimit ? (
-                    <p className="text-rose-600 font-bold flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      <span>
-                        Melebihi anggaran realisasi kegiatan ({formatRupiah(maxAnggaran)})
-                      </span>
-                    </p>
-                  ) : formTimeline.anggaran > 0 ? (
-                    <p className="text-emerald-700 font-mono font-medium truncate">
-                      Terbilang: {formatRupiah(formTimeline.anggaran)}
-                      {maxAnggaran > 0 && (
-                        <span className="text-gray-400 ml-1">
-                          (Batas: {formatRupiah(maxAnggaran)})
-                        </span>
-                      )}
-                    </p>
-                  ) : (
-                    <p className="text-gray-400">
-                      {maxAnggaran > 0
-                        ? `Batas realisasi: ${formatRupiah(maxAnggaran)} (tidak boleh negatif)`
-                        : "Tidak boleh bernilai negatif"}
-                    </p>
-                  )}
-                </div>
-              </div>
+            {/* Nama Tahapan / Aktivitas */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                Nama Tahapan / Aktivitas <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Nama tahapan / kegiatan baru..."
+                value={formTimeline.nama_aktivitas}
+                onChange={(e) =>
+                  setFormTimeline({ ...formTimeline, nama_aktivitas: e.target.value })
+                }
+                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
+                required
+              />
             </div>
 
             {/* Grid 2: Tanggal Rencana Kegiatan (RK) */}
@@ -1286,6 +1599,7 @@ export default function ProkerV3TimelinePage() {
             </div>
           </form>
         </div>
+        )}
 
         {/* ======================================================== */}
         {/* DISPLAY MATRIKS JADWAL MINGGUAN [RK] & [R] (READ-ONLY)    */}
@@ -1558,27 +1872,24 @@ export default function ProkerV3TimelinePage() {
                   >
                     {/* Header Baris Timeline */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-gray-100">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-start gap-2.5 min-w-0">
                         {/* Drag and Drop Grip Handle */}
                         <div
-                          className="p-1 rounded-lg text-gray-400 hover:text-purple-600 hover:bg-purple-50 cursor-grab active:cursor-grabbing transition shrink-0"
+                          className="p-1 rounded-lg text-gray-400 hover:text-purple-600 hover:bg-purple-50 cursor-grab active:cursor-grabbing transition shrink-0 mt-0.5"
                           title="Tahan & geser untuk mengubah nomor urut tahapan"
                         >
                           <GripVertical className="w-4 h-4" />
                         </div>
 
-                        <span className="w-7 h-7 rounded-lg bg-purple-100 text-purple-800 font-mono font-bold flex items-center justify-center text-xs shrink-0">
+                        <span className="w-7 h-7 rounded-lg bg-purple-100 text-purple-800 font-mono font-bold flex items-center justify-center text-xs shrink-0 mt-0.5">
                           {tl.NoAktivitas || index + 1}
                         </span>
 
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h4 className="font-bold text-gray-900 text-sm">
                               {tl.NamaAktivitas}
                             </h4>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                              Titik Kontrol: {tl.TitikKontrol || "RK"}
-                            </span>
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                 tl.Status === "Selesai"
@@ -1600,59 +1911,85 @@ export default function ProkerV3TimelinePage() {
                               <span className="font-extrabold">{formatRupiah(tl.Anggaran || tl.anggaran || 0)}</span>
                             </span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            PIC Tahapan: <b className="text-gray-700">{tl.PIC || "-"}</b> • Anggaran:{" "}
-                            <b className="text-emerald-800 font-mono">{formatRupiah(tl.Anggaran || tl.anggaran || 0)}</b> • Tanggal RK:{" "}
-                            <span className="font-semibold text-gray-800">
-                              {tl.TanggalRkAwal ? formatDateIndoWithDay(tl.TanggalRkAwal) : "-"} s/d{" "}
-                              {tl.TanggalRkAkhir ? formatDateIndoWithDay(tl.TanggalRkAkhir) : "-"}
-                            </span>
-                            {tl.TanggalRAwal && (
-                              <span>
-                                {" "}• Realisasi:{" "}
-                                <span className="font-semibold text-emerald-700">
-                                  {formatDateIndoWithDay(tl.TanggalRAwal)} s/d {tl.TanggalRAkhir ? formatDateIndoWithDay(tl.TanggalRAkhir) : "-"}
-                                </span>
+
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
+                            <div className="inline-flex items-center gap-1">
+                              <span className="text-gray-400">PIC Tahapan:</span>
+                              <span className="font-semibold text-gray-700">{tl.PIC || "-"}</span>
+                            </div>
+
+                            <span className="text-gray-300 hidden sm:inline">•</span>
+
+                            <div className="inline-flex items-center gap-1">
+                              <span className="text-gray-400">Tanggal RK:</span>
+                              <span className="font-semibold text-gray-700 font-mono text-[11px]">
+                                {tl.TanggalRkAwal ? formatDateIndoShort(tl.TanggalRkAwal) : "-"} s/d{" "}
+                                {tl.TanggalRkAkhir ? formatDateIndoShort(tl.TanggalRkAkhir) : "-"}
                               </span>
+                            </div>
+
+                            {tl.TanggalRAwal && (
+                              <>
+                                <span className="text-gray-300 hidden sm:inline">•</span>
+                                <div className="inline-flex items-center gap-1">
+                                  <span className="text-emerald-600 font-medium">Realisasi:</span>
+                                  <span className="font-semibold text-emerald-700 font-mono text-[11px]">
+                                    {formatDateIndoShort(tl.TanggalRAwal)} s/d{" "}
+                                    {tl.TanggalRAkhir ? formatDateIndoShort(tl.TanggalRAkhir) : "-"}
+                                  </span>
+                                </div>
+                              </>
                             )}
-                          </p>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Tombol Aksi Perkembangan Realisasi, Edit & Hapus */}
-                      <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => openRealisasiModal(tl)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition cursor-pointer shadow-2xs"
-                          title="Buka modal perkembangan realisasi (Tanggal R & Status)"
-                        >
-                          <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Perkembangan Realisasi</span>
-                        </button>
+                      {/* Tombol Aksi RAB, Perkembangan Realisasi, Edit & Hapus */}
+                      {canManageTimeline && (
+                        <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => openRabModal(tl)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer shadow-2xs"
+                            title="Kelola Rencana Anggaran Biaya (RAB) tahapan ini"
+                          >
+                            <Calculator className="w-3.5 h-3.5 text-amber-700" />
+                            <span>RAB</span>
+                          </button>
 
-                        <button
-                          type="button"
-                          onClick={() => startEditTimeline(tl)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition cursor-pointer"
-                          title="Edit data tahapan timeline ini"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          <span>Edit Tahapan</span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => openRealisasiModal(tl)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition cursor-pointer shadow-2xs"
+                            title="Buka modal perkembangan realisasi (Tanggal R & Status)"
+                          >
+                            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Perkembangan Realisasi</span>
+                          </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTimelineToDelete(tl);
-                            setDeleteTimelineDialog(true);
-                          }}
-                          className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer"
-                          title="Hapus tahapan timeline ini"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                          <button
+                            type="button"
+                            onClick={() => startEditTimeline(tl)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition cursor-pointer"
+                            title="Edit data tahapan timeline ini"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Edit Tahapan</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTimelineToDelete(tl);
+                              setDeleteTimelineDialog(true);
+                            }}
+                            className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer"
+                            title="Hapus tahapan timeline ini"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Informasi Evaluasi & Jadwal Minggu */}
@@ -1662,34 +1999,36 @@ export default function ProkerV3TimelinePage() {
                         <span className="text-[11px] font-bold text-gray-700 block">
                           Jadwal Minggu Pelaksanaan (RK & R):
                         </span>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="flex flex-wrap items-center gap-1">
-                            <span className="text-[10px] font-bold text-blue-700 w-12 shrink-0">[RK]:</span>
+                            <span className="text-[10px] font-bold text-blue-700 w-10 shrink-0">[RK]:</span>
                             {rkSlots.length === 0 ? (
                               <span className="text-[10px] text-gray-400 italic">Belum ada minggu yang ditandai</span>
                             ) : (
-                              rkSlots.map((s) => (
+                              summarizeSlots(rkSlots).map((item) => (
                                 <span
-                                  key={s}
+                                  key={item.key}
+                                  title={item.title}
                                   className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-blue-100 text-blue-800"
                                 >
-                                  {s.replace("_", " ")}
+                                  {item.text}
                                 </span>
                               ))
                             )}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-1">
-                            <span className="text-[10px] font-bold text-emerald-700 w-12 shrink-0">[R]:</span>
+                            <span className="text-[10px] font-bold text-emerald-700 w-10 shrink-0">[R]:</span>
                             {rSlots.length === 0 ? (
                               <span className="text-[10px] text-gray-400 italic">Belum ada realisasi yang ditandai</span>
                             ) : (
-                              rSlots.map((s) => (
+                              summarizeSlots(rSlots).map((item) => (
                                 <span
-                                  key={s}
+                                  key={item.key}
+                                  title={item.title}
                                   className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-100 text-emerald-800"
                                 >
-                                  {s.replace("_", " ")}
+                                  {item.text}
                                 </span>
                               ))
                             )}
@@ -1717,6 +2056,141 @@ export default function ProkerV3TimelinePage() {
                         )}
                       </div>
                     </div>
+
+                    {/* ======================================================== */}
+                    {/* SEKSI RENCANA ANGGARAN BIAYA (RAB) TAHAPAN              */}
+                    {/* ======================================================== */}
+                    {(() => {
+                      const rabItems = parseTimelineRab(tl);
+                      const totalItemRab = rabItems.reduce((acc, r) => acc + (Number(r.total) || 0), 0);
+                      const nominalTimeline = Number(tl.Anggaran ?? tl.anggaran ?? 0);
+
+                      return (
+                        <div className="p-4 bg-amber-50/40 rounded-xl border border-amber-200/80 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Calculator className="w-4 h-4 text-amber-700" />
+                              <span className="text-xs font-bold text-amber-950 uppercase tracking-wider">
+                                Rincian Rencana Anggaran Biaya (RAB)
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                                {formatRupiah(totalItemRab > 0 ? totalItemRab : nominalTimeline)}
+                              </span>
+                            </div>
+
+                            {canManageTimeline && (
+                              <button
+                                type="button"
+                                onClick={() => openRabModal(tl)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition shadow-2xs cursor-pointer"
+                                title="Edit kembali data RAB tahapan ini"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>{rabItems.length > 0 ? "Edit RAB" : "Kelola RAB"}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {rabItems.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-amber-800/80 bg-white/80 rounded-xl border border-dashed border-amber-300 flex flex-col sm:flex-row items-center justify-between gap-2">
+                              <span>
+                                Belum ada rincian item RAB untuk tahapan ini. Total anggaran saat ini:{" "}
+                                <b className="font-mono text-amber-950">{formatRupiah(nominalTimeline)}</b>
+                              </span>
+                              {canManageTimeline && (
+                                <button
+                                  type="button"
+                                  onClick={() => openRabModal(tl)}
+                                  className="text-amber-800 hover:text-amber-950 font-bold underline text-xs cursor-pointer"
+                                >
+                                  + Buat Rincian RAB Sekarang
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto rounded-xl border border-amber-200 bg-white shadow-2xs">
+                              <table className="w-full text-xs text-left border-collapse">
+                                <thead>
+                                  <tr className="bg-amber-100/70 border-b border-amber-200 text-amber-950 font-bold text-[11px]">
+                                    <th className="p-2 text-center w-10 border-r border-amber-200">#</th>
+                                    <th className="p-2 border-r border-amber-200">Keterangan</th>
+                                    <th className="p-2 text-center w-24 border-r border-amber-200">Qty (Satuan)</th>
+                                    <th className="p-2 text-center w-24 border-r border-amber-200">Qty (Paket)</th>
+                                    <th className="p-2 text-right w-32 border-r border-amber-200">Harga Satuan</th>
+                                    <th className="p-2 text-right w-36 border-r border-amber-200">Total</th>
+                                    <th className="p-2 text-center w-36">Bukti</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {rabItems.map((item, rIdx) => {
+                                    const proofUrl = item.bukti_url
+                                      ? (item.bukti_url.startsWith("http")
+                                          ? item.bukti_url
+                                          : `${API_BASE_URL}${item.bukti_url.startsWith("/") ? "" : "/"}${item.bukti_url}`)
+                                      : null;
+
+                                    return (
+                                      <tr
+                                        key={item.id || rIdx}
+                                        className="border-b border-amber-100 hover:bg-amber-50/40 transition text-gray-800"
+                                      >
+                                        <td className="p-2 text-center font-mono font-bold text-amber-900 border-r border-amber-100 bg-amber-50/20">
+                                          {rIdx + 1}
+                                        </td>
+                                        <td className="p-2 font-medium border-r border-amber-100">
+                                          {item.keterangan || "-"}
+                                        </td>
+                                        <td className="p-2 text-center font-mono border-r border-amber-100">
+                                          {item.qty_satuan}
+                                        </td>
+                                        <td className="p-2 text-center font-mono border-r border-amber-100">
+                                          {item.qty_paket}
+                                        </td>
+                                        <td className="p-2 text-right font-mono border-r border-amber-100">
+                                          {formatRupiah(item.harga_satuan)}
+                                        </td>
+                                        <td className="p-2 text-right font-mono font-bold text-amber-950 border-r border-amber-100 bg-amber-50/20">
+                                          {formatRupiah(item.total)}
+                                        </td>
+                                        <td className="p-2 text-center">
+                                          {proofUrl ? (
+                                            <a
+                                              href={proofUrl}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 hover:text-purple-900 hover:underline max-w-[130px] truncate"
+                                              title={item.bukti_name || "Buka Bukti RAB"}
+                                            >
+                                              <ExternalLink className="w-3 h-3 shrink-0" />
+                                              <span className="truncate">{item.bukti_name || "Lihat Bukti"}</span>
+                                            </a>
+                                          ) : (
+                                            <span className="text-gray-400 italic text-[11px]">-</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="bg-amber-50/90 font-bold text-gray-900 border-t border-amber-200">
+                                    <td colSpan={5} className="p-2.5 text-right text-xs">
+                                      Total Keseluruhan RAB:
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-amber-950 bg-amber-100/70 border-r border-amber-200 text-xs">
+                                      {formatRupiah(totalItemRab)}
+                                    </td>
+                                    <td className="p-2.5 text-center text-[10px] text-gray-500 font-normal">
+                                      {rabItems.length} item
+                                    </td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* ======================================================== */}
                     {/* SEKSI BERKAS BUKTI KEGIATAN TAHAPAN                      */}
@@ -2107,12 +2581,6 @@ export default function ProkerV3TimelinePage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Titik Kontrol:</span>
-                  <span className="font-bold text-gray-800">
-                    {selectedTimelineForRealisasi?.TitikKontrol || "-"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-gray-500">Rencana Jadwal [RK]:</span>
                   <span className="font-mono text-gray-700">
                     {selectedTimelineForRealisasi?.TanggalRkAwal ? selectedTimelineForRealisasi.TanggalRkAwal.slice(0, 10) : "-"} s/d{" "}
@@ -2191,6 +2659,331 @@ export default function ProkerV3TimelinePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL RENCANA ANGGARAN BIAYA (RAB) DINAMIS               */}
+      {/* ======================================================== */}
+      {rabModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 shrink-0">
+                  <Calculator className="w-5 h-5 text-amber-700" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 truncate">
+                    Rencana Anggaran Biaya (RAB)
+                  </h3>
+                  <p className="text-xs text-gray-500 truncate">
+                    Tahapan #{selectedTimelineForRab?.NoAktivitas || 1}: {selectedTimelineForRab?.NamaAktivitas}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRabModalOpen(false);
+                  setSelectedTimelineForRab(null);
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body: Scrollable */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
+              {/* Ringkasan Pagu & Total Realtime */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                <div>
+                  <span className="text-gray-500 block">PIC Tahapan:</span>
+                  <span className="font-bold text-gray-800 text-xs truncate block">
+                    {selectedTimelineForRab?.PIC || aktivitas?.PIC || "-"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500 block">Batas Pagu Aktivitas:</span>
+                  <span className="font-bold text-gray-800 font-mono text-xs">
+                    {maxAnggaran > 0 ? formatRupiah(maxAnggaran) : "Tidak dibatasi"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500 block">Total RAB Saat Ini:</span>
+                  <span
+                    className={`font-mono text-xs font-extrabold ${
+                      maxAnggaran > 0 && totalRab > maxAnggaran
+                        ? "text-rose-600"
+                        : "text-amber-700"
+                    }`}
+                  >
+                    {formatRupiah(totalRab)}
+                  </span>
+                </div>
+              </div>
+
+              {maxAnggaran > 0 && totalRab > maxAnggaran && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>
+                    <b>Peringatan:</b> Total RAB ({formatRupiah(totalRab)}) melebihi batas anggaran realisasi kegiatan ({formatRupiah(maxAnggaran)}). Mohon sesuaikan nominal item RAB.
+                  </span>
+                </div>
+              )}
+
+              {/* Tabel Dinamis RAB */}
+              <div className="border border-gray-200 rounded-xl overflow-x-auto shadow-2xs">
+                <table className="w-full text-xs min-w-[700px] border-collapse">
+                  <thead>
+                    <tr className="bg-amber-50/80 text-gray-800 border-b border-gray-200">
+                      <th
+                        rowSpan={2}
+                        className="px-3 py-2 text-left font-bold border-r border-gray-200 w-2/5 min-w-[200px]"
+                      >
+                        Keterangan
+                      </th>
+                      <th
+                        colSpan={2}
+                        className="px-2 py-1.5 text-center font-bold border-r border-gray-200"
+                      >
+                        qty
+                      </th>
+                      <th
+                        rowSpan={2}
+                        className="px-3 py-2 text-right font-bold border-r border-gray-200 w-36"
+                      >
+                        Harga satuan
+                      </th>
+                      <th
+                        rowSpan={2}
+                        className="px-3 py-2 text-right font-bold border-r border-gray-200 w-36"
+                      >
+                        total
+                      </th>
+                      <th
+                        rowSpan={2}
+                        className="px-3 py-2 text-center font-bold border-r border-gray-200 w-44"
+                      >
+                        bukti
+                      </th>
+                      <th
+                        rowSpan={2}
+                        className="px-2 py-2 text-center font-bold w-12"
+                      >
+                        Aksi
+                      </th>
+                    </tr>
+                    <tr className="bg-amber-100/60 text-gray-700 border-b border-gray-200">
+                      <th className="px-2 py-1 text-center font-semibold border-r border-gray-200 w-20">
+                        satuan
+                      </th>
+                      <th className="px-2 py-1 text-center font-semibold border-r border-gray-200 w-20">
+                        paket
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {rabRows.map((row, idx) => (
+                      <tr key={row.id || idx} className="hover:bg-amber-50/20 transition">
+                        {/* Keterangan */}
+                        <td className="p-2 border-r border-gray-100 align-middle">
+                          <input
+                            type="text"
+                            placeholder="Contoh: Konsumsi pagi / Sewa gedung / Honor..."
+                            value={row.keterangan}
+                            onChange={(e) =>
+                              handleRabRowChange(idx, "keterangan", e.target.value)
+                            }
+                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                          />
+                        </td>
+
+                        {/* qty: satuan */}
+                        <td className="p-2 border-r border-gray-100 align-middle w-20">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            placeholder="1"
+                            value={row.qty_satuan}
+                            onChange={(e) =>
+                              handleRabRowChange(idx, "qty_satuan", e.target.value)
+                            }
+                            className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono font-semibold"
+                          />
+                        </td>
+
+                        {/* qty: paket */}
+                        <td className="p-2 border-r border-gray-100 align-middle w-20">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            placeholder="1"
+                            value={row.qty_paket}
+                            onChange={(e) =>
+                              handleRabRowChange(idx, "qty_paket", e.target.value)
+                            }
+                            className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono font-semibold"
+                          />
+                        </td>
+
+                        {/* Harga satuan */}
+                        <td className="p-2 border-r border-gray-100 align-middle w-36">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            placeholder="0"
+                            value={row.harga_satuan}
+                            onChange={(e) =>
+                              handleRabRowChange(idx, "harga_satuan", e.target.value)
+                            }
+                            className="w-full px-2.5 py-1.5 text-xs text-right rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono font-bold text-gray-800"
+                          />
+                        </td>
+
+                        {/* Total: Auto Calculate (qty.satuan * qty.paket * harga_satuan) */}
+                        <td className="p-2 border-r border-gray-100 align-middle text-right font-mono font-bold text-amber-900 bg-amber-50/30 w-36">
+                          {formatRupiah(row.total || 0)}
+                        </td>
+
+                        {/* Bukti Upload */}
+                        <td className="p-2 border-r border-gray-100 align-middle w-44">
+                          {row.bukti_url ? (
+                            <div className="flex items-center justify-between text-[11px] bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
+                              <a
+                                href={`${API_BASE_URL}${row.bukti_url.startsWith("/") ? "" : "/"}${row.bukti_url}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-purple-600 hover:underline truncate max-w-[100px] font-semibold"
+                                title={row.bukti_name || "Buka Bukti Berkas"}
+                              >
+                                {row.bukti_name || "Lihat Bukti"}
+                              </a>
+                              <label className="text-[10px] text-amber-600 hover:text-amber-800 cursor-pointer underline ml-1 shrink-0">
+                                Ganti
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  onChange={(e) =>
+                                    handleRabFileChange(idx, e.target.files?.[0])
+                                  }
+                                />
+                              </label>
+                            </div>
+                          ) : row.bukti_name ? (
+                            <div className="flex items-center justify-between text-[11px] bg-emerald-50 text-emerald-800 px-2 py-1 rounded-lg border border-emerald-200">
+                              <span className="truncate max-w-[100px] font-medium" title={row.bukti_name}>
+                                {row.bukti_name}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRabRowChange(idx, "bukti_name", "")}
+                                className="text-rose-600 hover:text-rose-800 text-xs font-bold shrink-0 ml-1 cursor-pointer"
+                                title="Batal pilih file"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-medium text-gray-600 bg-gray-50 hover:bg-amber-50 border border-dashed border-gray-300 hover:border-amber-300 rounded-lg cursor-pointer transition">
+                              <Upload className="w-3 h-3 text-gray-400" />
+                              <span>Pilih File</span>
+                              <input
+                                type="file"
+                                className="hidden"
+                                onChange={(e) =>
+                                  handleRabFileChange(idx, e.target.files?.[0])
+                                }
+                              />
+                            </label>
+                          )}
+                        </td>
+
+                        {/* Aksi: Hapus Baris */}
+                        <td className="p-2 text-center align-middle w-12">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRabRow(idx)}
+                            className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer"
+                            title="Hapus baris item RAB ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-amber-50/80 border-t-2 border-amber-200 font-bold text-gray-900">
+                      <td colSpan={4} className="p-3 text-right">
+                        Total Keseluruhan RAB:
+                      </td>
+                      <td className="p-3 text-right font-mono text-sm text-amber-900 bg-amber-100/60 font-extrabold">
+                        {formatRupiah(totalRab)}
+                      </td>
+                      <td colSpan={2} className="p-3 text-xs text-gray-500 font-normal">
+                        ({rabRows.length} item pengeluaran)
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Tombol Tambah Baris */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleAddRabRow}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Baris RAB</span>
+                </button>
+
+                <p className="text-[11px] text-gray-500 italic">
+                  * Rumus: total = qty.satuan × qty.paket × harga satuan
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
+              <div className="text-xs font-bold text-gray-700">
+                <span>Total Anggaran Baru: </span>
+                <span className="font-mono text-amber-800 font-extrabold text-sm">
+                  {formatRupiah(totalRab)}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRabModalOpen(false);
+                    setSelectedTimelineForRab(null);
+                  }}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRab}
+                  disabled={savingRab || (maxAnggaran > 0 && totalRab > maxAnggaran)}
+                  className="px-5 py-2 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingRab ? "Menyimpan..." : "Simpan RAB"}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

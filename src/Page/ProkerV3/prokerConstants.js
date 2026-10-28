@@ -92,6 +92,54 @@ export function getTimelineRSlots(tl) {
   return [];
 }
 
+export function summarizeSlots(slots) {
+  if (!slots) return [];
+  const list = Array.isArray(slots) ? slots : parseSlotArray(slots);
+  if (!list || list.length === 0) return [];
+
+  const monthWeeks = {};
+  list.forEach((s) => {
+    if (!s || typeof s !== "string" || !s.includes("_")) return;
+    const [m, w] = s.split("_", 2);
+    const mKey = m.toUpperCase() === "PEBRUARI" ? "FEBRUARI" : m.toUpperCase();
+    const wNum = parseInt(w.replace(/\D/g, ""), 10);
+    if (!isNaN(wNum) && wNum > 0) {
+      if (!monthWeeks[mKey]) monthWeeks[mKey] = new Set();
+      monthWeeks[mKey].add(wNum);
+    }
+  });
+
+  const res = [];
+  BULAN_LIST.forEach((b) => {
+    const key = b.key;
+    if (!monthWeeks[key] || monthWeeks[key].size === 0) return;
+    const sortedWeeks = Array.from(monthWeeks[key]).sort((x, y) => x - y);
+
+    const ranges = [];
+    let start = sortedWeeks[0];
+    let prev = sortedWeeks[0];
+    for (let i = 1; i < sortedWeeks.length; i++) {
+      const cur = sortedWeeks[i];
+      if (cur === prev + 1) {
+        prev = cur;
+      } else {
+        ranges.push(start === prev ? `M${start}` : `M${start}–M${prev}`);
+        start = cur;
+        prev = cur;
+      }
+    }
+    ranges.push(start === prev ? `M${start}` : `M${start}–M${prev}`);
+
+    res.push({
+      key,
+      text: `${key} (${ranges.join(", ")})`,
+      title: `${b.label}: ` + sortedWeeks.map((w) => `Minggu ${w}`).join(", "),
+    });
+  });
+
+  return res;
+}
+
 export function formatBytes(bytes) {
   if (!bytes || bytes === 0) return "0 Bytes";
   const k = 1024;

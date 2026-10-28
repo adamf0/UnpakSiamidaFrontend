@@ -41,6 +41,7 @@ import {
   Upload,
   FileText,
   XCircle,
+  RefreshCw,
 } from "lucide-react";
 
 export default function ProkerV3Page() {
@@ -84,6 +85,17 @@ export default function ProkerV3Page() {
   const [rowToRevisiDraft, setRowToRevisiDraft] = useState(null);
   const [alasanRevisiDraft, setAlasanRevisiDraft] = useState("");
   const [isSubmittingRevisiDraft, setIsSubmittingRevisiDraft] = useState(false);
+
+  // Batch Operations State
+  const [selectedUuids, setSelectedUuids] = useState([]);
+  const [currentPageRows, setCurrentPageRows] = useState([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchRejectModalOpen, setBatchRejectModalOpen] = useState(false);
+  const [batchRejectReason, setBatchRejectReason] = useState("");
+  const [isSubmittingBatchReject, setIsSubmittingBatchReject] = useState(false);
+  const [batchRevisiModalOpen, setBatchRevisiModalOpen] = useState(false);
+  const [batchRevisiReason, setBatchRevisiReason] = useState("");
+  const [isSubmittingBatchRevisi, setIsSubmittingBatchRevisi] = useState(false);
 
   // Filters State
   const initialYear = positionYear || "all";
@@ -656,14 +668,37 @@ export default function ProkerV3Page() {
     "upms",
   ];
 
+  // Cek apakah akun ini adalah akun UPM (upml, upmf, upms)
+  const isUpmUser = useMemo(() => {
+    if (isUpm) return true;
+    if (Array.isArray(user?.extra_role)) {
+      return user.extra_role.some((r) =>
+        ["upml", "upmf", "upms"].includes(
+          String(r.role ?? r.Role ?? "")
+            .toLowerCase()
+            .trim(),
+        ),
+      );
+    }
+    return false;
+  }, [isUpm, user?.extra_role]);
+
   const canAddProker =
-    isLevelUser && hasTarget && !excludedAddRoles.includes(curRole);
+    isLevelUser &&
+    !isUpmUser &&
+    hasTarget &&
+    !excludedAddRoles.includes(curRole);
 
   // Cek apakah user berhak mengelola (edit/hapus) proker tertentu:
-  // HANYA muncul di level user yang memiliki target fakultas_unit
+  // HANYA muncul di level user yang memiliki target fakultas_unit (bukan akun UPM dan tahun aktif harus cocok)
   const canManageProker = (r) => {
-    if (!isLevelUser || !hasTarget) return false;
+    if (!isLevelUser || isUpmUser || !hasTarget) return false;
     if (!r) return false;
+
+    // Pastikan tahun proker sesuai dengan positionYear yang sedang aktif di navbar
+    if (positionYear && r.Tahun && String(positionYear) !== String(r.Tahun)) {
+      return false;
+    }
 
     const prokerFuId = String(r.IdFakultasUnit || r.id_fakultas_unit || "");
     const prokerFuUuid = String(
@@ -737,52 +772,56 @@ export default function ProkerV3Page() {
       if (match) return true;
     }
 
-    // 3. Cek dari field user langsung / userUnitData
-    const directFu = String(
-      user?.fakultas_unit ||
-        user?.id_fakultas_unit ||
-        user?.FakultasUnit ||
-        userUnitData?.id ||
-        userUnitData?.uuid ||
-        "",
-    ).trim();
-    if (
-      directFu &&
-      directFu !== "0" &&
-      directFu !== "null" &&
-      directFu !== "undefined"
-    ) {
-      if (prokerFuId && directFu === prokerFuId) return true;
-      if (prokerFuUuid && directFu.toLowerCase() === prokerFuUuid) return true;
-      if (prokerFuName && directFu.toLowerCase() === prokerFuName) return true;
+    // 3. Cek dari field user langsung / userUnitData (hanya jika bukan akun UPM)
+    if (!isUpmUser) {
+      const directFu = String(
+        user?.fakultas_unit ||
+          user?.id_fakultas_unit ||
+          user?.FakultasUnit ||
+          userUnitData?.id ||
+          userUnitData?.uuid ||
+          "",
+      ).trim();
+      if (
+        directFu &&
+        directFu !== "0" &&
+        directFu !== "null" &&
+        directFu !== "undefined"
+      ) {
+        if (prokerFuId && directFu === prokerFuId) return true;
+        if (prokerFuUuid && directFu.toLowerCase() === prokerFuUuid)
+          return true;
+        if (prokerFuName && directFu.toLowerCase() === prokerFuName)
+          return true;
+      }
+
+      const directFuUuid = String(
+        user?.uuid_fakultas_unit ||
+          user?.UuidFakultasUnit ||
+          userUnitData?.uuid ||
+          "",
+      ).toLowerCase();
+      if (directFuUuid && prokerFuUuid && directFuUuid === prokerFuUuid)
+        return true;
+
+      const directFuName = String(
+        user?.nama_fakultas_unit ||
+          user?.NamaFakultasUnit ||
+          userUnitData?.raw_nama ||
+          userUnitData?.nama ||
+          "",
+      )
+        .trim()
+        .toLowerCase();
+      if (
+        directFuName &&
+        prokerFuName &&
+        (directFuName === prokerFuName ||
+          prokerFuName.includes(directFuName) ||
+          directFuName.includes(prokerFuName))
+      )
+        return true;
     }
-
-    const directFuUuid = String(
-      user?.uuid_fakultas_unit ||
-        user?.UuidFakultasUnit ||
-        userUnitData?.uuid ||
-        "",
-    ).toLowerCase();
-    if (directFuUuid && prokerFuUuid && directFuUuid === prokerFuUuid)
-      return true;
-
-    const directFuName = String(
-      user?.nama_fakultas_unit ||
-        user?.NamaFakultasUnit ||
-        userUnitData?.raw_nama ||
-        userUnitData?.nama ||
-        "",
-    )
-      .trim()
-      .toLowerCase();
-    if (
-      directFuName &&
-      prokerFuName &&
-      (directFuName === prokerFuName ||
-        prokerFuName.includes(directFuName) ||
-        directFuName.includes(prokerFuName))
-    )
-      return true;
 
     // Jika proker tidak memiliki ID/UUID unit, fallback cek apakah user memang memiliki target
     if (!prokerFuId && !prokerFuUuid && hasTarget) {
@@ -1112,7 +1151,362 @@ export default function ProkerV3Page() {
     }
   };
 
+  const isUnitUser = isLevelUser && !isUpmUser && hasTarget;
+  const isVerifikatorUser = isVerifier || isUpm;
+  const isAnggaranUser = isAnggaran;
+  const canUseBatch =
+    isUnitUser || isVerifikatorUser || isAnggaranUser || isAdmin;
+
+  // Clear selected prokers when filter or tab changes
+  useEffect(() => {
+    setSelectedUuids([]);
+  }, [tableEndpoint, activeTab]);
+
+  const isRowSelectable = (row) => {
+    if (!row?.UUID) return false;
+    const sMain = (row.Status || "").toLowerCase().trim();
+    const sVerif = (row.StatusVerifikator || "").toLowerCase().trim();
+    const sAngg = (row.StatusAnggaran || "").toLowerCase().trim();
+
+    const isVerifierApproved =
+      sVerif === "terima_verifikator" ||
+      sVerif === "disetujui" ||
+      sVerif.includes("diverifikasi") ||
+      sMain === "disetujui" ||
+      sMain === "terima_anggaran" ||
+      sMain === "terima anggaran" ||
+      sMain.includes("diverifikasi");
+
+    const isAnggaranApproved =
+      sAngg === "terima_anggaran" ||
+      sAngg === "disetujui" ||
+      sMain === "terima_anggaran" ||
+      sMain === "terima anggaran";
+
+    // 1. User yang memiliki fakultas_unit (Operator / Pengusul)
+    if (isUnitUser) {
+      if (!canManageProker(row)) return false;
+      return (
+        sMain === "draft" || sMain === "ditolak" || sMain.includes("ditolak")
+      );
+    }
+
+    // 2. User level verifikator (UPM / Evaluator / Fakultas)
+    if (isVerifikatorUser) {
+      if (activeTab === "menunggu") {
+        return !isVerifierApproved && sMain !== "draft";
+      }
+      if (activeTab === "terima") {
+        return isVerifierApproved;
+      }
+      if (activeTab === "tolak") {
+        return sVerif === "ditolak" || sMain.includes("ditolak");
+      }
+      return (
+        sMain === "diajukan" || sVerif === "diajukan" || !isVerifierApproved
+      );
+    }
+
+    // 3. User level anggaran
+    if (isAnggaranUser) {
+      if (!isVerifierApproved || sMain === "draft") return false;
+      if (activeTab === "menunggu") {
+        return !isAnggaranApproved && sAngg !== "ditolak";
+      }
+      if (activeTab === "terima") {
+        return isAnggaranApproved;
+      }
+      if (activeTab === "tolak") {
+        return sAngg === "ditolak";
+      }
+      return true;
+    }
+
+    // 4. Admin
+    if (isAdmin) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const selectableRowsOnPage = useMemo(() => {
+    return (currentPageRows || []).filter(isRowSelectable);
+  }, [
+    currentPageRows,
+    isUnitUser,
+    isVerifikatorUser,
+    isAnggaranUser,
+    isAdmin,
+    activeTab,
+  ]);
+
+  const selectableUuidsOnPage = useMemo(() => {
+    return selectableRowsOnPage.map((r) => r.UUID);
+  }, [selectableRowsOnPage]);
+
+  const isAllSelected =
+    selectableUuidsOnPage.length > 0 &&
+    selectableUuidsOnPage.every((id) => selectedUuids.includes(id));
+
+  const isIndeterminate =
+    !isAllSelected &&
+    selectableUuidsOnPage.some((id) => selectedUuids.includes(id));
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedUuids((prev) =>
+        prev.filter((id) => !selectableUuidsOnPage.includes(id)),
+      );
+    } else {
+      setSelectedUuids((prev) =>
+        Array.from(new Set([...prev, ...selectableUuidsOnPage])),
+      );
+    }
+  };
+
+  const handleToggleSelectRow = (uuid) => {
+    setSelectedUuids((prev) =>
+      prev.includes(uuid) ? prev.filter((id) => id !== uuid) : [...prev, uuid],
+    );
+  };
+
+  // Handler: Batch Ajukan Program Kerja (Khusus user yang memiliki fakultas_unit)
+  const handleBatchAjukan = async () => {
+    if (selectedUuids.length === 0) return;
+    setIsBatchProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    await Promise.allSettled(
+      selectedUuids.map(async (uuid) => {
+        try {
+          const fd = new FormData();
+          fd.append("status", "diajukan");
+          await apiClient.put(`/proker_v3/${uuid}/status`, fd);
+          successCount++;
+        } catch (err) {
+          failCount++;
+        }
+      }),
+    );
+
+    if (successCount > 0) {
+      addToast(
+        "success",
+        `Berhasil mengajukan ${successCount} program kerja${failCount > 0 ? ` (${failCount} gagal)` : ""}.`,
+      );
+    } else {
+      addToast("error", "Gagal mengajukan program kerja yang dipilih.");
+    }
+
+    setSelectedUuids([]);
+    setIsBatchProcessing(false);
+    tableRef.current?.reload?.({ resetPage: false });
+  };
+
+  // Handler: Batch Terima Verifikator
+  const handleBatchTerimaVerifikator = async () => {
+    if (selectedUuids.length === 0) return;
+    setIsBatchProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    await Promise.allSettled(
+      selectedUuids.map(async (uuid) => {
+        try {
+          const fd = new FormData();
+          fd.append("status", "terima_verifikator");
+          await apiClient.put(`/proker_v3/${uuid}/status`, fd);
+          successCount++;
+        } catch (err) {
+          failCount++;
+        }
+      }),
+    );
+
+    if (successCount > 0) {
+      addToast(
+        "success",
+        `Berhasil menyetujui (Terima Verifikator) ${successCount} program kerja${failCount > 0 ? ` (${failCount} gagal)` : ""}.`,
+      );
+    } else {
+      addToast("error", "Gagal memverifikasi program kerja yang dipilih.");
+    }
+
+    setSelectedUuids([]);
+    setIsBatchProcessing(false);
+    tableRef.current?.reload?.({ resetPage: false });
+  };
+
+  // Handler: Batch Terima Anggaran
+  const handleBatchTerimaAnggaran = async () => {
+    if (selectedUuids.length === 0) return;
+    setIsBatchProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    await Promise.allSettled(
+      selectedUuids.map(async (uuid) => {
+        try {
+          const fd = new FormData();
+          fd.append("status", "terima_anggaran");
+          await apiClient.put(`/proker_v3/${uuid}/status`, fd);
+          successCount++;
+        } catch (err) {
+          failCount++;
+        }
+      }),
+    );
+
+    if (successCount > 0) {
+      addToast(
+        "success",
+        `Berhasil menyetujui (Terima Anggaran) ${successCount} program kerja${failCount > 0 ? ` (${failCount} gagal)` : ""}.`,
+      );
+    } else {
+      addToast(
+        "error",
+        "Gagal memverifikasi anggaran program kerja yang dipilih.",
+      );
+    }
+
+    setSelectedUuids([]);
+    setIsBatchProcessing(false);
+    tableRef.current?.reload?.({ resetPage: false });
+  };
+
+  // Handler: Batch Submit Tolak (Verifikator & Anggaran)
+  const handleBatchSubmitReject = async () => {
+    if (!batchRejectReason.trim()) {
+      addToast("error", "Alasan penolakan wajib diisi");
+      return;
+    }
+    if (selectedUuids.length === 0) return;
+
+    setIsSubmittingBatchReject(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    await Promise.allSettled(
+      selectedUuids.map(async (uuid) => {
+        try {
+          const fd = new FormData();
+          fd.append("status", "ditolak");
+          fd.append("catatan_penolakan", batchRejectReason.trim());
+          await apiClient.put(`/proker_v3/${uuid}/status`, fd);
+          successCount++;
+        } catch (err) {
+          failCount++;
+        }
+      }),
+    );
+
+    if (successCount > 0) {
+      addToast(
+        "success",
+        `Berhasil menolak ${successCount} program kerja${failCount > 0 ? ` (${failCount} gagal)` : ""}.`,
+      );
+    } else {
+      addToast("error", "Gagal menolak program kerja yang dipilih.");
+    }
+
+    setBatchRejectModalOpen(false);
+    setBatchRejectReason("");
+    setSelectedUuids([]);
+    setIsSubmittingBatchReject(false);
+    tableRef.current?.reload?.({ resetPage: false });
+  };
+
+  // Handler: Batch Submit Revisi ke Draft (Verifikator & Anggaran)
+  const handleBatchSubmitRevisiDraft = async () => {
+    if (selectedUuids.length === 0) return;
+    setIsSubmittingBatchRevisi(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    await Promise.allSettled(
+      selectedUuids.map(async (uuid) => {
+        try {
+          const fd = new FormData();
+          fd.append("status", "draft");
+          if (batchRevisiReason.trim()) {
+            fd.append("catatan_penolakan", batchRevisiReason.trim());
+          }
+          await apiClient.put(`/proker_v3/${uuid}/status`, fd);
+          successCount++;
+        } catch (err) {
+          failCount++;
+        }
+      }),
+    );
+
+    if (successCount > 0) {
+      addToast(
+        "success",
+        `Berhasil mengembalikan ${successCount} program kerja ke status Draft${failCount > 0 ? ` (${failCount} gagal)` : ""}.`,
+      );
+    } else {
+      addToast("error", "Gagal mengembalikan program kerja ke status Draft.");
+    }
+
+    setBatchRevisiModalOpen(false);
+    setBatchRevisiReason("");
+    setSelectedUuids([]);
+    setIsSubmittingBatchRevisi(false);
+    tableRef.current?.reload?.({ resetPage: false });
+  };
+
   const listColumns = [
+    ...(canUseBatch
+      ? [
+          {
+            key: "checkbox_select",
+            label: (
+              <div className="flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isIndeterminate;
+                  }}
+                  onChange={handleToggleSelectAll}
+                  disabled={selectableUuidsOnPage.length === 0}
+                  className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-gray-300 cursor-pointer disabled:opacity-40"
+                  title="Pilih Semua Program Kerja di Halaman Ini"
+                />
+              </div>
+            ),
+            width: "44px",
+            minWidth: "44px",
+            className: "text-center !px-2",
+            renderKey: (r) => {
+              const selectable = isRowSelectable(r);
+              if (!selectable) {
+                return (
+                  <div className="flex items-center justify-center">
+                    <span className="text-gray-300 font-mono text-xs">-</span>
+                  </div>
+                );
+              }
+              const checked = selectedUuids.includes(r.UUID);
+              return (
+                <div
+                  className="flex items-center justify-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => handleToggleSelectRow(r.UUID)}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-gray-300 cursor-pointer"
+                  />
+                </div>
+              );
+            },
+          },
+        ]
+      : []),
     {
       key: "no_proker",
       label: "No.",
@@ -1123,217 +1517,6 @@ export default function ProkerV3Page() {
           {r.NoProker || 1}
         </span>
       ),
-    },
-    {
-      key: "Tahun",
-      label: "Tahun",
-      width: "65px",
-      minWidth: "65px",
-      renderKey: (r) => (
-        <span className="font-semibold text-xs text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded font-mono">
-          {r.Tahun || "2026"}
-        </span>
-      ),
-    },
-    {
-      key: "aktivitas_dokumen",
-      label: "Aktivitas & Dokumen",
-      minWidth: "155px",
-      renderKey: (r) => (
-        <div className="flex flex-col gap-1.5 w-full">
-          <button
-            type="button"
-            onClick={() => openAktivitas(r)}
-            className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200/90 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
-            title="Klik untuk membuka kelola aktivitas program kerja"
-          >
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-              <Layers className="w-3.5 h-3.5 text-purple-600 group-hover:text-white shrink-0" />
-              <span>
-                <b className="font-bold">{r.TotalAktivitas || 0}</b> Aktivitas
-              </span>
-            </span>
-            <span className="text-[10px] bg-purple-200/90 text-purple-900 group-hover:bg-white group-hover:text-purple-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
-              Kelola →
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => openDokumen(r)}
-            className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/90 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
-            title="Klik untuk membuka kelola dokumen program kerja"
-          >
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-              <FileText className="w-3.5 h-3.5 text-indigo-600 group-hover:text-white shrink-0" />
-              <span>
-                <b className="font-bold">{r.TotalDokumen || 0}</b> Dokumen
-              </span>
-            </span>
-            <span className="text-[10px] bg-indigo-200/90 text-indigo-900 group-hover:bg-white group-hover:text-indigo-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
-              Unggah →
-            </span>
-          </button>
-        </div>
-      ),
-    },
-    {
-      key: "status_verifikasi",
-      label: "Status Verifikasi",
-      width: isUpm ? "170px" : "150px",
-      minWidth: isUpm ? "170px" : "150px",
-      renderKey: (r) => {
-        const sVerif = (r.StatusVerifikator || "").toLowerCase().trim();
-        const sMain = (r.Status || "").toLowerCase().trim();
-        const sAngg = (r.StatusAnggaran || "").toLowerCase().trim();
-        const isProdi =
-          (r.TypeFakultasUnit || "").toLowerCase() === "prodi" ||
-          (r.NamaFakultasUnit || "").toLowerCase().includes("prodi");
-
-        const historyBtnInline = (
-          <Tooltip title="Riwayat State & Validasi">
-            <button
-              type="button"
-              onClick={() => {
-                setHistoryItem({ uuid: r.UUID, title: r.NamaProgram });
-                setHistoryDrawerOpen(true);
-              }}
-              className="p-1 rounded-md text-purple-600 bg-white hover:bg-purple-50 border border-purple-200 hover:border-purple-300 transition cursor-pointer shadow-2xs shrink-0 inline-flex items-center justify-center"
-              title="Riwayat State & Validasi"
-            >
-              <Clock className="w-3 h-3" />
-            </button>
-          </Tooltip>
-        );
-
-        let badgeUpm = null;
-        if (
-          sVerif === "terima_verifikator" ||
-          sVerif === "disetujui" ||
-          sMain === "disetujui" ||
-          sMain === "terima_anggaran" ||
-          sMain === "terima anggaran"
-        ) {
-          badgeUpm = (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>DITERIMA UPM</span>
-            </span>
-          );
-        } else if (
-          sVerif === "diverifikasi_upmf" ||
-          sMain === "diverifikasi_upmf"
-        ) {
-          badgeUpm = (
-            <div className="flex flex-col gap-0.5 items-start">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-indigo-300 bg-indigo-50 text-indigo-800 uppercase tracking-wider">
-                VERIFIKASI UPMF
-              </span>
-              <span className="text-[9px] text-gray-500 font-medium">
-                Menunggu UPMS
-              </span>
-            </div>
-          );
-        } else if (
-          sVerif === "diverifikasi_upml" ||
-          sMain === "diverifikasi_upml"
-        ) {
-          badgeUpm = (
-            <div className="flex flex-col gap-0.5 items-start">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-cyan-300 bg-cyan-50 text-cyan-800 uppercase tracking-wider">
-                VERIFIKASI UPML
-              </span>
-              <span className="text-[9px] text-gray-500 font-medium">
-                {isProdi ? "Menunggu UPMF" : "Menunggu UPMS"}
-              </span>
-            </div>
-          );
-        } else if (
-          sVerif === "ditolak" ||
-          (sMain.includes("ditolak") && r.CatatanVerifikator)
-        ) {
-          badgeUpm = (
-            <div className="flex flex-col gap-1 items-start">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
-                DITOLAK UPM
-              </span>
-            </div>
-          );
-        } else if (sVerif === "diajukan" || sMain === "diajukan") {
-          badgeUpm = (
-            <div className="flex flex-col gap-0.5 items-start">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-300 bg-blue-50 text-blue-800 uppercase tracking-wider">
-                DIAJUKAN UPM
-              </span>
-              <span className="text-[9px] text-gray-500 font-medium">
-                Menunggu UPML
-              </span>
-            </div>
-          );
-        } else {
-          badgeUpm = (
-            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-600 uppercase tracking-wider">
-              DRAF UPM
-            </span>
-          );
-        }
-
-        const isVerifierApproved =
-          sVerif === "terima_verifikator" ||
-          sVerif === "disetujui" ||
-          sVerif.includes("diverifikasi") ||
-          sMain === "disetujui" ||
-          sMain === "terima_anggaran" ||
-          sMain === "terima anggaran" ||
-          sMain.includes("diverifikasi");
-
-        let badgeAnggaran = null;
-        if (
-          sAngg === "terima_anggaran" ||
-          sAngg === "disetujui" ||
-          sMain === "terima_anggaran" ||
-          sMain === "terima anggaran"
-        ) {
-          badgeAnggaran = (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
-              <DollarSign className="w-3 h-3 text-emerald-600" />
-              <span>TERIMA ANGGARAN</span>
-            </span>
-          );
-        } else if (
-          sAngg === "ditolak" ||
-          (sMain.includes("ditolak") && r.CatatanAnggaran)
-        ) {
-          badgeAnggaran = (
-            <div className="flex flex-col gap-1 items-start">
-              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
-                DITOLAK ANGGARAN
-              </span>
-            </div>
-          );
-        } else if (sAngg === "menunggu_anggaran" || isVerifierApproved) {
-          badgeAnggaran = (
-            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
-              MENUNGGU ANGGARAN
-            </span>
-          );
-        } else {
-          badgeAnggaran = (
-            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-50 text-gray-500 uppercase tracking-wider">
-              MENUNGGU VERIFIKATOR
-            </span>
-          );
-        }
-
-        return (
-          <div className="flex flex-col gap-1.5 items-start">
-            <div className="flex items-center gap-1.5 flex-nowrap">
-              {badgeUpm}
-              {isUpm && historyBtnInline}
-            </div>
-            {badgeAnggaran}
-          </div>
-        );
-      },
     },
     ...(!isUpm
       ? [
@@ -1615,6 +1798,336 @@ export default function ProkerV3Page() {
         ]
       : []),
     {
+      key: "Tahun",
+      label: "Tahun",
+      width: "65px",
+      minWidth: "65px",
+      renderKey: (r) => (
+        <span className="font-semibold text-xs text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded font-mono">
+          {r.Tahun || "2026"}
+        </span>
+      ),
+    },
+    {
+      key: "aktivitas_dokumen",
+      label: "Aktivitas & Dokumen",
+      minWidth: "155px",
+      renderKey: (r) => (
+        <div className="flex flex-col gap-1.5 w-full">
+          <button
+            type="button"
+            onClick={() => openAktivitas(r)}
+            className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200/90 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
+            title="Klik untuk membuka kelola aktivitas program kerja"
+          >
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+              <Layers className="w-3.5 h-3.5 text-purple-600 group-hover:text-white shrink-0" />
+              <span>
+                <b className="font-bold">{r.TotalAktivitas || 0}</b> Aktivitas
+              </span>
+            </span>
+            <span className="text-[10px] bg-purple-200/90 text-purple-900 group-hover:bg-white group-hover:text-purple-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
+              Kelola →
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => openDokumen(r)}
+            className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/90 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
+            title="Klik untuk membuka kelola dokumen program kerja"
+          >
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+              <FileText className="w-3.5 h-3.5 text-indigo-600 group-hover:text-white shrink-0" />
+              <span>
+                <b className="font-bold">{r.TotalDokumen || 0}</b> Dokumen
+              </span>
+            </span>
+            <span className="text-[10px] bg-indigo-200/90 text-indigo-900 group-hover:bg-white group-hover:text-indigo-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
+              Unggah →
+            </span>
+          </button>
+        </div>
+      ),
+    },
+    {
+      key: "status_verifikasi",
+      label: "Status Verifikasi",
+      width: "220px",
+      minWidth: "200px",
+      renderKey: (r) => {
+        const sVerif = (r.StatusVerifikator || "").toLowerCase().trim();
+        const sMain = (r.Status || "").toLowerCase().trim();
+        const sAngg = (r.StatusAnggaran || "").toLowerCase().trim();
+        const isProdi =
+          (r.TypeFakultasUnit || "").toLowerCase() === "prodi" ||
+          (r.NamaFakultasUnit || "").toLowerCase().includes("prodi");
+
+        // Catatan penolakan verifikator (UPM)
+        let catatanVerif = (
+          r.CatatanVerifikator ||
+          r.catatan_verifikator ||
+          ""
+        ).trim();
+        if (
+          !catatanVerif &&
+          (sVerif === "ditolak" ||
+            (sMain.includes("ditolak") && !sAngg.includes("ditolak")))
+        ) {
+          catatanVerif = (
+            r.CatatanPenolakan ||
+            r.catatan_penolakan ||
+            ""
+          ).trim();
+        }
+
+        // Catatan penolakan tim anggaran
+        let catatanAngg = (
+          r.CatatanAnggaran ||
+          r.catatan_anggaran ||
+          ""
+        ).trim();
+        if (!catatanAngg && sAngg === "ditolak") {
+          catatanAngg = (
+            r.CatatanPenolakan ||
+            r.catatan_penolakan ||
+            ""
+          ).trim();
+        }
+
+        const historyBtnInline = (
+          <Tooltip title="Riwayat State & Validasi">
+            <button
+              type="button"
+              onClick={() => {
+                setHistoryItem({ uuid: r.UUID, title: r.NamaProgram });
+                setHistoryDrawerOpen(true);
+              }}
+              className="p-1 rounded-md text-purple-600 bg-white hover:bg-purple-50 border border-purple-200 hover:border-purple-300 transition cursor-pointer shadow-2xs shrink-0 inline-flex items-center justify-center"
+              title="Riwayat State & Validasi"
+            >
+              <Clock className="w-3 h-3" />
+            </button>
+          </Tooltip>
+        );
+
+        let badgeUpm = null;
+        if (
+          sVerif === "terima_verifikator" ||
+          sVerif === "disetujui" ||
+          sMain === "disetujui" ||
+          sMain === "terima_anggaran" ||
+          sMain === "terima anggaran"
+        ) {
+          badgeUpm = (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>DITERIMA UPM</span>
+            </span>
+          );
+        } else if (
+          sVerif === "diverifikasi_upmf" ||
+          sMain === "diverifikasi_upmf"
+        ) {
+          badgeUpm = (
+            <div className="flex flex-col gap-0.5 items-start">
+              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-indigo-300 bg-indigo-50 text-indigo-800 uppercase tracking-wider">
+                VERIFIKASI UPMF
+              </span>
+              <span className="text-[9px] text-gray-500 font-medium">
+                Menunggu UPMS
+              </span>
+            </div>
+          );
+        } else if (
+          sVerif === "diverifikasi_upml" ||
+          sMain === "diverifikasi_upml"
+        ) {
+          badgeUpm = (
+            <div className="flex flex-col gap-0.5 items-start">
+              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-cyan-300 bg-cyan-50 text-cyan-800 uppercase tracking-wider">
+                VERIFIKASI UPML
+              </span>
+              <span className="text-[9px] text-gray-500 font-medium">
+                {isProdi ? "Menunggu UPMF" : "Menunggu UPMS"}
+              </span>
+            </div>
+          );
+        } else if (
+          sVerif === "ditolak" ||
+          (sMain.includes("ditolak") &&
+            (catatanVerif || !sAngg.includes("ditolak")))
+        ) {
+          badgeUpm = (
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
+              DITOLAK UPM
+            </span>
+          );
+        } else if (sVerif === "diajukan" || sMain === "diajukan") {
+          badgeUpm = (
+            <div className="flex flex-col gap-0.5 items-start">
+              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-300 bg-blue-50 text-blue-800 uppercase tracking-wider">
+                DIAJUKAN UPM
+              </span>
+              <span className="text-[9px] text-gray-500 font-medium">
+                Menunggu UPML
+              </span>
+            </div>
+          );
+        } else {
+          badgeUpm = (
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-600 uppercase tracking-wider">
+              DRAF UPM
+            </span>
+          );
+        }
+
+        const isVerifierApproved =
+          sVerif === "terima_verifikator" ||
+          sVerif === "disetujui" ||
+          sVerif.includes("diverifikasi") ||
+          sMain === "disetujui" ||
+          sMain === "terima_anggaran" ||
+          sMain === "terima anggaran" ||
+          sMain.includes("diverifikasi");
+
+        let badgeAnggaran = null;
+        if (
+          sAngg === "terima_anggaran" ||
+          sAngg === "disetujui" ||
+          sMain === "terima_anggaran" ||
+          sMain === "terima anggaran"
+        ) {
+          badgeAnggaran = (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
+              <DollarSign className="w-3 h-3 text-emerald-600" />
+              <span>TERIMA ANGGARAN</span>
+            </span>
+          );
+        } else if (
+          sAngg === "ditolak" ||
+          (sMain.includes("ditolak") && catatanAngg)
+        ) {
+          badgeAnggaran = (
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
+              DITOLAK ANGGARAN
+            </span>
+          );
+        } else if (sAngg === "menunggu_anggaran" || isVerifierApproved) {
+          badgeAnggaran = (
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
+              MENUNGGU ANGGARAN
+            </span>
+          );
+        } else {
+          badgeAnggaran = (
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-50 text-gray-500 uppercase tracking-wider">
+              MENUNGGU VERIFIKATOR
+            </span>
+          );
+        }
+
+        const isUpmRejected =
+          sVerif === "ditolak" ||
+          (sMain.includes("ditolak") &&
+            (catatanVerif || !sAngg.includes("ditolak")));
+        const isAnggaranRejected =
+          sAngg === "ditolak" ||
+          (sMain.includes("ditolak") && Boolean(catatanAngg));
+
+        return (
+          <div className="flex flex-col gap-2 items-start w-full">
+            <div className="flex flex-col gap-1 items-start w-full">
+              <div className="flex items-center gap-1.5 flex-nowrap">
+                {badgeUpm}
+                {isUpm && historyBtnInline}
+              </div>
+              {isUpmRejected && catatanVerif && (
+                <div
+                  className="flex items-start gap-1.5 p-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-[10px] leading-tight w-full max-w-[220px] shadow-2xs"
+                  title={`Catatan Penolakan UPM: ${catatanVerif}`}
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="font-bold text-rose-700 text-[9px] uppercase tracking-wider">
+                      Catatan UPM:
+                    </span>
+                    <span className="italic line-clamp-3 break-words">
+                      "{catatanVerif}"
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1 items-start w-full">
+              {badgeAnggaran}
+              {isAnggaranRejected && catatanAngg && (
+                <div
+                  className="flex items-start gap-1.5 p-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-[10px] leading-tight w-full max-w-[220px] shadow-2xs"
+                  title={`Catatan Penolakan Anggaran: ${catatanAngg}`}
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="font-bold text-rose-700 text-[9px] uppercase tracking-wider">
+                      Catatan Anggaran:
+                    </span>
+                    <span className="italic line-clamp-3 break-words">
+                      "{catatanAngg}"
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "anggaran",
+      label: "Anggaran Program",
+      minWidth: "135px",
+      renderKey: (r) => {
+        const totalAng = Number(r.TotalAnggaran || r.Anggaran || 0);
+        const totalReal = Number(r.TotalRealisasi);
+        const hasRealDiff = Boolean(
+          r.HasRealisasi &&
+          r.TotalRealisasi !== undefined &&
+          r.TotalRealisasi !== null &&
+          totalAng !== totalReal,
+        );
+        return (
+          <div className="text-xs font-mono bg-emerald-50/60 px-2 py-1.5 rounded-lg border border-emerald-100 text-right whitespace-nowrap">
+            {hasRealDiff ? (
+              <div>
+                <span
+                  className="line-through text-gray-400 text-[11px] block font-normal decoration-rose-500 decoration-1"
+                  title="Total Anggaran Awal"
+                >
+                  {formatRupiah(totalAng)}
+                </span>
+                <span
+                  className="font-bold text-emerald-700 text-xs block"
+                  title="Total Realisasi Anggaran Baru"
+                >
+                  {formatRupiah(totalReal)}
+                </span>
+              </div>
+            ) : (
+              <span className="font-bold text-emerald-700">
+                {formatRupiah(
+                  r.HasRealisasi &&
+                    r.TotalRealisasi !== undefined &&
+                    r.TotalRealisasi !== null
+                    ? totalReal
+                    : totalAng,
+                )}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       key: "fakultas_unit",
       label: "Target",
       minWidth: "140px",
@@ -1756,51 +2269,6 @@ export default function ProkerV3Page() {
           {r.Outcome || "-"}
         </div>
       ),
-    },
-    {
-      key: "anggaran",
-      label: "Anggaran Program",
-      minWidth: "135px",
-      renderKey: (r) => {
-        const totalAng = Number(r.TotalAnggaran || r.Anggaran || 0);
-        const totalReal = Number(r.TotalRealisasi);
-        const hasRealDiff = Boolean(
-          r.HasRealisasi &&
-          r.TotalRealisasi !== undefined &&
-          r.TotalRealisasi !== null &&
-          totalAng !== totalReal,
-        );
-        return (
-          <div className="text-xs font-mono bg-emerald-50/60 px-2 py-1.5 rounded-lg border border-emerald-100 text-right whitespace-nowrap">
-            {hasRealDiff ? (
-              <div>
-                <span
-                  className="line-through text-gray-400 text-[11px] block font-normal decoration-rose-500 decoration-1"
-                  title="Total Anggaran Awal"
-                >
-                  {formatRupiah(totalAng)}
-                </span>
-                <span
-                  className="font-bold text-emerald-700 text-xs block"
-                  title="Total Realisasi Anggaran Baru"
-                >
-                  {formatRupiah(totalReal)}
-                </span>
-              </div>
-            ) : (
-              <span className="font-bold text-emerald-700">
-                {formatRupiah(
-                  r.HasRealisasi &&
-                    r.TotalRealisasi !== undefined &&
-                    r.TotalRealisasi !== null
-                    ? totalReal
-                    : totalAng,
-                )}
-              </span>
-            )}
-          </div>
-        );
-      },
     },
   ];
 
@@ -2059,12 +2527,139 @@ export default function ProkerV3Page() {
 
         {/* Remote Table Program Kerja */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+          {/* BATCH ACTION BANNER */}
+          {selectedUuids.length > 0 && (
+            <div className="bg-linear-to-r from-purple-50 via-indigo-50 to-blue-50 border-b border-purple-200 px-5 py-3 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse" />
+                <span className="text-xs font-bold text-gray-800">
+                  <span className="text-purple-700 font-extrabold">
+                    {selectedUuids.length}
+                  </span>{" "}
+                  program kerja dipilih
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUuids([])}
+                  className="text-[11px] text-gray-500 hover:text-gray-800 underline ml-2 cursor-pointer"
+                >
+                  Batalkan pilihan
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 1. Khusus user yang memiliki fakultas_unit: Tombol Ajukan */}
+                {isUnitUser && (
+                  <button
+                    type="button"
+                    onClick={handleBatchAjukan}
+                    disabled={isBatchProcessing}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                    title="Ajukan semua program kerja terpilih ke verifikator"
+                  >
+                    {isBatchProcessing ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span>Ajukan Terpilih ({selectedUuids.length})</span>
+                  </button>
+                )}
+
+                {/* 2. User level verifikator (UPM / Evaluator / Fakultas) & Admin: Tombol Terima & Tolak Verifikator */}
+                {(isVerifikatorUser || isAdmin) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleBatchTerimaVerifikator}
+                      disabled={isBatchProcessing}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                      title="Verifikasi dan terima seluruh program kerja terpilih"
+                    >
+                      {isBatchProcessing ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Terima Verifikator ({selectedUuids.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBatchRejectReason("");
+                        setBatchRejectModalOpen(true);
+                      }}
+                      disabled={isBatchProcessing}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                      title="Tolak seluruh program kerja terpilih dengan catatan"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Tolak Verifikator ({selectedUuids.length})</span>
+                    </button>
+                  </>
+                )}
+
+                {/* 3. User level anggaran: Tombol Terima & Tolak Anggaran */}
+                {isAnggaranUser && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleBatchTerimaAnggaran}
+                      disabled={isBatchProcessing}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                      title="Verifikasi dan terima anggaran seluruh program kerja terpilih"
+                    >
+                      {isBatchProcessing ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Terima Anggaran ({selectedUuids.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBatchRejectReason("");
+                        setBatchRejectModalOpen(true);
+                      }}
+                      disabled={isBatchProcessing}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                      title="Tolak anggaran seluruh program kerja terpilih dengan catatan"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Tolak Anggaran ({selectedUuids.length})</span>
+                    </button>
+                  </>
+                )}
+
+                {/* Revisi ke Draft jika verifikator / anggaran di tab terima atau tolak */}
+                {(isVerifikatorUser || isAnggaranUser || isAdmin) &&
+                  (activeTab === "terima" || activeTab === "tolak") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBatchRevisiReason("");
+                        setBatchRevisiModalOpen(true);
+                      }}
+                      disabled={isBatchProcessing}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                      title="Kembalikan semua program kerja terpilih ke status Draft"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Revisi ke Draft ({selectedUuids.length})</span>
+                    </button>
+                  )}
+              </div>
+            </div>
+          )}
+
           <RemoteTable
             ref={tableRef}
             endpoint={tableEndpoint}
             mode="paging"
             token={getValidToken()}
             listcolumns={listColumns}
+            onDataLoaded={(rows) => setCurrentPageRows(rows || [])}
             disableGlobalSearch={false}
             searchable={true}
             searchPlaceholder="Cari nama program kerja, PIC..."
@@ -2263,6 +2858,156 @@ export default function ProkerV3Page() {
                     {isSubmittingRevisiDraft
                       ? "Memproses..."
                       : "Kembalikan ke Draft"}
+                  </span>
+                </button>
+              </div>
+            </Dialog.Panel>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Batch Rejection Modal (Verifikator & Anggaran) */}
+      <Transition appear show={batchRejectModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => setBatchRejectModalOpen(false)}
+        >
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Dialog.Panel className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2 text-rose-600 font-bold text-base">
+                  <AlertCircle className="w-5 h-5" />
+                  <span>
+                    {isAnggaranUser
+                      ? "Tolak Anggaran Program Kerja Terpilih"
+                      : "Tolak Verifikator Program Kerja Terpilih"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBatchRejectModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs text-gray-600">
+                  Anda akan menolak secara serentak{" "}
+                  <b className="text-rose-600">{selectedUuids.length}</b>{" "}
+                  program kerja yang dipilih. Silakan berikan catatan atau
+                  alasan penolakan:
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-700">
+                  Catatan / Alasan Penolakan{" "}
+                  <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={batchRejectReason}
+                  onChange={(e) => setBatchRejectReason(e.target.value)}
+                  placeholder="Tuliskan catatan perbaikan atau alasan mengapa program-program kerja ini ditolak..."
+                  className="w-full p-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setBatchRejectModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    isSubmittingBatchReject || !batchRejectReason.trim()
+                  }
+                  onClick={handleBatchSubmitReject}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer"
+                >
+                  {isSubmittingBatchReject
+                    ? "Menyimpan..."
+                    : `Tolak ${selectedUuids.length} Proker`}
+                </button>
+              </div>
+            </Dialog.Panel>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Batch Revisi ke Draft Modal (Verifikator & Anggaran) */}
+      <Transition appear show={batchRevisiModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => setBatchRevisiModalOpen(false)}
+        >
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Dialog.Panel className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2 text-amber-600 font-bold text-base">
+                  <RotateCcw className="w-5 h-5" />
+                  <span>Revisi Status ke Draft Serentak</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBatchRevisiModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs text-gray-600">
+                  <b className="text-amber-600">{selectedUuids.length}</b>{" "}
+                  program kerja yang dipilih akan dikembalikan ke status{" "}
+                  <b>Draft</b> agar dapat diperbaiki kembali oleh pengaju.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-700">
+                  Catatan / Alasan Revisi{" "}
+                  <span className="text-gray-400 font-normal">(opsional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={batchRevisiReason}
+                  onChange={(e) => setBatchRevisiReason(e.target.value)}
+                  placeholder="Tuliskan catatan perbaikan atau alasan pengembalian ke status Draft..."
+                  className="w-full p-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setBatchRevisiModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingBatchRevisi}
+                  onClick={handleBatchSubmitRevisiDraft}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>
+                    {isSubmittingBatchRevisi
+                      ? "Menyimpan..."
+                      : `Kembalikan ${selectedUuids.length} Proker ke Draft`}
                   </span>
                 </button>
               </div>

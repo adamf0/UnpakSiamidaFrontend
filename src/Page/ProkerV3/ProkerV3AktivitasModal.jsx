@@ -927,7 +927,7 @@ export default function ProkerV3AktivitasModal({
                                             {tl.NamaAktivitas}
                                           </h4>
                                           <span className="text-[10px] text-gray-500 block">
-                                            PIC: <b>{tl.PIC || "-"}</b> • Titik Kontrol: <b>{tl.TitikKontrol || "RK"}</b> • Status:{" "}
+                                            PIC: <b>{tl.PIC || "-"}</b> • Status:{" "}
                                             <span className="font-semibold text-indigo-600">{tl.Status || "Terlaksana"}</span>
                                           </span>
                                         </div>
