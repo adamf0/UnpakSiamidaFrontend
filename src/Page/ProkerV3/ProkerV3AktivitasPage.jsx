@@ -85,7 +85,7 @@ export default function ProkerV3AktivitasPage() {
   const isVerifier = ["upml", "upmf", "upms", "fakultas", "evaluator"].includes(curRole);
   const isAnggaran = ["anggaran", "keuangan"].includes(curRole);
   const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
-  const canRevisiAnggaran = isAnggaran || isAdmin;
+  const canRevisiAnggaran = isAnggaran && !isAdmin;
 
   // Level evaluator dan anggaran untuk tampilan detail tabel khusus
   const isEvaluatorOrAnggaran = useMemo(() => {
@@ -666,8 +666,8 @@ export default function ProkerV3AktivitasPage() {
     return isAdmin || isAnggaran;
   }, [curRole, isAdmin, isAnggaran]);
 
-  // Hanya verifikator (upml, upmf, upms, evaluator) dan admin yang memverifikasi aktivitas
-  const canVerify = isVerifier || isAdmin;
+  // Hanya verifikator (upml, upmf, upms, evaluator) yang memverifikasi aktivitas
+  const canVerify = isVerifier && !isAdmin;
 
   // Next verification status label and value
   let nextVerifyStatus = "disetujui";
@@ -2113,108 +2113,6 @@ export default function ProkerV3AktivitasPage() {
                                   )}
                                 </>
                               )}
-
-                              {/* 4. ADMIN VERIFY / REJECT ACTION */}
-                              {isAdmin &&
-                                curRole !== "upml" &&
-                                curRole !== "upmf" &&
-                                curRole !== "fakultas" &&
-                                curRole !== "upms" && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        let target = "lpm";
-                                        if (isProdi) {
-                                          const stUpms = (
-                                            act.StatusUpms || ""
-                                          )
-                                            .toLowerCase()
-                                            .trim();
-                                          const stUpmf = (
-                                            act.StatusUpmf || ""
-                                          )
-                                            .toLowerCase()
-                                            .trim();
-                                          if (stUpms !== "disetujui")
-                                            target = "upms";
-                                          else if (stUpmf !== "disetujui")
-                                            target = "upmf";
-                                          else target = "lpm";
-                                        } else {
-                                          const stUpml = (
-                                            act.StatusUpml || ""
-                                          )
-                                            .toLowerCase()
-                                            .trim();
-                                          if (stUpml !== "disetujui")
-                                            target = "upml";
-                                          else target = "lpm";
-                                        }
-                                        handleVerifySingleRow(act, target);
-                                      }}
-                                      disabled={
-                                        verifyingRowUuid === act.UUID ||
-                                        isBatchProcessing
-                                      }
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                      title="Admin: Setujui verifikasi aktivitas"
-                                    >
-                                      {verifyingRowUuid === act.UUID ? (
-                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        <Check className="w-3 h-3" />
-                                      )}
-                                      <span>Verifikasi</span>
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        let target = "lpm";
-                                        if (isProdi) {
-                                          const stUpms = (
-                                            act.StatusUpms || ""
-                                          )
-                                            .toLowerCase()
-                                            .trim();
-                                          const stUpmf = (
-                                            act.StatusUpmf || ""
-                                          )
-                                            .toLowerCase()
-                                            .trim();
-                                          if (stUpms !== "disetujui")
-                                            target = "upms";
-                                          else if (stUpmf !== "disetujui")
-                                            target = "upmf";
-                                          else target = "lpm";
-                                        } else {
-                                          const stUpml = (
-                                            act.StatusUpml || ""
-                                          )
-                                            .toLowerCase()
-                                            .trim();
-                                          if (stUpml !== "disetujui")
-                                            target = "upml";
-                                          else target = "lpm";
-                                        }
-                                        handleOpenSingleRejectModal(
-                                          act,
-                                          target,
-                                        );
-                                      }}
-                                      disabled={
-                                        verifyingRowUuid === act.UUID ||
-                                        isBatchProcessing
-                                      }
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                      title="Admin: Tolak verifikasi aktivitas"
-                                    >
-                                      <X className="w-3 h-3" />
-                                      <span>Tolak</span>
-                                    </button>
-                                  </>
-                                )}
 
                               {/* Option to revert single activity to draft (bukan untuk upml, upmf, upms) */}
                               {canRevisiActDraft &&
