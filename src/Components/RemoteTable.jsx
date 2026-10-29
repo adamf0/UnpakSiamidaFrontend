@@ -30,6 +30,8 @@ const RemoteTable = forwardRef(function RemoteTable(
     token,
     filterFn,
     onDataLoaded,
+    groupBy,
+    renderGroupHeader,
   },
   ref
 ) {
@@ -484,8 +486,8 @@ const RemoteTable = forwardRef(function RemoteTable(
               </tr>
             )}
 
-            {!loading &&
-              rows.map((r, idx) => (
+            {!loading && (() => {
+              const renderTableRow = (r, idx) => (
                 <tr key={r.id || r.UUID || r.uuid || idx} className="border-t group hover:bg-gray-50/70 transition-colors">
                   {listcolumns.map((c, i) => {
                     const isStickyRight = c.isStickyRight || c.sticky === "right";
@@ -550,7 +552,34 @@ const RemoteTable = forwardRef(function RemoteTable(
                     </td>
                   )}
                 </tr>
-              ))}
+              );
+
+              if (typeof groupBy !== "function" || typeof renderGroupHeader !== "function") {
+                return rows.map((r, idx) => renderTableRow(r, idx));
+              }
+
+              const groups = [];
+              const groupMap = new Map();
+
+              rows.forEach((r) => {
+                const key = String(groupBy(r) ?? "");
+                if (!groupMap.has(key)) {
+                  const entry = { key, firstRow: r, items: [] };
+                  groupMap.set(key, entry);
+                  groups.push(entry);
+                }
+                groupMap.get(key).items.push(r);
+              });
+
+              const colSpan = listcolumns.length + (typeof renderAction === "function" ? 1 : 0);
+
+              return groups.map((g, gIdx) => (
+                <React.Fragment key={`grp-${g.key || gIdx}`}>
+                  {renderGroupHeader(g.key, g.firstRow, g.items, colSpan)}
+                  {g.items.map((r, rIdx) => renderTableRow(r, `${gIdx}-${rIdx}`))}
+                </React.Fragment>
+              ));
+            })()}
 
             {!loading && rows.length === 0 && (
               <tr>

@@ -11,6 +11,7 @@ import PageHeader from "@/Components/PageHeader";
 import Tooltip from "@/Components/Tooltip";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import StateHistoryDrawer from "./StateHistoryDrawer";
+import ProkerV3AktivitasEvaluatorRow from "./ProkerV3AktivitasEvaluatorRow";
 import {
   BULAN_LIST,
   WEEKS,
@@ -85,6 +86,21 @@ export default function ProkerV3AktivitasPage() {
   const isAnggaran = ["anggaran", "keuangan"].includes(curRole);
   const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
   const canRevisiAnggaran = isAnggaran || isAdmin;
+
+  // Level evaluator dan anggaran untuk tampilan detail tabel khusus
+  const isEvaluatorOrAnggaran = useMemo(() => {
+    const normRole = curRole.toLowerCase().trim();
+    const normLevel = String(level || localStorage.getItem("activeLevel") || "").toLowerCase().trim();
+    const userLevel = String(user?.level || "").toLowerCase().trim();
+    const userRole = String(user?.role || "").toLowerCase().trim();
+    const targets = ["evaluator", "anggaran", "keuangan"];
+    return (
+      targets.some((t) => normRole.includes(t)) ||
+      targets.some((t) => normLevel.includes(t)) ||
+      targets.some((t) => userLevel.includes(t)) ||
+      targets.some((t) => userRole.includes(t))
+    );
+  }, [curRole, level, user]);
 
   // Level verifikator dan role verifikator
   const isVerifikatorRoleOrLevel = useMemo(() => {
@@ -258,8 +274,9 @@ export default function ProkerV3AktivitasPage() {
   const [revisiDraftModalOpen, setRevisiDraftModalOpen] = useState(false);
   const [alasanRevisiDraft, setAlasanRevisiDraft] = useState("");
   const [isSubmittingRevisiDraft, setIsSubmittingRevisiDraft] = useState(false);
+  const [prokerDocuments, setProkerDocuments] = useState([]);
 
-  // Fetch Data (Proker & Activities)
+  // Fetch Data (Proker, Activities & Documents)
   const fetchData = async () => {
     if (!prokerUuid) return;
     setLoading(true);
@@ -268,6 +285,14 @@ export default function ProkerV3AktivitasPage() {
       const json = res.data;
       setProker(json.proker || null);
       setActivities(json.data || []);
+
+      // Ambil dokumen proker untuk detail tampilan evaluator/anggaran
+      try {
+        const docRes = await apiClient.get(`/proker_v3/${prokerUuid}/dokumen`);
+        setProkerDocuments(docRes.data?.data || []);
+      } catch (docErr) {
+        console.warn("Gagal memuat dokumen proker:", docErr);
+      }
     } catch (err) {
       addToast("error", err?.message || "Layanan tidak dapat dihubungi");
     } finally {
@@ -1485,8 +1510,12 @@ export default function ProkerV3AktivitasPage() {
                   <th className="py-3 px-4 min-w-[170px] text-right">
                     Anggaran (Rp)
                   </th>
-                  <th className="py-3 px-4 min-w-[170px]">Dokumen Referensi</th>
-                  <th className="py-3 px-4 min-w-[210px]">Jadwal & Bukti</th>
+                  {!isEvaluatorOrAnggaran && (
+                    <>
+                      <th className="py-3 px-4 min-w-[170px]">Dokumen Referensi</th>
+                      <th className="py-3 px-4 min-w-[210px]">Jadwal & Bukti</th>
+                    </>
+                  )}
                   <th className="py-3 px-4 min-w-[150px]">Status UPML/UPMS</th>
                   <th className="py-3 px-4 min-w-[150px]">Status UPMF</th>
                   <th className="py-3 px-4 min-w-[150px]">Status LPM</th>
@@ -1497,7 +1526,15 @@ export default function ProkerV3AktivitasPage() {
                 {activities.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={canVerify ? 11 : 10}
+                      colSpan={
+                        canVerify
+                          ? isEvaluatorOrAnggaran
+                            ? 9
+                            : 11
+                          : isEvaluatorOrAnggaran
+                          ? 8
+                          : 10
+                      }
                       className="py-12 text-center text-gray-400"
                     >
                       <FileSpreadsheet className="w-10 h-10 mx-auto text-gray-300 mb-2 stroke-1" />
@@ -1618,58 +1655,63 @@ export default function ProkerV3AktivitasPage() {
                             )}
                           </td>
 
-                          {/* Dokumen Referensi */}
-                          <td className="py-3.5 px-4">
-                            <div className="space-y-1.5">
-                              <span className="text-[11px] font-semibold text-gray-700 block whitespace-nowrap">
-                                {(act.DokumenReferensiFiles || []).length > 0
-                                  ? `${(act.DokumenReferensiFiles || []).length} Berkas Terunggah`
-                                  : "Belum ada berkas"}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  navigate(
-                                    `/proker_v3/${prokerUuid}/dokumen?act=${act.UUID}`,
-                                    { state: { aktivitas: act } },
-                                  )
-                                }
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 border border-indigo-200 transition cursor-pointer group shadow-2xs whitespace-nowrap"
-                                title="Buka halaman dokumen program kerja untuk aktivitas ini"
-                              >
-                                <FileText className="w-3 h-3 text-indigo-600 group-hover:text-white shrink-0" />
-                                <span>Dokumen Proker →</span>
-                              </button>
-                            </div>
-                          </td>
+                          {/* Dokumen Referensi & Jadwal Timeline (hanya tampil jika BUKAN evaluator / anggaran) */}
+                          {!isEvaluatorOrAnggaran && (
+                            <>
+                              {/* Dokumen Referensi */}
+                              <td className="py-3.5 px-4">
+                                <div className="space-y-1.5">
+                                  <span className="text-[11px] font-semibold text-gray-700 block whitespace-nowrap">
+                                    {(act.DokumenReferensiFiles || []).length > 0
+                                      ? `${(act.DokumenReferensiFiles || []).length} Berkas Terunggah`
+                                      : "Belum ada berkas"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/proker_v3/${prokerUuid}/dokumen?act=${act.UUID}`,
+                                        { state: { aktivitas: act } },
+                                      )
+                                    }
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 border border-indigo-200 transition cursor-pointer group shadow-2xs whitespace-nowrap"
+                                    title="Buka halaman dokumen program kerja untuk aktivitas ini"
+                                  >
+                                    <FileText className="w-3 h-3 text-indigo-600 group-hover:text-white shrink-0" />
+                                    <span>Dokumen Proker →</span>
+                                  </button>
+                                </div>
+                              </td>
 
-                          {/* Jadwal Timeline & Bukti File */}
-                          <td className="py-3.5 px-4">
-                            <button
-                              type="button"
-                              onClick={() => openTimelinePage(act)}
-                              className="inline-flex flex-col gap-1.5 p-2.5 rounded-xl border border-purple-200/90 bg-purple-50/40 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition text-left cursor-pointer group w-full shadow-2xs"
-                              title="Klik untuk membuka kelola jadwal rencana [RK] & realisasi [R] serta berkas bukti kegiatan"
-                            >
-                              <div className="flex items-center justify-between gap-2 text-xs font-bold text-gray-800 group-hover:text-white">
-                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                                  <Clock className="w-3.5 h-3.5 text-purple-600 group-hover:text-white shrink-0" />
-                                  <span>Jadwal RK/R</span>
-                                </span>
-                                <span className="text-[10px] bg-purple-100 group-hover:bg-white text-purple-800 group-hover:text-purple-700 px-2 py-0.5 rounded-full font-mono font-bold whitespace-nowrap shrink-0 transition-colors">
-                                  RK: {rkCount} | R: {rCount}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-[11px] text-gray-500 group-hover:text-purple-100 pt-1 border-t border-purple-100/60 group-hover:border-purple-500">
-                                <span className="whitespace-nowrap">
-                                  Bukti Kegiatan:
-                                </span>
-                                <span className="font-bold text-indigo-700 group-hover:text-white whitespace-nowrap">
-                                  {filesCount} Berkas
-                                </span>
-                              </div>
-                            </button>
-                          </td>
+                              {/* Jadwal Timeline & Bukti File */}
+                              <td className="py-3.5 px-4">
+                                <button
+                                  type="button"
+                                  onClick={() => openTimelinePage(act)}
+                                  className="inline-flex flex-col gap-1.5 p-2.5 rounded-xl border border-purple-200/90 bg-purple-50/40 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition text-left cursor-pointer group w-full shadow-2xs"
+                                  title="Klik untuk membuka kelola jadwal rencana [RK] & realisasi [R] serta berkas bukti kegiatan"
+                                >
+                                  <div className="flex items-center justify-between gap-2 text-xs font-bold text-gray-800 group-hover:text-white">
+                                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                                      <Clock className="w-3.5 h-3.5 text-purple-600 group-hover:text-white shrink-0" />
+                                      <span>Jadwal RK/R</span>
+                                    </span>
+                                    <span className="text-[10px] bg-purple-100 group-hover:bg-white text-purple-800 group-hover:text-purple-700 px-2 py-0.5 rounded-full font-mono font-bold whitespace-nowrap shrink-0 transition-colors">
+                                      RK: {rkCount} | R: {rCount}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-[11px] text-gray-500 group-hover:text-purple-100 pt-1 border-t border-purple-100/60 group-hover:border-purple-500">
+                                    <span className="whitespace-nowrap">
+                                      Bukti Kegiatan:
+                                    </span>
+                                    <span className="font-bold text-indigo-700 group-hover:text-white whitespace-nowrap">
+                                      {filesCount} Berkas
+                                    </span>
+                                  </div>
+                                </button>
+                              </td>
+                            </>
+                          )}
 
                           {/* Status UPML/UPMS */}
                           <td className="py-3.5 px-4">
@@ -2222,11 +2264,29 @@ export default function ProkerV3AktivitasPage() {
                           </td>
                         </tr>
 
+                        {/* DETAIL TABEL AKTIVITAS TIMELINE & DAFTAR DOKUMEN KHUSUS EVALUATOR & ANGGARAN */}
+                        {isEvaluatorOrAnggaran && (
+                          <ProkerV3AktivitasEvaluatorRow
+                            activity={act}
+                            colSpan={canVerify ? 9 : 8}
+                            prokerDocuments={prokerDocuments}
+                            isVerifierRoleOrLevel={isVerifikatorRoleOrLevel}
+                          />
+                        )}
+
                         {/* DEDICATED FULL-WIDTH ERROR SUB-ROW IF ACTION FAILED */}
                         {rowError && (
                           <tr className="bg-rose-50/95 border-b border-rose-200 transition animate-in fade-in duration-200">
                             <td
-                              colSpan={canVerify ? 11 : 10}
+                              colSpan={
+                                canVerify
+                                  ? isEvaluatorOrAnggaran
+                                    ? 9
+                                    : 11
+                                  : isEvaluatorOrAnggaran
+                                  ? 8
+                                  : 10
+                              }
                               className="py-3 px-6"
                             >
                               <div className="flex items-start sm:items-center justify-between gap-4">

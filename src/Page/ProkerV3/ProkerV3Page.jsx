@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import RemoteTable from "@/Components/RemoteTable";
 import ProkerV3FormModal from "./ProkerV3FormModal";
 import ProkerV3AktivitasModal from "./ProkerV3AktivitasModal";
+import ProkerV3SwotView from "./ProkerV3SwotView";
+import ProkerV3RiskModal from "./ProkerV3RiskModal";
 import StateHistoryDrawer from "./StateHistoryDrawer";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import SearchSelect from "@/Components/SearchSelect";
@@ -16,7 +18,11 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
 import Tooltip from "@/Components/Tooltip";
 import { formatRupiah } from "./prokerConstants";
-import { formatProdiWithJenjang, cleanDuplicateJenjang, formatTanggalBulanTahun } from "@/Common/Utils";
+import {
+  formatProdiWithJenjang,
+  cleanDuplicateJenjang,
+  formatTanggalBulanTahun,
+} from "@/Common/Utils";
 import {
   Plus,
   Pencil,
@@ -42,6 +48,9 @@ import {
   FileText,
   XCircle,
   RefreshCw,
+  ShieldAlert,
+  Activity,
+  ChevronDown,
 } from "lucide-react";
 
 export default function ProkerV3Page() {
@@ -97,6 +106,21 @@ export default function ProkerV3Page() {
   const [batchRevisiReason, setBatchRevisiReason] = useState("");
   const [isSubmittingBatchRevisi, setIsSubmittingBatchRevisi] = useState(false);
 
+  // Evaluator SWOT expansion & mobile modal
+  const [expandedSwotGroup, setExpandedSwotGroup] = useState(null);
+  const [mobileSwotModal, setMobileSwotModal] = useState({
+    isOpen: false,
+    groupKey: null,
+    row: null,
+    unitName: "",
+  });
+
+  // Analisis Risiko Detail Modal
+  const [riskModalState, setRiskModalState] = useState({
+    open: false,
+    proker: null,
+  });
+
   // Filters State
   const initialYear = positionYear || "all";
   const [selectedTahun, setSelectedTahun] = useState(initialYear);
@@ -131,13 +155,43 @@ export default function ProkerV3Page() {
   const isLevelUser = curRole === "user";
   const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
 
+  // Level evaluator dan anggaran
+  const isEvaluatorOrAnggaran = useMemo(() => {
+    const normRole = curRole.toLowerCase().trim();
+    const normLevel = String(
+      level || localStorage.getItem("activeLevel") || "",
+    )
+      .toLowerCase()
+      .trim();
+    const userLevel = String(user?.level || "").toLowerCase().trim();
+    const userRole = String(user?.role || "").toLowerCase().trim();
+    const targets = ["evaluator", "anggaran", "keuangan"];
+    return (
+      targets.some((t) => normRole.includes(t)) ||
+      targets.some((t) => normLevel.includes(t)) ||
+      targets.some((t) => userLevel.includes(t)) ||
+      targets.some((t) => userRole.includes(t))
+    );
+  }, [curRole, level, user]);
+
   // Level verifikator dan role verifikator
   const isVerifikatorRoleOrLevel = useMemo(() => {
     if (isAdmin) return false;
     const normRole = curRole.toLowerCase().trim();
-    const normLevel = String(level || localStorage.getItem("activeLevel") || "").toLowerCase().trim();
-    const userLevel = String(user?.level || "").toLowerCase().trim();
-    const verifierRoles = ["upml", "upmf", "upms", "fakultas", "evaluator", "verifikator"];
+    const normLevel = String(level || localStorage.getItem("activeLevel") || "")
+      .toLowerCase()
+      .trim();
+    const userLevel = String(user?.level || "")
+      .toLowerCase()
+      .trim();
+    const verifierRoles = [
+      "upml",
+      "upmf",
+      "upms",
+      "fakultas",
+      "evaluator",
+      "verifikator",
+    ];
     return (
       verifierRoles.includes(normRole) ||
       normRole.includes("verifikator") ||
@@ -315,22 +369,33 @@ export default function ProkerV3Page() {
     );
   }, [user?.extra_role, curRole, positionYear]);
 
-  // Helper to format unit/fakultas filter options
+  // Helper to format unit/fakultas/prodi filter options
   const formatUnitOption = (u) => {
     const rawName = u.raw_nama || u.nama;
-    const isFakultas =
-      (u.type || "").toLowerCase() === "fakultas" ||
-      (u.type || "").toLowerCase() === "sekolah";
-    const typeLabel = isFakultas ? "FAKULTAS" : "UNIT";
+    const t = (u.type || "").toLowerCase();
+    const isFakultas = t === "fakultas" || t === "sekolah";
+    const isProdi = t === "prodi";
+
+    let displayName = rawName;
+    if (isProdi) {
+      const clean = cleanDuplicateJenjang(rawName);
+      displayName = formatProdiWithJenjang(clean, u.jenjang);
+    }
+
+    const typeLabel = isFakultas ? "FAKULTAS" : isProdi ? "PRODI" : "UNIT";
+    const badgeClass = isFakultas
+      ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+      : isProdi
+      ? "bg-purple-50 text-purple-700 border border-purple-200"
+      : "bg-emerald-50 text-emerald-700 border border-emerald-200";
+
     return {
       ...u,
       badge: typeLabel,
-      badgeClass: isFakultas
-        ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-        : "bg-emerald-50 text-emerald-700 border border-emerald-200",
-      display_name: rawName,
-      label: `${rawName} (${typeLabel})`,
-      nama: `${rawName} (${typeLabel})`,
+      badgeClass,
+      display_name: displayName,
+      label: `${displayName} (${typeLabel})`,
+      nama: `${displayName} (${typeLabel})`,
     };
   };
 
@@ -400,10 +465,11 @@ export default function ProkerV3Page() {
     }
 
     // admin, verifikator umum, evaluator, anggaran, upms (universal)
-    // Exclude prodi - dropdown Unit/Fakultas khusus menampilkan fakultas dan unit
+    // Untuk evaluator & anggaran: tampilkan fakultas, unit, dan prodi
     // DATA FAKULTAS HARUS PALING ATAS
     const fakultasUnits = [];
     const regularUnits = [];
+    const prodiUnits = [];
 
     unitOptions.forEach((u) => {
       const t = (u.type || "").toLowerCase();
@@ -411,6 +477,8 @@ export default function ProkerV3Page() {
         fakultasUnits.push(u);
       } else if (t === "unit") {
         regularUnits.push(u);
+      } else if (t === "prodi" && isEvaluatorOrAnggaran) {
+        prodiUnits.push(u);
       }
     });
 
@@ -431,19 +499,32 @@ export default function ProkerV3Page() {
       (a.raw_nama || a.nama || "").localeCompare(b.raw_nama || b.nama || ""),
     );
 
-    const sortedUnits = [...fakultasUnits, ...regularUnits];
+    // Urutkan prodi secara alfabetis
+    prodiUnits.sort((a, b) =>
+      (a.raw_nama || a.nama || "").localeCompare(b.raw_nama || b.nama || ""),
+    );
+
+    const sortedUnits = isEvaluatorOrAnggaran
+      ? [...fakultasUnits, ...regularUnits, ...prodiUnits]
+      : [...fakultasUnits, ...regularUnits];
 
     return [
       {
         id: "all",
         uuid: "all",
-        label: "Semua Unit / Fakultas",
-        nama: "Semua Unit / Fakultas",
-        display_name: "Semua Unit / Fakultas",
+        label: isEvaluatorOrAnggaran
+          ? "Semua Unit / Fakultas / Prodi"
+          : "Semua Unit / Fakultas",
+        nama: isEvaluatorOrAnggaran
+          ? "Semua Unit / Fakultas / Prodi"
+          : "Semua Unit / Fakultas",
+        display_name: isEvaluatorOrAnggaran
+          ? "Semua Unit / Fakultas / Prodi"
+          : "Semua Unit / Fakultas",
       },
       ...sortedUnits.map(formatUnitOption),
     ];
-  }, [curRole, userAssignedUnits, unitOptions, hasActiveRoleAssignment]);
+  }, [curRole, userAssignedUnits, unitOptions, hasActiveRoleAssignment, isEvaluatorOrAnggaran]);
 
   // Cek apakah dropdown unit/fakultas memilih item bertipe fakultas
   const isFakultasSelected = useMemo(() => {
@@ -744,8 +825,7 @@ export default function ProkerV3Page() {
   const isVerifikatorUser = isVerifier || isUpm;
   const isAnggaranUser = isAnggaran;
   const isScheduleLocked =
-    !isAdmin &&
-    Boolean(jadwalStatus?.has_schedule && !jadwalStatus?.is_open);
+    !isAdmin && Boolean(jadwalStatus?.has_schedule && !jadwalStatus?.is_open);
 
   // Cek apakah user berhak mengelola (edit/hapus) proker tertentu:
   // HANYA muncul di level user yang memiliki target fakultas_unit (bukan akun UPM dan tahun aktif harus cocok)
@@ -1093,7 +1173,9 @@ export default function ProkerV3Page() {
     } catch (err) {
       addToast(
         "error",
-        err?.response?.data?.error || err?.message || "Gagal memperbarui status",
+        err?.response?.data?.error ||
+          err?.message ||
+          "Gagal memperbarui status",
       );
     }
   };
@@ -1553,6 +1635,92 @@ export default function ProkerV3Page() {
     tableRef.current?.reload?.({ resetPage: false });
   };
 
+  const handleSwotButtonClick = (groupKey, row, unitName) => {
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    if (isMobile) {
+      setMobileSwotModal({
+        isOpen: true,
+        groupKey,
+        row,
+        unitName,
+      });
+    } else {
+      setExpandedSwotGroup((prev) => (prev === groupKey ? null : groupKey));
+    }
+  };
+
+  const renderGroupHeader = (groupKey, firstRow, items, colSpan) => {
+    const type = (firstRow.TypeFakultasUnit || "").toLowerCase();
+    const isFak = type === "fakultas" || type === "sekolah";
+    const isProdi = type === "prodi";
+    const cleanName = cleanDuplicateJenjang(firstRow.NamaFakultasUnit || "");
+    const displayUnit =
+      (isProdi
+        ? formatProdiWithJenjang(cleanName, firstRow.JenjangFakultasUnit)
+        : cleanName) || "Target Tidak Diketahui";
+    const badgeType = isFak ? "Fakultas" : isProdi ? "Prodi" : "Unit / Lembaga";
+    const isExpanded = expandedSwotGroup === groupKey;
+
+    return (
+      <React.Fragment key={`group-header-${groupKey}`}>
+        <tr className="bg-slate-100/90 border-t-2 border-b border-slate-300">
+          <td colSpan={colSpan} className="px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-purple-700 shrink-0" />
+              <span className="font-bold text-gray-900 text-sm">
+                {displayUnit}
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                  isFak
+                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                    : isProdi
+                      ? "bg-purple-50 text-purple-700 border-purple-200"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                }`}
+              >
+                {badgeType}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  handleSwotButtonClick(groupKey, firstRow, displayUnit)
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-purple-700 border border-purple-200 hover:bg-purple-50 active:bg-purple-100 shadow-2xs transition cursor-pointer"
+                title="Klik untuk membuka Analisis SWOT target ini"
+              >
+                <Activity className="w-3.5 h-3.5 text-purple-600" />
+                <span>Analisis SWOT</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 hidden md:inline transition-transform duration-200 ${
+                    isExpanded ? "rotate-180 text-purple-700" : "text-gray-400"
+                  }`}
+                />
+              </button>
+            </div>
+          </td>
+        </tr>
+        {isExpanded && (
+          <tr className="bg-slate-50 border-b-2 border-purple-200 hidden md:table-row">
+            <td colSpan={colSpan} className="p-4">
+              <ProkerV3SwotView
+                fakultasUnitId={
+                  firstRow.UuidFakultasUnit || firstRow.IdFakultasUnit
+                }
+                targetName={displayUnit}
+                tahun={
+                  selectedTahun && selectedTahun !== "all"
+                    ? selectedTahun
+                    : positionYear || firstRow.Tahun || "2026"
+                }
+              />
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  };
+
   const listColumns = [
     ...(canUseBatch
       ? [
@@ -1851,7 +2019,8 @@ export default function ProkerV3Page() {
                           }`}
                           title={
                             isScheduleLocked
-                              ? jadwalStatus?.message || "Pengajuan ditutup sesuai jadwal"
+                              ? jadwalStatus?.message ||
+                                "Pengajuan ditutup sesuai jadwal"
                               : "Ajukan program kerja ke pimpinan/verifikator"
                           }
                         >
@@ -2201,6 +2370,87 @@ export default function ProkerV3Page() {
         );
       },
     },
+    ...(isAnggaran || isEvaluator || isAdmin
+      ? [
+          {
+            key: "analisis_risiko",
+            label: "Analisis Risiko",
+            minWidth: "145px",
+            renderKey: (r) => {
+              const total = Number(r.TotalRisiko || 0);
+              const tingkat = (r.TingkatRisiko || "").toUpperCase().trim();
+
+              const getLevelBadge = (level) => {
+                switch (level) {
+                  case "T":
+                    return {
+                      label: "T - Tinggi",
+                      cls: "bg-rose-50 text-rose-700 border-rose-200",
+                      dot: "bg-rose-500",
+                    };
+                  case "M":
+                    return {
+                      label: "M - Menengah",
+                      cls: "bg-amber-50 text-amber-700 border-amber-200",
+                      dot: "bg-amber-500",
+                    };
+                  case "R":
+                    return {
+                      label: "R - Rendah",
+                      cls: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                      dot: "bg-emerald-500",
+                    };
+                  default:
+                    return {
+                      label: "Belum dinilai",
+                      cls: "bg-gray-50 text-gray-600 border-gray-200",
+                      dot: "bg-gray-400",
+                    };
+                }
+              };
+
+              const badgeInfo = getLevelBadge(tingkat);
+
+              return (
+                <div className="flex flex-col gap-1.5 w-full">
+                  <button
+                    type="button"
+                    onClick={() => setRiskModalState({ open: true, proker: r })}
+                    className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/90 hover:bg-rose-600 hover:text-white hover:border-rose-600 transition cursor-pointer group shadow-2xs whitespace-nowrap w-full"
+                    title="Klik untuk melihat detail analisis risiko program kerja"
+                  >
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                      <ShieldAlert className="w-3.5 h-3.5 text-rose-600 group-hover:text-white shrink-0" />
+                      <span>
+                        <b className="font-bold">{total}</b> Risiko
+                      </span>
+                    </span>
+                    <span className="text-[10px] bg-rose-200/90 text-rose-900 group-hover:bg-white group-hover:text-rose-700 px-1.5 py-0.5 rounded-md font-bold whitespace-nowrap shrink-0 transition-colors">
+                      Lihat →
+                    </span>
+                  </button>
+                  {total > 0 && tingkat ? (
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${badgeInfo.cls}`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${badgeInfo.dot}`}
+                        />
+                        {badgeInfo.label}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-gray-400 italic px-1">
+                      Belum diisi
+                    </span>
+                  )}
+                </div>
+              );
+            },
+          },
+        ]
+      : []),
     {
       key: "anggaran",
       label: "Anggaran Program",
@@ -2209,7 +2459,9 @@ export default function ProkerV3Page() {
         if (isVerifikatorRoleOrLevel) {
           return (
             <div className="text-xs font-mono bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200 text-center">
-              <span className="font-bold text-gray-400 tracking-widest">***</span>
+              <span className="font-bold text-gray-400 tracking-widest">
+                ***
+              </span>
             </div>
           );
         }
@@ -2439,7 +2691,8 @@ export default function ProkerV3Page() {
                 }`}
                 title={
                   isScheduleLocked
-                    ? jadwalStatus?.message || "Penambahan program kerja ditutup sesuai jadwal"
+                    ? jadwalStatus?.message ||
+                      "Penambahan program kerja ditutup sesuai jadwal"
                     : "Tambah Program Kerja"
                 }
               >
@@ -2560,7 +2813,9 @@ export default function ProkerV3Page() {
                         ? "Pilih Unit Penugasan"
                         : curRole === "upmf"
                           ? "Pilih Fakultas"
-                          : "Semua Unit / Fakultas"
+                          : isEvaluatorOrAnggaran
+                            ? "Semua Unit / Fakultas / Prodi"
+                            : "Semua Unit / Fakultas"
                     }
                     icon={Building2}
                   />
@@ -2722,7 +2977,8 @@ export default function ProkerV3Page() {
                   : "bg-rose-100 text-rose-800 border-rose-300"
               }`}
             >
-              {jadwalStatus.status_label || (jadwalStatus.is_open ? "Sedang Dibuka" : "Ditutup")}
+              {jadwalStatus.status_label ||
+                (jadwalStatus.is_open ? "Sedang Dibuka" : "Ditutup")}
             </span>
           </div>
         )}
@@ -2763,7 +3019,8 @@ export default function ProkerV3Page() {
                     }`}
                     title={
                       isScheduleLocked
-                        ? jadwalStatus?.message || "Pengajuan ditutup sesuai jadwal"
+                        ? jadwalStatus?.message ||
+                          "Pengajuan ditutup sesuai jadwal"
                         : "Ajukan semua program kerja terpilih ke verifikator"
                     }
                   >
@@ -2780,36 +3037,36 @@ export default function ProkerV3Page() {
                 {(isVerifikatorUser || isAdmin) &&
                   activeTab !== "terima" &&
                   activeTab !== "tolak" && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleBatchTerimaVerifikator}
-                      disabled={isBatchProcessing}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                      title="Verifikasi dan terima seluruh program kerja terpilih"
-                    >
-                      {isBatchProcessing ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
-                      <span>Terima Verifikator ({selectedUuids.length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBatchRejectReason("");
-                        setBatchRejectModalOpen(true);
-                      }}
-                      disabled={isBatchProcessing}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                      title="Tolak seluruh program kerja terpilih dengan catatan"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Tolak Verifikator ({selectedUuids.length})</span>
-                    </button>
-                  </>
-                )}
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleBatchTerimaVerifikator}
+                        disabled={isBatchProcessing}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                        title="Verifikasi dan terima seluruh program kerja terpilih"
+                      >
+                        {isBatchProcessing ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        <span>Terima Verifikator ({selectedUuids.length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBatchRejectReason("");
+                          setBatchRejectModalOpen(true);
+                        }}
+                        disabled={isBatchProcessing}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                        title="Tolak seluruh program kerja terpilih dengan catatan"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Tolak Verifikator ({selectedUuids.length})</span>
+                      </button>
+                    </>
+                  )}
 
                 {/* 3. User level anggaran: Tombol Terima & Tolak Anggaran */}
                 {isAnggaranUser && (
@@ -2873,6 +3130,16 @@ export default function ProkerV3Page() {
             mode="paging"
             token={getValidToken()}
             listcolumns={listColumns}
+            groupBy={
+              isEvaluator
+                ? (r) =>
+                    r.UuidFakultasUnit ||
+                    r.IdFakultasUnit ||
+                    r.NamaFakultasUnit ||
+                    "unknown"
+                : null
+            }
+            renderGroupHeader={isEvaluator ? renderGroupHeader : null}
             onDataLoaded={(rows) => setCurrentPageRows(rows || [])}
             disableGlobalSearch={false}
             searchable={true}
@@ -3226,6 +3493,114 @@ export default function ProkerV3Page() {
                 </button>
               </div>
             </Dialog.Panel>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Analisis Risiko Detail Modal */}
+      <ProkerV3RiskModal
+        open={riskModalState.open}
+        proker={riskModalState.proker}
+        onClose={() => setRiskModalState({ open: false, proker: null })}
+      />
+
+      {/* Modal Analisis SWOT untuk Mobile */}
+      <Transition appear show={mobileSwotModal.isOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50 md:hidden"
+          onClose={() =>
+            setMobileSwotModal({
+              isOpen: false,
+              groupKey: null,
+              row: null,
+              unitName: "",
+            })
+          }
+        >
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-200"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-150"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-3">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-200"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-150"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-lg transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all border border-gray-200 flex flex-col max-h-[85vh]">
+                  <div className="px-4 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-gray-200 flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-purple-600 shrink-0" />
+                      <Dialog.Title className="text-sm font-bold text-gray-900 line-clamp-1">
+                        Analisis SWOT: {mobileSwotModal.unitName}
+                      </Dialog.Title>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMobileSwotModal({
+                          isOpen: false,
+                          groupKey: null,
+                          row: null,
+                          unitName: "",
+                        })
+                      }
+                      className="p-1 rounded-lg text-gray-400 hover:text-gray-700 transition cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="p-3 overflow-y-auto">
+                    {mobileSwotModal.row && (
+                      <ProkerV3SwotView
+                        fakultasUnitId={
+                          mobileSwotModal.row.UuidFakultasUnit ||
+                          mobileSwotModal.row.IdFakultasUnit
+                        }
+                        targetName={mobileSwotModal.unitName}
+                        tahun={
+                          selectedTahun && selectedTahun !== "all"
+                            ? selectedTahun
+                            : positionYear ||
+                              mobileSwotModal.row.Tahun ||
+                              "2026"
+                        }
+                      />
+                    )}
+                  </div>
+                  <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-end shrink-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMobileSwotModal({
+                          isOpen: false,
+                          groupKey: null,
+                          row: null,
+                          unitName: "",
+                        })
+                      }
+                      className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-200 hover:bg-gray-300 text-gray-700 transition cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
           </div>
         </Dialog>
       </Transition>
