@@ -2209,7 +2209,7 @@ export default function ProkerV3Page() {
           badgeUpm = (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>DITERIMA UPM</span>
+              <span>DITERIMA VERIFIKATOR</span>
             </span>
           );
         } else if (
@@ -2255,9 +2255,6 @@ export default function ProkerV3Page() {
             <div className="flex flex-col gap-0.5 items-start">
               <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-300 bg-blue-50 text-blue-800 uppercase tracking-wider">
                 DIAJUKAN EVALUATOR
-              </span>
-              <span className="text-[9px] text-gray-500 font-medium">
-                Menunggu UPML
               </span>
             </div>
           );
