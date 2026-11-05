@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, Fragment } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  Fragment,
+} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Dialog, Transition } from "@headlessui/react";
 import { useAuth } from "@/Providers/AuthProvider";
@@ -10,8 +16,10 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
 import Tooltip from "@/Components/Tooltip";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
+import CoaSearchSelect from "@/Components/CoaSearchSelect";
 import StateHistoryDrawer from "./StateHistoryDrawer";
 import ProkerV3AktivitasEvaluatorRow from "./ProkerV3AktivitasEvaluatorRow";
+import RubberStamp from "../Dashboard/MonitoringProker3D/RubberStamp";
 import {
   BULAN_LIST,
   WEEKS,
@@ -24,6 +32,7 @@ import {
   getTimelineRkSlots,
   getTimelineRSlots,
 } from "./prokerConstants";
+import { formatTanggalBulanTahun } from "@/Common/Utils";
 import {
   ArrowLeft,
   Building2,
@@ -52,6 +61,7 @@ import {
   X,
   Eye,
   AlertCircle,
+  AlertTriangle,
   Save,
   Coins,
   PencilLine,
@@ -59,6 +69,9 @@ import {
   Lightbulb,
   ChevronDown,
   ChevronUp,
+  Lock,
+  XCircle,
+  Ban,
 } from "lucide-react";
 
 export default function ProkerV3AktivitasPage() {
@@ -78,11 +91,13 @@ export default function ProkerV3AktivitasPage() {
 
   const isAdmin = level === "admin" || user?.level === "admin";
   const curRole = String(
-    level || localStorage.getItem("activeLevel") || user?.level || ""
+    level || localStorage.getItem("activeLevel") || user?.level || "",
   )
     .toLowerCase()
     .trim();
-  const isVerifier = ["upml", "upmf", "upms", "fakultas", "evaluator"].includes(curRole);
+  const isVerifier = ["upml", "upmf", "upms", "fakultas", "evaluator"].includes(
+    curRole,
+  );
   const isAnggaran = ["anggaran", "keuangan"].includes(curRole);
   const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
   const canRevisiAnggaran = isAnggaran && !isAdmin;
@@ -90,9 +105,15 @@ export default function ProkerV3AktivitasPage() {
   // Level evaluator dan anggaran untuk tampilan detail tabel khusus
   const isEvaluatorOrAnggaran = useMemo(() => {
     const normRole = curRole.toLowerCase().trim();
-    const normLevel = String(level || localStorage.getItem("activeLevel") || "").toLowerCase().trim();
-    const userLevel = String(user?.level || "").toLowerCase().trim();
-    const userRole = String(user?.role || "").toLowerCase().trim();
+    const normLevel = String(level || localStorage.getItem("activeLevel") || "")
+      .toLowerCase()
+      .trim();
+    const userLevel = String(user?.level || "")
+      .toLowerCase()
+      .trim();
+    const userRole = String(user?.role || "")
+      .toLowerCase()
+      .trim();
     const targets = ["evaluator", "anggaran", "keuangan"];
     return (
       targets.some((t) => normRole.includes(t)) ||
@@ -106,9 +127,20 @@ export default function ProkerV3AktivitasPage() {
   const isVerifikatorRoleOrLevel = useMemo(() => {
     if (isAdmin) return false;
     const normRole = curRole.toLowerCase().trim();
-    const normLevel = String(level || localStorage.getItem("activeLevel") || "").toLowerCase().trim();
-    const userLevel = String(user?.level || "").toLowerCase().trim();
-    const verifierRoles = ["upml", "upmf", "upms", "fakultas", "evaluator", "verifikator"];
+    const normLevel = String(level || localStorage.getItem("activeLevel") || "")
+      .toLowerCase()
+      .trim();
+    const userLevel = String(user?.level || "")
+      .toLowerCase()
+      .trim();
+    const verifierRoles = [
+      "upml",
+      "upmf",
+      "upms",
+      "fakultas",
+      "evaluator",
+      "verifikator",
+    ];
     return (
       verifierRoles.includes(normRole) ||
       normRole.includes("verifikator") ||
@@ -130,7 +162,9 @@ export default function ProkerV3AktivitasPage() {
     if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
       return user.extra_role.some((r) =>
         ["upml", "upmf", "upms"].includes(
-          String(r.role ?? r.Role ?? "").toLowerCase().trim(),
+          String(r.role ?? r.Role ?? "")
+            .toLowerCase()
+            .trim(),
         ),
       );
     }
@@ -161,15 +195,23 @@ export default function ProkerV3AktivitasPage() {
       return false;
     }
 
-    const prokerFuId = proker.IdFakultasUnit ? String(proker.IdFakultasUnit) : "";
-    const prokerFuUuid = proker.UuidFakultasUnit ? String(proker.UuidFakultasUnit).toLowerCase() : "";
-    const prokerFuName = proker.NamaFakultasUnit ? String(proker.NamaFakultasUnit).trim().toLowerCase() : "";
+    const prokerFuId = proker.IdFakultasUnit
+      ? String(proker.IdFakultasUnit)
+      : "";
+    const prokerFuUuid = proker.UuidFakultasUnit
+      ? String(proker.UuidFakultasUnit).toLowerCase()
+      : "";
+    const prokerFuName = proker.NamaFakultasUnit
+      ? String(proker.NamaFakultasUnit).trim().toLowerCase()
+      : "";
     const effYear = prokerYear || activeYearStr;
 
     // 1. Cek dari user.extra_role (penugasan ABAC)
     if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
       const match = user.extra_role.some((r) => {
-        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        const rRole = String(r.role ?? r.Role ?? "")
+          .toLowerCase()
+          .trim();
         // Hanya role "user" / operator yang berhak mengelola aktivitas
         if (rRole && rRole !== "user") {
           return false;
@@ -183,11 +225,22 @@ export default function ProkerV3AktivitasPage() {
         const rFuId = r.id_fakultas_unit ?? r.IdFakultasUnit;
         if (rFuId && prokerFuId && String(rFuId) === prokerFuId) return true;
 
-        const rFuUuid = String(r.uuid_fakultas_unit ?? r.UuidFakultasUnit ?? "").toLowerCase();
+        const rFuUuid = String(
+          r.uuid_fakultas_unit ?? r.UuidFakultasUnit ?? "",
+        ).toLowerCase();
         if (rFuUuid && prokerFuUuid && rFuUuid === prokerFuUuid) return true;
 
-        const rFuName = String(r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "").trim().toLowerCase();
-        if (rFuName && prokerFuName && (rFuName === prokerFuName || prokerFuName.includes(rFuName) || rFuName.includes(prokerFuName))) return true;
+        const rFuName = String(r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "")
+          .trim()
+          .toLowerCase();
+        if (
+          rFuName &&
+          prokerFuName &&
+          (rFuName === prokerFuName ||
+            prokerFuName.includes(rFuName) ||
+            rFuName.includes(prokerFuName))
+        )
+          return true;
 
         return false;
       });
@@ -197,25 +250,44 @@ export default function ProkerV3AktivitasPage() {
 
     // 2. Cek dari field user langsung (hanya untuk operator biasa, bukan akun UPM)
     if (!isUpmUser) {
-      const directFu = String(user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit || "");
+      const directFu = String(
+        user?.fakultas_unit ||
+          user?.id_fakultas_unit ||
+          user?.FakultasUnit ||
+          "",
+      );
       if (directFu) {
         if (prokerFuId && directFu === prokerFuId) return true;
-        if (prokerFuUuid && directFu.toLowerCase() === prokerFuUuid) return true;
-        if (prokerFuName && directFu.toLowerCase() === prokerFuName) return true;
+        if (prokerFuUuid && directFu.toLowerCase() === prokerFuUuid)
+          return true;
+        if (prokerFuName && directFu.toLowerCase() === prokerFuName)
+          return true;
       }
 
-      const directFuUuid = String(user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "").toLowerCase();
-      if (directFuUuid && prokerFuUuid && directFuUuid === prokerFuUuid) return true;
+      const directFuUuid = String(
+        user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "",
+      ).toLowerCase();
+      if (directFuUuid && prokerFuUuid && directFuUuid === prokerFuUuid)
+        return true;
 
-      const directFuName = String(user?.nama_fakultas_unit || user?.NamaFakultasUnit || "").trim().toLowerCase();
-      if (directFuName && prokerFuName && directFuName === prokerFuName) return true;
+      const directFuName = String(
+        user?.nama_fakultas_unit || user?.NamaFakultasUnit || "",
+      )
+        .trim()
+        .toLowerCase();
+      if (directFuName && prokerFuName && directFuName === prokerFuName)
+        return true;
     }
 
     return false;
   }, [user, proker, positionYear, isUpmUser]);
 
-  // Tombol tambah/edit/hapus aktivitas HANYA muncul di level user dengan target yang ditugaskan (bukan akun UPM dan tahun aktif harus cocok)
-  const canAddAktivitas = isLevelUser && !isUpmUser && isYearMatch && hasAssignedTarget;
+  // Tombol tambah/edit/hapus aktivitas HANYA muncul di level user dengan target yang ditugaskan (bukan akun UPM dan tahun aktif harus cocok) atau Admin
+  const canAddAktivitas =
+    (isLevelUser || isAdmin) &&
+    !isUpmUser &&
+    isYearMatch &&
+    (hasAssignedTarget || isAdmin);
 
   // State History Drawer State
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -252,6 +324,7 @@ export default function ProkerV3AktivitasPage() {
   const [actPic, setActPic] = useState("");
   const [actAnggaran, setActAnggaran] = useState(0);
   const [actAnggaranStr, setActAnggaranStr] = useState("0");
+  const [actRabRows, setActRabRows] = useState([]);
   const [actCapaian, setActCapaian] = useState("");
   const [actMasalah, setActMasalah] = useState("");
   const [actPemecahan, setActPemecahan] = useState("");
@@ -270,11 +343,64 @@ export default function ProkerV3AktivitasPage() {
   const [revisiAnggaranStr, setRevisiAnggaranStr] = useState("0");
   const [isSubmittingRevisi, setIsSubmittingRevisi] = useState(false);
 
+  // Standalone RAB Detail Modal State (Triggered by clicking budget/SBU badge - Gambar 2 -> Gambar 1)
+  const [rabDetailModalOpen, setRabDetailModalOpen] = useState(false);
+  const [rabDetailAct, setRabDetailAct] = useState(null);
+  const [rabDetailRows, setRabDetailRows] = useState([]);
+  const [isSavingRabDetail, setIsSavingRabDetail] = useState(false);
+
   // Revisi Status Proker ke Draft (Tim Anggaran, Verifikator, Admin)
   const [revisiDraftModalOpen, setRevisiDraftModalOpen] = useState(false);
   const [alasanRevisiDraft, setAlasanRevisiDraft] = useState("");
   const [isSubmittingRevisiDraft, setIsSubmittingRevisiDraft] = useState(false);
   const [prokerDocuments, setProkerDocuments] = useState([]);
+
+  // Jadwal Proker V3 Status Check
+  const [jadwalProkerStatus, setJadwalProkerStatus] = useState(null);
+  const [loadingJadwalProkerStatus, setLoadingJadwalProkerStatus] =
+    useState(false);
+
+  // Batal Aktivitas State
+  const [batalActModalOpen, setBatalActModalOpen] = useState(false);
+  const [batalTargetAct, setBatalTargetAct] = useState(null);
+  const [catatanBatalActInput, setCatatanBatalActInput] = useState("");
+  const [isSubmittingBatalAct, setIsSubmittingBatalAct] = useState(false);
+  const [confirmUnbatalActOpen, setConfirmUnbatalActOpen] = useState(false);
+
+  const fetchJadwalProkerStatus = useCallback(
+    async (prokerData) => {
+      const targetYear = prokerData?.Tahun || positionYear || "2027";
+      const targetUnitId = prokerData?.IdFakultasUnit ?? "";
+      const targetUnitName = prokerData?.NamaFakultasUnit ?? "";
+      let params = `tahun=${encodeURIComponent(targetYear)}`;
+      if (targetUnitId) {
+        params += `&id_fakultas_unit=${encodeURIComponent(targetUnitId)}`;
+      }
+      if (targetUnitName) {
+        params += `&nama_fakultas_unit=${encodeURIComponent(targetUnitName)}`;
+      }
+      setLoadingJadwalProkerStatus(true);
+      try {
+        const resProker = await apiClient
+          .get(`/proker_v3/jadwal_status?${params}`)
+          .catch(() => null);
+        if (resProker?.data) setJadwalProkerStatus(resProker.data);
+      } catch (err) {
+        console.warn("Gagal memeriksa jadwal proker:", err);
+      } finally {
+        setLoadingJadwalProkerStatus(false);
+      }
+    },
+    [positionYear],
+  );
+
+  // Jadwal proker terbuka jika status jadwal proker open
+  const isJadwalProkerOpen = Boolean(jadwalProkerStatus?.is_open);
+
+  // Tombol tambah aktivitas HANYA muncul dan open jika jadwal proker ada dan sedang dibuka
+  const isAktivitasScheduleOpen = Boolean(
+    jadwalProkerStatus?.has_schedule && jadwalProkerStatus?.is_open,
+  );
 
   // Fetch Data (Proker, Activities & Documents)
   const fetchData = async () => {
@@ -285,6 +411,9 @@ export default function ProkerV3AktivitasPage() {
       const json = res.data;
       setProker(json.proker || null);
       setActivities(json.data || []);
+      if (json.proker) {
+        fetchJadwalProkerStatus(json.proker);
+      }
 
       // Ambil dokumen proker untuk detail tampilan evaluator/anggaran
       try {
@@ -303,6 +432,12 @@ export default function ProkerV3AktivitasPage() {
   useEffect(() => {
     fetchData();
   }, [prokerUuid]);
+
+  useEffect(() => {
+    if (!proker) {
+      fetchJadwalProkerStatus({ Tahun: positionYear || "2027" });
+    }
+  }, [proker, fetchJadwalProkerStatus, positionYear]);
 
   // Aggregate stats
   const { totalAnggaran, totalRealisasi, hasRealisasi } = useMemo(() => {
@@ -328,10 +463,86 @@ export default function ProkerV3AktivitasPage() {
 
   // ==========================================
   // ACTIVITY CRUD HANDLERS
-  // ==========================================
+  // RAB Dinamis & Total Anggaran Handlers
+  const totalActRab = useMemo(() => {
+    return actRabRows.reduce((acc, r) => acc + (Number(r.total) || 0), 0);
+  }, [actRabRows]);
+
+  const totalRabDetail = useMemo(() => {
+    return rabDetailRows.reduce((acc, r) => acc + (Number(r.total) || 0), 0);
+  }, [rabDetailRows]);
+
+  const handleRabRowChange = (index, field, value) => {
+    if (!canEditActModalRab) return;
+    setActRabRows((prev) => {
+      const updated = [...prev];
+      const row = { ...updated[index] };
+      if (field === "coa") {
+        row.no_akun = value.no_akun || "";
+        row.nama_akun = value.nama_akun || "";
+        row.kategori =
+          value.kategori ||
+          (value.no_akun && value.nama_akun
+            ? `${value.no_akun} - ${value.nama_akun}`
+            : value.no_akun || value.nama_akun || "");
+      } else {
+        row[field] = value;
+        const satuan = Number(row.qty_satuan) || 0;
+        const paket = Number(row.qty_paket) || 0;
+        const sbuVal = Number(row.sbu) || 0;
+        row.total = satuan * paket * sbuVal;
+        row.harga_satuan = sbuVal;
+      }
+      updated[index] = row;
+      return updated;
+    });
+  };
+
+  const handleAddRabRow = () => {
+    if (!canEditActModalRab) return;
+    setActRabRows((prev) => [
+      ...prev,
+      {
+        id: `rab-${Date.now()}-${prev.length}`,
+        no_akun: "",
+        nama_akun: "",
+        kategori: "",
+        keterangan: "",
+        qty_satuan: 1,
+        qty_paket: 1,
+        sbu: 0,
+        harga_satuan: 0,
+        total: 0,
+      },
+    ]);
+  };
+
+  const handleRemoveRabRow = (index) => {
+    if (!canEditActModalRab) return;
+    setActRabRows((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      if (updated.length === 0) {
+        return [
+          {
+            id: `rab-${Date.now()}-0`,
+            no_akun: "",
+            nama_akun: "",
+            kategori: "",
+            keterangan: "",
+            qty_satuan: 1,
+            qty_paket: 1,
+            sbu: 0,
+            harga_satuan: 0,
+            total: 0,
+          },
+        ];
+      }
+      return updated;
+    });
+  };
+
   const handleAnggaranInputChange = (e) => {
     const rawValue = e.target.value;
-    // Ambil hanya digit angka (0-9)
     const digitsOnly = rawValue.replace(/\D/g, "");
     if (!digitsOnly) {
       setActAnggaran(0);
@@ -347,7 +558,15 @@ export default function ProkerV3AktivitasPage() {
     if (!canAddAktivitas) {
       addToast(
         "warning",
-        "Akses ditolak: Tambah aktivitas hanya untuk level user pada unit yang ditugaskan"
+        "Akses ditolak: Tambah aktivitas hanya untuk level user pada unit yang ditugaskan",
+      );
+      return;
+    }
+    if (!isAktivitasScheduleOpen) {
+      addToast(
+        "error",
+        formatTanggalBulanTahun(jadwalProkerStatus?.message) ||
+          "Penambahan aktivitas kegiatan saat ini ditutup sesuai jadwal program kerja.",
       );
       return;
     }
@@ -357,6 +576,20 @@ export default function ProkerV3AktivitasPage() {
     setActPic(user?.nama || proker?.PIC || "");
     setActAnggaran(0);
     setActAnggaranStr("");
+    setActRabRows([
+      {
+        id: `rab-${Date.now()}-0`,
+        no_akun: "",
+        nama_akun: "",
+        kategori: "",
+        keterangan: "",
+        qty_satuan: 1,
+        qty_paket: 1,
+        sbu: 0,
+        harga_satuan: 0,
+        total: 0,
+      },
+    ]);
     setActCapaian("");
     setActMasalah("");
     setActPemecahan("");
@@ -369,7 +602,7 @@ export default function ProkerV3AktivitasPage() {
     if (!canAddAktivitas) {
       addToast(
         "warning",
-        "Akses ditolak: Edit aktivitas hanya untuk level user pada unit yang ditugaskan"
+        "Akses ditolak: Edit aktivitas hanya untuk level user pada unit yang ditugaskan",
       );
       return;
     }
@@ -384,6 +617,89 @@ export default function ProkerV3AktivitasPage() {
         ? new Intl.NumberFormat("id-ID").format(initialAnggaran)
         : "0",
     );
+
+    let initialRabRows = [];
+    const sourceRab = act.RabItems || act.RAB || act.rab;
+    if (sourceRab) {
+      try {
+        const parsed =
+          typeof sourceRab === "string" ? JSON.parse(sourceRab) : sourceRab;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          initialRabRows = parsed.map((r, idx) => {
+            const qty_satuan = Number(
+              r.qty_satuan !== undefined
+                ? r.qty_satuan
+                : r.QtySatuan !== undefined
+                  ? r.QtySatuan
+                  : 1,
+            );
+            const qty_paket = Number(
+              r.qty_paket !== undefined
+                ? r.qty_paket
+                : r.QtyPaket !== undefined
+                  ? r.QtyPaket
+                  : 1,
+            );
+            const sbuVal = Number(
+              r.sbu !== undefined
+                ? r.sbu
+                : r.SBU !== undefined
+                  ? r.SBU
+                  : r.harga_satuan !== undefined
+                    ? r.harga_satuan
+                    : 0,
+            );
+            const totalVal =
+              r.total !== undefined
+                ? Number(r.total)
+                : r.Total !== undefined
+                  ? Number(r.Total)
+                  : qty_satuan * qty_paket * sbuVal;
+            const noAkun = r.no_akun || r.NoAkun || "";
+            const namaAkun = r.nama_akun || r.NamaAkun || "";
+            return {
+              id: r.id || r.uuid || `rab-${Date.now()}-${idx}`,
+              no_akun: noAkun,
+              nama_akun: namaAkun,
+              kategori:
+                r.kategori ||
+                r.Kategori ||
+                (noAkun && namaAkun
+                  ? `${noAkun} - ${namaAkun}`
+                  : noAkun || namaAkun || ""),
+              keterangan:
+                r.keterangan || r.Keterangan || r.rincian || r.Rincian || "",
+              qty_satuan,
+              qty_paket,
+              sbu: sbuVal,
+              harga_satuan: sbuVal,
+              total: totalVal,
+            };
+          });
+        }
+      } catch (err) {
+        console.warn("Gagal parse RAB aktivitas:", err);
+      }
+    }
+
+    if (initialRabRows.length === 0) {
+      initialRabRows = [
+        {
+          id: `rab-${Date.now()}-0`,
+          no_akun: "",
+          nama_akun: "",
+          kategori: "",
+          keterangan: initialAnggaran > 0 ? "Alokasi Anggaran Kegiatan" : "",
+          qty_satuan: 1,
+          qty_paket: 1,
+          sbu: initialAnggaran,
+          harga_satuan: initialAnggaran,
+          total: initialAnggaran,
+        },
+      ];
+    }
+    setActRabRows(initialRabRows);
+
     setActCapaian(act.Capaian || "");
     setActMasalah(act.Masalah || "");
     setActPemecahan(act.PemecahanMasalah || "");
@@ -403,9 +719,42 @@ export default function ProkerV3AktivitasPage() {
       );
       return;
     }
+    if (actModalMode !== "edit" && !isAktivitasScheduleOpen) {
+      addToast(
+        "error",
+        formatTanggalBulanTahun(jadwalProkerStatus?.message) ||
+          "Penambahan aktivitas kegiatan saat ini ditutup sesuai jadwal program kerja.",
+      );
+      return;
+    }
     if (!actNama.trim()) {
       addToast("warning", "Nama aktivitas / kegiatan wajib diisi");
       return;
+    }
+
+    const calculatedTotalAnggaran = actRabRows.reduce(
+      (sum, r) => sum + (Number(r.total) || 0),
+      0,
+    );
+
+    // Validasi pembatasan pagu unit (Case 2: jika pagu ada > 0)
+    if (proker?.HasPagu && Number(proker?.PaguUnit) > 0) {
+      const paguUnit = Number(proker.PaguUnit);
+      const totalTerpakai = Number(proker.TotalAnggaranUnit) || 0;
+      const oldActAnggaran =
+        actModalMode === "edit" ? Number(selectedAct?.Anggaran) || 0 : 0;
+      const delta = calculatedTotalAnggaran - oldActAnggaran;
+      if (delta > 0 && totalTerpakai + delta > paguUnit) {
+        const sisaAllowed = Math.max(
+          0,
+          paguUnit - (totalTerpakai - oldActAnggaran),
+        );
+        addToast(
+          "error",
+          `Total alokasi anggaran (${formatRupiah(calculatedTotalAnggaran)}) melebihi pagu unit tahun ${proker.Tahun || ""}. Maksimal alokasi untuk aktivitas ini: ${formatRupiah(sisaAllowed)} (Pagu: ${formatRupiah(paguUnit)}, Terpakai: ${formatRupiah(totalTerpakai)})`,
+        );
+        return;
+      }
     }
 
     setSavingAct(true);
@@ -413,7 +762,8 @@ export default function ProkerV3AktivitasPage() {
       const fd = new FormData();
       fd.append("aktivitas", actNama.trim());
       fd.append("pic", actPic.trim());
-      fd.append("anggaran", String(Number(actAnggaran) || 0));
+      fd.append("anggaran", String(calculatedTotalAnggaran));
+      fd.append("rab", JSON.stringify(actRabRows));
       fd.append("status", actStatus);
       fd.append("capaian", actCapaian.trim());
       fd.append("masalah", actMasalah.trim());
@@ -440,7 +790,12 @@ export default function ProkerV3AktivitasPage() {
       setActModalOpen(false);
       fetchData();
     } catch (err) {
-      addToast("error", err?.message || "Terjadi kesalahan sistem");
+      addToast(
+        "error",
+        err?.response?.data?.error ||
+          err?.message ||
+          "Terjadi kesalahan sistem",
+      );
     } finally {
       setSavingAct(false);
     }
@@ -456,6 +811,15 @@ export default function ProkerV3AktivitasPage() {
       return;
     }
     if (!actToDelete?.UUID) return;
+    if (isActApprovedByEvaluator(actToDelete)) {
+      addToast(
+        "warning",
+        "Aktivitas tidak dapat dihapus karena sudah disetujui oleh evaluator",
+      );
+      setConfirmDelete(false);
+      setActToDelete(null);
+      return;
+    }
     try {
       const res = await apiClient.delete(
         `/proker_v3/aktivitas/${actToDelete.UUID}`,
@@ -511,10 +875,12 @@ export default function ProkerV3AktivitasPage() {
     setActToRevisi(act);
     const currReal = getRealisasiAnggaran(act);
     const initialVal =
-      currReal !== null && currReal !== undefined ? currReal : (Number(act.Anggaran) || 0);
+      currReal !== null && currReal !== undefined
+        ? currReal
+        : Number(act.Anggaran) || 0;
     setRevisiAnggaran(initialVal);
     setRevisiAnggaranStr(
-      initialVal > 0 ? new Intl.NumberFormat("id-ID").format(initialVal) : "0"
+      initialVal > 0 ? new Intl.NumberFormat("id-ID").format(initialVal) : "0",
     );
     setRevisiModalOpen(true);
   };
@@ -544,7 +910,7 @@ export default function ProkerV3AktivitasPage() {
       await apiClient.put(`/proker_v3/aktivitas/${actToRevisi.UUID}`, fd);
       addToast(
         "success",
-        `Realisasi anggaran aktivitas "${actToRevisi.Aktivitas}" berhasil disimpan: ${formatRupiah(revisiAnggaran)}`
+        `Realisasi anggaran aktivitas "${actToRevisi.Aktivitas}" berhasil disimpan: ${formatRupiah(revisiAnggaran)}`,
       );
       setRevisiModalOpen(false);
       setActToRevisi(null);
@@ -552,10 +918,331 @@ export default function ProkerV3AktivitasPage() {
     } catch (err) {
       addToast(
         "error",
-        err?.message || "Gagal memperbarui realisasi anggaran aktivitas"
+        err?.message || "Gagal memperbarui realisasi anggaran aktivitas",
       );
     } finally {
       setIsSubmittingRevisi(false);
+    }
+  };
+
+  // ==========================================
+  // PENCAIRAN ANGGARAN HANDLERS & HELPERS
+  // ==========================================
+  const getSumAktivitasRab = (act) => {
+    if (!act) return 0;
+    if (Array.isArray(act.RabItems) && act.RabItems.length > 0) {
+      return act.RabItems.reduce((acc, r) => {
+        const t = Number(r.total || r.Total || 0);
+        if (t > 0) return acc + t;
+        const qs = Number(r.qty_satuan || r.QtySatuan || 0);
+        const qp = Number(r.qty_paket || r.QtyPaket || 0);
+        const sbu = Number(
+          r.sbu || r.SBU || r.harga_satuan || r.HargaSatuan || 0,
+        );
+        return acc + qs * qp * sbu;
+      }, 0);
+    }
+    return Number(act.Anggaran || 0);
+  };
+
+  const getPencairanStatus = (act) => {
+    const sumRab = getSumAktivitasRab(act);
+    const pengajuan =
+      sumRab > 0 ? sumRab : Number(act?.Anggaran || act?.anggaran) || 0;
+
+    // Cek data realisasi dari tim anggaran (hasil revisi)
+    const hasReal = hasRealisasiAnggaran(act);
+    const realisasiNominal = hasReal ? getRealisasiAnggaran(act) : null;
+
+    // Angka pembanding: gunakan realisasi jika ada, fallback ke pengajuan (RAB) jika belum ada revisi realisasi
+    const targetBanding =
+      hasReal && realisasiNominal !== null && realisasiNominal !== undefined
+        ? realisasiNominal
+        : pengajuan;
+
+    const rawPencairan =
+      act?.Pencairan !== undefined &&
+      act?.Pencairan !== null &&
+      act?.Pencairan !== ""
+        ? Number(act.Pencairan)
+        : act?.pencairan !== undefined &&
+            act?.pencairan !== null &&
+            act?.pencairan !== ""
+          ? Number(act.pencairan)
+          : null;
+
+    if (rawPencairan === null || rawPencairan === 0) {
+      return {
+        status: "belum_cair",
+        label: "Belum Dicairkan",
+        nominal: 0,
+        targetBanding,
+        pengajuan,
+        realisasi: realisasiNominal,
+        selisih: 0,
+        persen: 0,
+        className: "bg-slate-100 text-slate-600 border-slate-200",
+        dotClass: "bg-slate-400",
+      };
+    }
+
+    const selisih = rawPencairan - targetBanding;
+    const persen =
+      targetBanding > 0 ? Math.round((rawPencairan / targetBanding) * 100) : 0;
+
+    if (rawPencairan === targetBanding) {
+      return {
+        status: "cair",
+        label: "Cair Penuh",
+        nominal: rawPencairan,
+        targetBanding,
+        pengajuan,
+        realisasi: realisasiNominal,
+        selisih: 0,
+        persen: 100,
+        className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        dotClass: "bg-emerald-500",
+      };
+    }
+
+    if (rawPencairan < targetBanding) {
+      return {
+        status: "tidak_penuh",
+        label: "Cair Sebagian",
+        nominal: rawPencairan,
+        targetBanding,
+        pengajuan,
+        realisasi: realisasiNominal,
+        selisih,
+        persen,
+        className: "bg-amber-50 text-amber-700 border-amber-200",
+        dotClass: "bg-amber-500",
+      };
+    }
+
+    return {
+      status: "kelebihan",
+      label: "Melebihi Anggaran",
+      nominal: rawPencairan,
+      targetBanding,
+      pengajuan,
+      realisasi: realisasiNominal,
+      selisih,
+      persen,
+      className: "bg-rose-50 text-rose-700 border-rose-200",
+      dotClass: "bg-rose-500",
+    };
+  };
+
+  // ==========================================
+  // DETAIL / EDIT RAB MODAL HANDLERS (GAMBAR 2 -> GAMBAR 1)
+  // ==========================================
+  const openRabDetailModal = (act) => {
+    setRabDetailAct(act);
+    const initialAnggaran = Number(act.Anggaran) || 0;
+    let initialRabRows = [];
+    const sourceRab = act.RabItems || act.RAB || act.rab;
+    if (sourceRab) {
+      try {
+        const parsed =
+          typeof sourceRab === "string" ? JSON.parse(sourceRab) : sourceRab;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          initialRabRows = parsed.map((r, idx) => {
+            const qty_satuan = Number(
+              r.qty_satuan !== undefined
+                ? r.qty_satuan
+                : r.QtySatuan !== undefined
+                  ? r.QtySatuan
+                  : 1,
+            );
+            const qty_paket = Number(
+              r.qty_paket !== undefined
+                ? r.qty_paket
+                : r.QtyPaket !== undefined
+                  ? r.QtyPaket
+                  : 1,
+            );
+            const sbuVal = Number(
+              r.sbu !== undefined
+                ? r.sbu
+                : r.SBU !== undefined
+                  ? r.SBU
+                  : r.harga_satuan !== undefined
+                    ? r.harga_satuan
+                    : 0,
+            );
+            const totalVal =
+              r.total !== undefined
+                ? Number(r.total)
+                : r.Total !== undefined
+                  ? Number(r.Total)
+                  : qty_satuan * qty_paket * sbuVal;
+            const noAkun = r.no_akun || r.NoAkun || "";
+            const namaAkun = r.nama_akun || r.NamaAkun || "";
+            return {
+              id: r.id || r.uuid || `rab-${Date.now()}-${idx}`,
+              no_akun: noAkun,
+              nama_akun: namaAkun,
+              kategori:
+                r.kategori ||
+                r.Kategori ||
+                (noAkun && namaAkun
+                  ? `${noAkun} - ${namaAkun}`
+                  : noAkun || namaAkun || ""),
+              keterangan:
+                r.keterangan || r.Keterangan || r.rincian || r.Rincian || "",
+              qty_satuan,
+              qty_paket,
+              sbu: sbuVal,
+              harga_satuan: sbuVal,
+              total: totalVal,
+            };
+          });
+        }
+      } catch (err) {
+        console.warn("Gagal parse RAB aktivitas:", err);
+      }
+    }
+
+    if (initialRabRows.length === 0) {
+      initialRabRows = [
+        {
+          id: `rab-${Date.now()}-0`,
+          no_akun: "",
+          nama_akun: "",
+          kategori: "",
+          keterangan: initialAnggaran > 0 ? "Alokasi Anggaran Kegiatan" : "",
+          qty_satuan: 1,
+          qty_paket: 1,
+          sbu: initialAnggaran,
+          harga_satuan: initialAnggaran,
+          total: initialAnggaran,
+        },
+      ];
+    }
+    setRabDetailRows(initialRabRows);
+    setRabDetailModalOpen(true);
+  };
+
+  const handleRabDetailRowChange = (index, field, value) => {
+    if (!canEditRabDetail) return;
+    setRabDetailRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[index] };
+
+      if (field === "coa") {
+        row.no_akun = value.no_akun || "";
+        row.nama_akun = value.nama_akun || "";
+        row.kategori =
+          value.kategori ||
+          (value.no_akun && value.nama_akun
+            ? `${value.no_akun} - ${value.nama_akun}`
+            : value.no_akun || value.nama_akun || "");
+      } else if (
+        field === "qty_satuan" ||
+        field === "qty_paket" ||
+        field === "sbu"
+      ) {
+        const numVal = Number(value) || 0;
+        row[field] = numVal;
+        if (field === "sbu") row.harga_satuan = numVal;
+        const qs =
+          field === "qty_satuan" ? numVal : Number(row.qty_satuan) || 0;
+        const qp = field === "qty_paket" ? numVal : Number(row.qty_paket) || 0;
+        const sbu = field === "sbu" ? numVal : Number(row.sbu) || 0;
+        row.total = qs * qp * sbu;
+      } else {
+        row[field] = value;
+      }
+
+      next[index] = row;
+      return next;
+    });
+  };
+
+  const handleAddRabDetailRow = () => {
+    if (!canEditRabDetail) return;
+    setRabDetailRows((prev) => [
+      ...prev,
+      {
+        id: `rab-${Date.now()}-${prev.length}`,
+        no_akun: "",
+        nama_akun: "",
+        kategori: "",
+        keterangan: "",
+        qty_satuan: 1,
+        qty_paket: 1,
+        sbu: 0,
+        harga_satuan: 0,
+        total: 0,
+      },
+    ]);
+  };
+
+  const handleRemoveRabDetailRow = (index) => {
+    if (!canEditRabDetail) return;
+    if (rabDetailRows.length <= 1) {
+      addToast("warning", "Minimal harus ada 1 baris rincian anggaran.");
+      return;
+    }
+    setRabDetailRows((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveRabDetail = async () => {
+    if (!rabDetailAct?.UUID) return;
+    if (!canEditRabDetail) {
+      addToast(
+        "warning",
+        "Akses ditolak: Hanya level user pemilik fakultas/unit yang dapat mengubah RAB.",
+      );
+      return;
+    }
+
+    const calculatedTotalAnggaran = rabDetailRows.reduce(
+      (sum, r) => sum + (Number(r.total) || 0),
+      0,
+    );
+
+    // Validasi pembatasan pagu unit (Case 2: jika pagu ada > 0)
+    if (proker?.HasPagu && Number(proker?.PaguUnit) > 0) {
+      const paguUnit = Number(proker.PaguUnit);
+      const totalTerpakai = Number(proker.TotalAnggaranUnit) || 0;
+      const oldActAnggaran = Number(rabDetailAct?.Anggaran) || 0;
+      const delta = calculatedTotalAnggaran - oldActAnggaran;
+      if (delta > 0 && totalTerpakai + delta > paguUnit) {
+        const sisaAllowed = Math.max(
+          0,
+          paguUnit - (totalTerpakai - oldActAnggaran),
+        );
+        addToast(
+          "error",
+          `Total alokasi anggaran (${formatRupiah(calculatedTotalAnggaran)}) melebihi pagu unit tahun ${proker.Tahun || ""}. Maksimal alokasi untuk aktivitas ini: ${formatRupiah(sisaAllowed)} (Pagu: ${formatRupiah(paguUnit)}, Terpakai: ${formatRupiah(totalTerpakai)})`,
+        );
+        return;
+      }
+    }
+
+    setIsSavingRabDetail(true);
+    try {
+      const fd = new FormData();
+      fd.append("anggaran", String(calculatedTotalAnggaran));
+      fd.append("rab", JSON.stringify(rabDetailRows));
+
+      await apiClient.put(`/proker_v3/aktivitas/${rabDetailAct.UUID}`, fd);
+      addToast(
+        "success",
+        `Rincian Anggaran Biaya aktivitas "${rabDetailAct.Aktivitas}" berhasil diperbarui: ${formatRupiah(calculatedTotalAnggaran)}`,
+      );
+      setRabDetailModalOpen(false);
+      setRabDetailAct(null);
+      await fetchData();
+    } catch (err) {
+      addToast(
+        "error",
+        err?.response?.data?.error || err?.message || "Gagal memperbarui RAB",
+      );
+    } finally {
+      setIsSavingRabDetail(false);
     }
   };
 
@@ -579,7 +1266,9 @@ export default function ProkerV3AktivitasPage() {
     } catch (err) {
       addToast(
         "error",
-        err?.response?.data?.error || err?.message || "Gagal mengembalikan status ke Draft",
+        err?.response?.data?.error ||
+          err?.message ||
+          "Gagal mengembalikan status ke Draft",
       );
     } finally {
       setIsSubmittingRevisiDraft(false);
@@ -599,7 +1288,87 @@ export default function ProkerV3AktivitasPage() {
       );
       await fetchData();
     } catch (err) {
-      addToast("error", err?.message || "Gagal mengembalikan aktivitas ke Draft");
+      addToast(
+        "error",
+        err?.message || "Gagal mengembalikan aktivitas ke Draft",
+      );
+    }
+  };
+
+  const handleToggleBatalAktivitas = (act) => {
+    if (Boolean(proker?.IsBatal)) {
+      addToast(
+        "warning",
+        "Program kerja ini dalam status dibatalkan. Untuk mengaktifkan aktivitas, aktifkan kembali program kerja pada halaman daftar proker.",
+      );
+      return;
+    }
+    if (Boolean(act.IsBatal)) {
+      setBatalTargetAct(act);
+      setConfirmUnbatalActOpen(true);
+    } else {
+      setBatalTargetAct(act);
+      setCatatanBatalActInput("");
+      setBatalActModalOpen(true);
+    }
+  };
+
+  const handleSubmitBatalAct = async () => {
+    if (!batalTargetAct?.UUID) return;
+    if (!catatanBatalActInput.trim()) {
+      addToast("warning", "Catatan alasan pembatalan aktivitas wajib diisi");
+      return;
+    }
+    setIsSubmittingBatalAct(true);
+    try {
+      await apiClient.put(`/proker_v3/aktivitas/${batalTargetAct.UUID}/batal`, {
+        is_batal: true,
+        catatan_batal: catatanBatalActInput.trim(),
+      });
+      addToast(
+        "success",
+        `Aktivitas "${batalTargetAct.Aktivitas}" berhasil dibatalkan`,
+      );
+      setBatalActModalOpen(false);
+      setBatalTargetAct(null);
+      setCatatanBatalActInput("");
+      await fetchData();
+    } catch (err) {
+      addToast(
+        "error",
+        err?.response?.data?.error ||
+          err?.message ||
+          "Gagal membatalkan aktivitas",
+      );
+    } finally {
+      setIsSubmittingBatalAct(false);
+    }
+  };
+
+  const handleConfirmUnbatalAct = async () => {
+    if (!batalTargetAct?.UUID) return;
+    setIsSubmittingBatalAct(true);
+    try {
+      await apiClient.put(`/proker_v3/aktivitas/${batalTargetAct.UUID}/batal`, {
+        is_batal: false,
+        catatan_batal: "",
+      });
+      addToast(
+        "success",
+        `Status pembatalan aktivitas "${batalTargetAct.Aktivitas}" berhasil dibatalkan (diaktifkan kembali)`,
+      );
+      setConfirmUnbatalActOpen(false);
+      setBatalTargetAct(null);
+      await fetchData();
+    } catch (err) {
+      addToast(
+        "error",
+        err?.response?.data?.error ||
+          err?.message ||
+          "Gagal mengaktifkan kembali aktivitas",
+      );
+    } finally {
+      setIsSubmittingBatalAct(false);
     }
   };
 
@@ -616,8 +1385,14 @@ export default function ProkerV3AktivitasPage() {
     .trim();
 
   const isProdi =
-    (proker?.TypeFakultasUnit || "").toLowerCase() === "prodi" ||
-    (proker?.NamaFakultasUnit || "").toLowerCase().includes("prodi");
+    (
+      proker?.TypeFakultasUnit ||
+      proker?.type_fakultas_unit ||
+      ""
+    ).toLowerCase() === "prodi" ||
+    (proker?.NamaFakultasUnit || proker?.nama_fakultas_unit || "")
+      .toLowerCase()
+      .includes("prodi");
 
   const pVerif = (proker?.StatusVerifikator || "").toLowerCase().trim();
   const pAngg = (proker?.StatusAnggaran || "").toLowerCase().trim();
@@ -649,25 +1424,138 @@ export default function ProkerV3AktivitasPage() {
   const isVerifierApproved = isProkerAccVerifikator;
   const isTerimaAnggaranStage = isProkerAccAnggaran;
 
+  // Helper: periksa apakah aktivitas atau parent proker sudah di approve evaluator
+  const isActApprovedByEvaluator = useCallback(
+    (act) => {
+      const pMainStr = (proker?.Status || "").toLowerCase().trim();
+      const pVerifStr = (proker?.StatusVerifikator || "").toLowerCase().trim();
+      const actMain = (act?.Status || "").toLowerCase().trim();
+      const actVerif = (act?.StatusVerifikator || "").toLowerCase().trim();
+      const actLpm = (act?.StatusLpm || "").toLowerCase().trim();
+      const actAngg = (act?.StatusAnggaran || "").toLowerCase().trim();
+
+      const isParentApproved =
+        !["draft", "revisi", "ditolak"].includes(pMainStr) &&
+        !["draft", "revisi", "ditolak"].includes(pVerifStr) &&
+        (isProkerAccVerifikator ||
+          pVerifStr === "terima_verifikator" ||
+          pVerifStr === "disetujui" ||
+          pMainStr === "disetujui" ||
+          pMainStr === "terima_anggaran");
+
+      const isRowApproved =
+        !["draft", "revisi", "ditolak"].includes(actMain) &&
+        !["draft", "revisi", "ditolak"].includes(actVerif) &&
+        (actVerif === "terima_verifikator" ||
+          actVerif === "disetujui" ||
+          actVerif.includes("diverifikasi") ||
+          actLpm === "disetujui" ||
+          actMain === "disetujui" ||
+          actMain === "terima_anggaran" ||
+          actAngg === "terima_anggaran");
+
+      return Boolean(isParentApproved || isRowApproved);
+    },
+    [proker, isProkerAccVerifikator],
+  );
+
+  // Periksa apakah RAB aktivitas dikunci karena status sudah diverifikasi verifikator atau anggaran
+  const isActRabLocked = useCallback(
+    (act) => {
+      if (!act) return false;
+      const normalize = (v) =>
+        String(v || "")
+          .toLowerCase()
+          .trim();
+      const isVerifApproved = (v) => {
+        const val = normalize(v);
+        return (
+          val.includes("terima_verifikator") ||
+          val.includes("disetujui") ||
+          val.includes("approved") ||
+          val.includes("diterima")
+        );
+      };
+
+      const isAnggaranApproved = (v) => {
+        const val = normalize(v);
+        return (
+          val.includes("terima_anggaran") ||
+          val.includes("disetujui") ||
+          val.includes("approved") ||
+          val.includes("diterima")
+        );
+      };
+
+      const actStatus = normalize(act.Status || act.status);
+      const actVerif = normalize(
+        act.StatusVerifikator || act.status_verifikator,
+      );
+      const actAngg = normalize(act.StatusAnggaran || act.status_anggaran);
+
+      const pStatus = normalize(proker?.Status || proker?.status);
+      const pVerif = normalize(
+        proker?.StatusVerifikator || proker?.status_verifikator,
+      );
+      const pAngg = normalize(
+        proker?.StatusAnggaran || proker?.status_anggaran,
+      );
+
+      const isProkerLocked =
+        (isVerifApproved(pVerif) && isAnggaranApproved(pAngg)) ||
+        pStatus.includes("terima_anggaran");
+
+      const isActLocked =
+        (isVerifApproved(actVerif) && isAnggaranApproved(actAngg)) ||
+        actStatus.includes("terima_anggaran") ||
+        isAnggaranApproved(actAngg);
+
+      return isProkerLocked || isActLocked;
+    },
+    [proker],
+  );
+
+  const isRabDetailLocked = Boolean(isActRabLocked(rabDetailAct));
+  const isActModalRabLocked =
+    actModalMode === "edit" && Boolean(isActRabLocked(selectedAct));
+
+  // Tombol tambah, simpan, dan hapus RAB hanya muncul di level user yang memiliki fakultas_unit tersebut
+  const canUserManageRab =
+    isLevelUser && !isUpmUser && isYearMatch && hasAssignedTarget;
+  const canEditRabDetail = canUserManageRab && !isRabDetailLocked;
+  const canEditActModalRab = canUserManageRab && !isActModalRabLocked;
+
   // Tombol revisi ke draft hanya tampil ketika status Verifikasi UPM / Verifikasi Anggaran diterima/ditolak,
   // hanya muncul di level verifikator dan anggaran
   const canRevisiDraftProker = useMemo(() => {
     if (!isVerifier && !isAnggaran) return false;
-    const isVerifierDone = isProkerAccVerifikator || pVerif === "ditolak" || pMain.includes("ditolak");
+    const isVerifierDone =
+      isProkerAccVerifikator ||
+      pVerif === "ditolak" ||
+      pMain.includes("ditolak");
     const isAnggaranDone = isProkerAccAnggaran || pAngg === "ditolak";
     if (isVerifier) return isVerifierDone;
     if (isAnggaran) return isAnggaranDone;
     return false;
-  }, [isVerifier, isAnggaran, isProkerAccVerifikator, isProkerAccAnggaran, pVerif, pAngg, pMain]);
+  }, [
+    isVerifier,
+    isAnggaran,
+    isProkerAccVerifikator,
+    isProkerAccAnggaran,
+    pVerif,
+    pAngg,
+    pMain,
+  ]);
 
-  // Tombol revisi aktivitas ke draft di tabel: TIDAK ada pada role upml, upmf, upms
+  // Tombol revisi aktivitas ke draft di tabel: TIDAK ada pada role upml, upmf, upms, dan level anggaran (Gambar 1)
   const canRevisiActDraft = useMemo(() => {
+    if (isAnggaran) return false;
     if (["upml", "upmf", "upms"].includes(curRole)) return false;
-    return isAdmin || isAnggaran;
+    return isAdmin;
   }, [curRole, isAdmin, isAnggaran]);
 
-  // Hanya verifikator (upml, upmf, upms, evaluator) yang memverifikasi aktivitas
-  const canVerify = isVerifier && !isAdmin;
+  // Verifikator (upml, upmf, upms, evaluator) dan admin yang memverifikasi aktivitas
+  const canVerify = isVerifier || isAdmin;
 
   // Next verification status label and value
   let nextVerifyStatus = "disetujui";
@@ -1066,7 +1954,10 @@ export default function ProkerV3AktivitasPage() {
       fd.append("status", "ditolak");
       fd.append("role", rejectRole || curRole);
       fd.append("catatan_penolakan", singleRejectReason.trim());
-      await apiClient.put(`/proker_v3/aktivitas/${actToReject.UUID}/status`, fd);
+      await apiClient.put(
+        `/proker_v3/aktivitas/${actToReject.UUID}/status`,
+        fd,
+      );
       addToast(
         "success",
         `Aktivitas "${actToReject.Aktivitas}" berhasil ditolak`,
@@ -1089,68 +1980,154 @@ export default function ProkerV3AktivitasPage() {
     }
   };
 
-  const renderStatusBadge = (statusStr) => {
+  const renderStatusStamp = (statusStr) => {
     const s = (statusStr || "draft").toLowerCase().replace(/_/g, " ").trim();
-    if (s === "disetujui") {
-      return (
-        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
-          DISETUJUI
-        </span>
-      );
-    }
-    if (s === "menunggu upms" || s === "diverifikasi upmf") {
-      return (
-        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-purple-300 bg-purple-50 text-purple-800 uppercase tracking-wider">
-          MENUNGGU UPMS
-        </span>
-      );
-    }
-    if (s === "menunggu upmf" || s === "diverifikasi upml") {
-      return (
-        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-indigo-300 bg-indigo-50 text-indigo-800 uppercase tracking-wider">
-          MENUNGGU UPMF
-        </span>
-      );
-    }
-    if (s === "menunggu upml") {
-      return (
-        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-cyan-300 bg-cyan-50 text-cyan-800 uppercase tracking-wider">
-          MENUNGGU UPML
-        </span>
-      );
-    }
+    let statusType = "kosong";
+    let mainText = "DRAF";
+    let headerText = "★ STATUS PROKER ★";
+    let subText = "BELUM DIAJUKAN";
+
     if (s === "terima anggaran") {
-      return (
-        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
-          TERIMA ANGGARAN
-        </span>
-      );
+      statusType = "terverifikasi";
+      mainText = "TERIMA ANGGARAN";
+      headerText = "★ LPMI UNPAK ★";
+      subText = "SAH & DITERIMA";
+    } else if (s === "disetujui") {
+      statusType = "terverifikasi";
+      mainText = "DISETUJUI";
+      headerText = "★ LPMI UNPAK ★";
+      subText = "SAH & MEMENUHI STANDAR";
+    } else if (s === "selesai") {
+      statusType = "terverifikasi";
+      mainText = "SELESAI";
+      headerText = "★ PROGRAM RESMI ★";
+      subText = "TELAH TERLAKSANA";
+    } else if (s.includes("ditolak")) {
+      statusType = "gagal";
+      mainText = "DITOLAK";
+      headerText = "✖ TIM AUDITOR ✖";
+      subText =
+        proker?.CatatanPenolakan ||
+        proker?.CatatanVerifikator ||
+        proker?.CatatanAnggaran ||
+        "PERLU PERBAIKAN";
+    } else if (s === "menunggu upms" || s === "diverifikasi upmf") {
+      statusType = "verifikasi";
+      mainText = "MENUNGGU UPMS";
+      headerText = "★ AUDIT PRODI ★";
+      subText = "EVALUASI UPMS";
+    } else if (s === "menunggu upmf" || s === "diverifikasi upml") {
+      statusType = "verifikasi";
+      mainText = "MENUNGGU UPMF";
+      headerText = "★ AUDIT FAKULTAS ★";
+      subText = "EVALUASI UPMF";
+    } else if (s === "menunggu upml") {
+      statusType = "verifikasi";
+      mainText = "MENUNGGU UPML";
+      headerText = "★ AUDIT LEMBAGA ★";
+      subText = "EVALUASI UPML";
+    } else if (s === "diajukan") {
+      statusType = "verifikasi";
+      mainText = "DIAJUKAN";
+      headerText = "★ VERIFIKASI PROKER ★";
+      subText = "MENUNGGU REVIEW";
     }
-    if (s === "diajukan") {
-      return (
-        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-blue-300 bg-blue-50 text-blue-800 uppercase tracking-wider">
-          DIAJUKAN
-        </span>
-      );
-    }
-    if (s.includes("ditolak")) {
-      return (
-        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
-          DITOLAK
-        </span>
-      );
-    }
-    if (s === "selesai") {
-      return (
-        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-purple-300 bg-purple-50 text-purple-800 uppercase tracking-wider">
-          SELESAI
-        </span>
-      );
-    }
+
     return (
-      <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border border-gray-200 bg-gray-100 text-gray-600 uppercase tracking-wider">
-        DRAF
-      </span>
+      <RubberStamp
+        status={statusType}
+        size="sm"
+        customText={mainText}
+        headerText={headerText}
+        subText={subText}
+        delay={0.1}
+      />
+    );
+  };
+
+  const renderTableRubberStamp = (
+    rawStatus,
+    roleCode,
+    note,
+    isApplicable = true,
+    actStatusStr = "",
+  ) => {
+    if (!isApplicable) {
+      return (
+        <span
+          className="text-gray-400 font-mono text-xs italic"
+          title="Tidak berlaku untuk unit non-prodi"
+        >
+          -
+        </span>
+      );
+    }
+
+    const s = String(rawStatus || "")
+      .toLowerCase()
+      .trim();
+    if (s === "-" || s === "strip") {
+      return <span className="text-gray-400 font-mono text-xs italic">-</span>;
+    }
+
+    let statusType = "kosong";
+    let mainText = "DRAF";
+    let topHeader = `★ AUDIT ${roleCode} ★`;
+    let bottomSub = "BELUM DIAJUKAN";
+
+    if (s === "disetujui") {
+      statusType = "terverifikasi";
+      mainText = "DISETUJUI";
+      topHeader = `★ VERIFIKATOR ${roleCode} ★`;
+      bottomSub = "SAH & MEMENUHI STANDAR";
+    } else if (s === "ditolak") {
+      statusType = "gagal";
+      mainText = "DITOLAK";
+      topHeader = `✖ AUDITOR ${roleCode} ✖`;
+      bottomSub = note
+        ? note.length > 20
+          ? note.slice(0, 18) + "..."
+          : note
+        : "PERLU PERBAIKAN";
+    } else if (s === "revisi") {
+      statusType = "gagal";
+      mainText = "REVISI";
+      topHeader = `✖ AUDITOR ${roleCode} ✖`;
+      bottomSub = note
+        ? note.length > 20
+          ? note.slice(0, 18) + "..."
+          : note
+        : "PERLU PERBAIKAN";
+    } else if (s === "menunggu" || actStatusStr === "diajukan") {
+      statusType = "verifikasi";
+      mainText = "MENUNGGU";
+      topHeader = `VERIFIKASI ${roleCode}`;
+      bottomSub = "MENUNGGU EVALUASI";
+    }
+
+    return (
+      <div className="flex flex-col items-start gap-1 py-1">
+        <RubberStamp
+          status={statusType}
+          size="sm"
+          customText={mainText}
+          headerText={topHeader}
+          subText={bottomSub}
+          delay={0.05}
+        />
+        {(s === "ditolak" || s === "revisi") && note && (
+          <span
+            className={`text-[9.5px] italic px-1.5 py-0.5 rounded border line-clamp-2 max-w-[150px] ${
+              s === "ditolak"
+                ? "text-rose-700 bg-rose-50 border-rose-200"
+                : "text-amber-700 bg-amber-50 border-amber-200"
+            }`}
+            title={`Catatan ${roleCode}: ${note}`}
+          >
+            "{note}"
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -1246,11 +2223,8 @@ export default function ProkerV3AktivitasPage() {
                   </button>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-gray-500 font-semibold">
-                    Status Program Kerja:
-                  </span>
-                  {renderStatusBadge(prokerStatusClean)}
+                <div className="flex flex-wrap items-center gap-3">
+                  {renderStatusStamp(prokerStatusClean)}
                   {canRevisiDraftProker && (
                     <button
                       type="button"
@@ -1369,7 +2343,9 @@ export default function ProkerV3AktivitasPage() {
                         </span>
                       </div>
                     ) : (
-                      formatRupiah(hasRealisasi ? totalRealisasi : totalAnggaran)
+                      formatRupiah(
+                        hasRealisasi ? totalRealisasi : totalAnggaran,
+                      )
                     )}
                   </div>
                 </div>
@@ -1377,6 +2353,46 @@ export default function ProkerV3AktivitasPage() {
             </div>
           </div>
         ) : null}
+
+        {/* Jadwal Pengajuan Proker Status Alert */}
+        {jadwalProkerStatus && (
+          <div
+            className={`p-3.5 sm:px-4 sm:py-3 rounded-2xl border flex items-center justify-between gap-3 text-xs sm:text-sm font-medium ${
+              jadwalProkerStatus.is_open
+                ? "bg-emerald-50/80 border-emerald-200 text-emerald-900"
+                : "bg-rose-50/80 border-rose-200 text-rose-900"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {jadwalProkerStatus.is_open ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              )}
+              <span>
+                <strong>
+                  Jadwal Pengajuan Proker{" "}
+                  {jadwalProkerStatus.tahun ||
+                    proker?.Tahun ||
+                    positionYear ||
+                    "2027"}
+                  :
+                </strong>{" "}
+                {formatTanggalBulanTahun(jadwalProkerStatus.message)}
+              </span>
+            </div>
+            <span
+              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 border ${
+                jadwalProkerStatus.is_open
+                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                  : "bg-rose-100 text-rose-800 border-rose-300"
+              }`}
+            >
+              {jadwalProkerStatus.status_label ||
+                (jadwalProkerStatus.is_open ? "Sedang Dibuka" : "Ditutup")}
+            </span>
+          </div>
+        )}
 
         {/* MAIN SECTION: TABEL AKTIVITAS KEGIATAN (AKTIVITASV2) */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -1393,7 +2409,7 @@ export default function ProkerV3AktivitasPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {canAddAktivitas && (
+              {canAddAktivitas && isAktivitasScheduleOpen && (
                 <button
                   type="button"
                   onClick={openCreateActivity}
@@ -1512,11 +2528,17 @@ export default function ProkerV3AktivitasPage() {
                   </th>
                   {!isEvaluatorOrAnggaran && (
                     <>
-                      <th className="py-3 px-4 min-w-[170px]">Dokumen Referensi</th>
-                      <th className="py-3 px-4 min-w-[210px]">Jadwal & Bukti</th>
+                      <th className="py-3 px-4 min-w-[170px]">
+                        Dokumen Proker
+                      </th>
+                      <th className="py-3 px-4 min-w-[210px]">
+                        Jadwal & Bukti
+                      </th>
                     </>
                   )}
-                  <th className="py-3 px-4 min-w-[150px]">Status UPML/UPMS</th>
+                  <th className="py-3 px-4 min-w-[150px]">
+                    {isProdi ? "Status UPMS" : "Status UPML"}
+                  </th>
                   <th className="py-3 px-4 min-w-[150px]">Status UPMF</th>
                   <th className="py-3 px-4 min-w-[150px]">Status LPM</th>
                   <th className="py-3 px-4 min-w-[190px] text-center">Aksi</th>
@@ -1532,8 +2554,8 @@ export default function ProkerV3AktivitasPage() {
                             ? 9
                             : 11
                           : isEvaluatorOrAnggaran
-                          ? 8
-                          : 10
+                            ? 8
+                            : 10
                       }
                       className="py-12 text-center text-gray-400"
                     >
@@ -1542,15 +2564,28 @@ export default function ProkerV3AktivitasPage() {
                         Belum ada aktivitas pada program kerja ini
                       </p>
                       <p className="text-[11px] text-gray-400 mt-0.5">
-                        {canAddAktivitas
+                        {canAddAktivitas && isAktivitasScheduleOpen
                           ? 'Klik tombol "+ Tambah Aktivitas Baru" di atas untuk mulai membuat kegiatan'
-                          : "Aktivitas kegiatan belum dibuat oleh unit kerja"}
+                          : !isAktivitasScheduleOpen
+                            ? "Pembuatan aktivitas kegiatan saat ini ditutup sesuai jadwal program kerja."
+                            : "Aktivitas kegiatan belum dibuat oleh unit kerja"}
                       </p>
                     </td>
                   </tr>
                 ) : (
                   activities.map((act, idx) => {
                     const actStatusStr = (act.Status || "draft").toLowerCase();
+                    const isUnitProdi =
+                      (
+                        act.TypeFakultasUnit ||
+                        proker?.TypeFakultasUnit ||
+                        proker?.type_fakultas_unit ||
+                        ""
+                      ).toLowerCase() === "prodi" ||
+                      (act.NamaFakultasUnit || proker?.NamaFakultasUnit || "")
+                        .toLowerCase()
+                        .includes("prodi") ||
+                      isProdi;
                     const tlList = act.Timelines || [];
                     const rkSlotSet = new Set();
                     const rSlotSet = new Set();
@@ -1596,9 +2631,38 @@ export default function ProkerV3AktivitasPage() {
                           {/* Aktivitas */}
                           <td className="py-3.5 px-4 font-semibold text-gray-900 leading-snug">
                             <div className="space-y-1">
-                              <span className="line-clamp-2">
-                                {act.Aktivitas}
-                              </span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="line-clamp-2">
+                                  {act.Aktivitas}
+                                </span>
+                                {Boolean(act.IsBatal || proker?.IsBatal) && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-100 text-rose-800 uppercase tracking-wider">
+                                    <XCircle className="w-3 h-3 text-rose-600" />
+                                    <span>
+                                      {proker?.IsBatal
+                                        ? "PROKER BATAL"
+                                        : "AKTIVITAS BATAL"}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+                              {Boolean(act.IsBatal || proker?.IsBatal) &&
+                                (act.CatatanBatal || proker?.CatatanBatal) && (
+                                  <div className="flex items-start gap-1.5 p-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-[10px] leading-tight shadow-2xs max-w-sm">
+                                    <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                      <span className="font-bold text-rose-700 text-[9px] uppercase tracking-wider">
+                                        Alasan Pembatalan:
+                                      </span>
+                                      <span className="italic break-words">
+                                        "
+                                        {act.CatatanBatal ||
+                                          proker?.CatatanBatal}
+                                        "
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
                               {act.Capaian && (
                                 <div className="text-[11px] text-emerald-700 font-normal">
                                   Capaian: {act.Capaian}
@@ -1618,25 +2682,129 @@ export default function ProkerV3AktivitasPage() {
                               <div className="text-center font-bold text-gray-400 tracking-widest">
                                 ***
                               </div>
-                            ) : isAnggaranRevised(act) ? (
-                              <div>
-                                <span
-                                  className="line-through text-gray-400 text-[11px] block font-normal decoration-rose-500 decoration-1"
-                                  title="Anggaran Awal"
-                                >
-                                  {formatRupiah(act.Anggaran)}
-                                </span>
-                                <span
-                                  className="font-bold text-emerald-700 text-xs block"
-                                  title="Realisasi Anggaran Baru"
-                                >
-                                  {formatRupiah(getRealisasiAnggaran(act))}
-                                </span>
-                              </div>
                             ) : (
-                              <span className="font-bold text-emerald-700">
-                                {formatRupiah(hasRealisasiAnggaran(act) ? getRealisasiAnggaran(act) : act.Anggaran)}
-                              </span>
+                              <div className="flex flex-col items-end">
+                                <button
+                                  type="button"
+                                  onClick={() => openRabDetailModal(act)}
+                                  className="group/rab text-right transition cursor-pointer p-1.5 -m-1.5 rounded-xl hover:bg-purple-50/80 focus:outline-none focus:ring-2 focus:ring-purple-400 block ml-auto"
+                                  title="Klik untuk melihat / mengelola Rincian Anggaran Biaya (RAB) & SBU"
+                                >
+                                  {isAnggaranRevised(act) ? (
+                                    <div>
+                                      <span
+                                        className="line-through text-gray-400 text-[11px] block font-normal decoration-rose-500 decoration-1"
+                                        title="Anggaran Awal"
+                                      >
+                                        {formatRupiah(act.Anggaran)}
+                                      </span>
+                                      <span
+                                        className="font-bold text-emerald-700 group-hover/rab:text-purple-700 text-xs block transition"
+                                        title="Realisasi Anggaran Baru"
+                                      >
+                                        {formatRupiah(
+                                          getRealisasiAnggaran(act),
+                                        )}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="font-bold text-emerald-700 group-hover/rab:text-purple-700 transition">
+                                      {formatRupiah(
+                                        hasRealisasiAnggaran(act)
+                                          ? getRealisasiAnggaran(act)
+                                          : act.Anggaran,
+                                      )}
+                                    </span>
+                                  )}
+
+                                  {/* Jumlah item SBU jika ada */}
+                                  {(() => {
+                                    try {
+                                      const source =
+                                        act.RabItems || act.RAB || act.rab;
+                                      if (source) {
+                                        const p =
+                                          typeof source === "string"
+                                            ? JSON.parse(source)
+                                            : source;
+                                        if (Array.isArray(p) && p.length > 0) {
+                                          return (
+                                            <div className="text-[10px] text-gray-500 group-hover/rab:text-purple-700 font-sans font-medium flex items-center justify-end gap-1 mt-0.5">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 group-hover/rab:scale-125 transition" />
+                                              <span>{p.length} item SBU</span>
+                                            </div>
+                                          );
+                                        }
+                                      }
+                                    } catch (e) {}
+                                    return (
+                                      <div className="text-[9px] text-gray-400 group-hover/rab:text-purple-600 font-sans flex items-center justify-end gap-1 mt-0.5 opacity-0 group-hover/rab:opacity-100 transition">
+                                        <span>Lihat SBU</span>
+                                      </div>
+                                    );
+                                  })()}
+                                </button>
+
+                                {/* Badge Status Pencairan Anggaran */}
+                                {(() => {
+                                  const pStatus = getPencairanStatus(act);
+                                  return (
+                                    <div className="mt-1 flex flex-col items-end gap-0.5">
+                                      <div
+                                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border select-none cursor-default shadow-2xs ${pStatus.className}`}
+                                        title={`Status Pencairan: ${pStatus.label}${
+                                          pStatus.nominal > 0
+                                            ? ` (${formatRupiah(pStatus.nominal)}${
+                                                pStatus.selisih !== 0
+                                                  ? ` | Selisih: ${pStatus.selisih > 0 ? "+" : ""}${formatRupiah(pStatus.selisih)}`
+                                                  : ""
+                                              })`
+                                            : ""
+                                        }`}
+                                      >
+                                        <span
+                                          className={`w-1.5 h-1.5 rounded-full ${pStatus.dotClass}`}
+                                        />
+                                        <span>{pStatus.label}</span>
+                                      </div>
+                                      {pStatus.nominal > 0 && (
+                                        <div className="text-[10px] text-gray-500 font-mono flex items-center justify-end gap-1 mt-0.5">
+                                          <span>
+                                            Cair:{" "}
+                                            <span className="font-semibold text-gray-700">
+                                              {formatRupiah(
+                                                hasRealisasiAnggaran(act)
+                                                  ? getRealisasiAnggaran(act)
+                                                  : act.Anggaran,
+                                              )}
+                                            </span>
+                                          </span>
+                                          {pStatus.status === "kelebihan" && (
+                                            <span
+                                              className="text-rose-600 font-sans font-semibold text-[9px] bg-rose-50 px-1 py-0.2 rounded border border-rose-100"
+                                              title={`Kelebihan ${formatRupiah(pStatus.selisih)} dari target anggaran`}
+                                            >
+                                              +{formatRupiah(pStatus.selisih)}
+                                            </span>
+                                          )}
+                                          {pStatus.status === "tidak_penuh" && (
+                                            <span
+                                              className="text-amber-700 font-sans font-medium text-[9px] bg-amber-50 px-1 py-0.2 rounded border border-amber-100"
+                                              title={`Sisa belum cair ${formatRupiah(Math.abs(pStatus.selisih))}`}
+                                            >
+                                              (Sisa{" "}
+                                              {formatRupiah(
+                                                Math.abs(pStatus.selisih),
+                                              )}
+                                              )
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
                             )}
 
                             {/* Action Revisi Anggaran untuk Tim Anggaran / Admin */}
@@ -1662,7 +2830,8 @@ export default function ProkerV3AktivitasPage() {
                               <td className="py-3.5 px-4">
                                 <div className="space-y-1.5">
                                   <span className="text-[11px] font-semibold text-gray-700 block whitespace-nowrap">
-                                    {(act.DokumenReferensiFiles || []).length > 0
+                                    {(act.DokumenReferensiFiles || []).length >
+                                    0
                                       ? `${(act.DokumenReferensiFiles || []).length} Berkas Terunggah`
                                       : "Belum ada berkas"}
                                   </span>
@@ -1714,224 +2883,70 @@ export default function ProkerV3AktivitasPage() {
                           )}
 
                           {/* Status UPML/UPMS */}
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 align-middle">
                             {(() => {
-                              const curSt = (
-                                isProdi ? act.StatusUpms : act.StatusUpml
-                              )
-                                ?.toLowerCase()
-                                ?.trim() || "";
-                              if (curSt === "disetujui") {
-                                return (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    <span>DISETUJUI</span>
-                                  </span>
-                                );
-                              }
-                              if (curSt === "ditolak") {
-                                const note =
-                                  (isProdi
-                                    ? act.CatatanTolakUpms
-                                    : act.CatatanTolakUpml) ||
-                                  act.CatatanVerifikator ||
-                                  act.CatatanPenolakan;
-                                return (
-                                  <div className="flex flex-col gap-1 items-start">
-                                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
-                                      DITOLAK
-                                    </span>
-                                    {note && (
-                                      <span
-                                        className="text-[10px] text-rose-700 italic bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 line-clamp-2 max-w-[160px]"
-                                        title={`Catatan: ${note}`}
-                                      >
-                                        "{note}"
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              if (
-                                curSt === "menunggu" ||
-                                actStatusStr === "diajukan"
-                              ) {
-                                return (
-                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-cyan-300 bg-cyan-50 text-cyan-800 uppercase tracking-wider">
-                                    MENUNGGU
-                                  </span>
-                                );
-                              }
-                              return (
-                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-600 uppercase tracking-wider">
-                                  DRAF
-                                </span>
+                              const roleCode = isUnitProdi ? "UPMS" : "UPML";
+                              const curSt = isUnitProdi
+                                ? act.StatusUpms || act.status_upms || ""
+                                : act.StatusUpml || act.status_upml || "";
+                              const note =
+                                (isUnitProdi
+                                  ? act.CatatanTolakUpms ||
+                                    act.catatan_tolak_upms
+                                  : act.CatatanTolakUpml ||
+                                    act.catatan_tolak_upml) ||
+                                act.CatatanVerifikator ||
+                                act.CatatanPenolakan;
+                              return renderTableRubberStamp(
+                                curSt,
+                                roleCode,
+                                note,
+                                true,
+                                actStatusStr,
                               );
                             })()}
                           </td>
 
                           {/* Status UPMF */}
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 align-middle">
                             {(() => {
-                              if (!isProdi) {
-                                return (
-                                  <span
-                                    className="text-gray-400 font-mono text-xs italic"
-                                    title="Tidak berlaku untuk unit non-prodi"
-                                  >
-                                    -
-                                  </span>
-                                );
-                              }
-
-                              const stUpms = (act.StatusUpms || "")
-                                .toLowerCase()
-                                .trim();
-                              const stUpmf = (act.StatusUpmf || "")
-                                .toLowerCase()
-                                .trim();
-                              const isUpmsApproved = stUpms === "disetujui";
-
-                              if (stUpmf === "disetujui") {
-                                return (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    <span>DISETUJUI</span>
-                                  </span>
-                                );
-                              }
-                              if (stUpmf === "ditolak") {
-                                const noteUpmf =
-                                  act.CatatanTolakUpmf ||
-                                  act.CatatanVerifikator ||
-                                  act.CatatanPenolakan;
-                                return (
-                                  <div className="flex flex-col gap-1 items-start">
-                                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
-                                      DITOLAK
-                                    </span>
-                                    {noteUpmf && (
-                                      <span
-                                        className="text-[10px] text-rose-700 italic bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 line-clamp-2 max-w-[160px]"
-                                        title={`Catatan UPMF: ${noteUpmf}`}
-                                      >
-                                        "{noteUpmf}"
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              if (!isUpmsApproved) {
-                                return (
-                                  <span
-                                    className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
-                                    title="Menunggu verifikasi UPMS disetujui"
-                                  >
-                                    MENUNGGU UPMS
-                                  </span>
-                                );
-                              }
-                              return (
-                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-indigo-300 bg-indigo-50 text-indigo-800 uppercase tracking-wider">
-                                  MENUNGGU UPMF
-                                </span>
+                              const stUpmf =
+                                act.StatusUpmf || act.status_upmf || "";
+                              const noteUpmf =
+                                act.CatatanTolakUpmf ||
+                                act.catatan_tolak_upmf ||
+                                act.CatatanVerifikator ||
+                                act.CatatanPenolakan;
+                              const isApplicable =
+                                isUnitProdi &&
+                                stUpmf !== "-" &&
+                                Boolean(stUpmf);
+                              return renderTableRubberStamp(
+                                stUpmf,
+                                "UPMF",
+                                noteUpmf,
+                                isApplicable,
+                                actStatusStr,
                               );
                             })()}
                           </td>
 
                           {/* Status LPM */}
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 align-middle">
                             {(() => {
-                              const stUpml = (act.StatusUpml || "")
-                                .toLowerCase()
-                                .trim();
-                              const stUpmf = (act.StatusUpmf || "")
-                                .toLowerCase()
-                                .trim();
-                              const stUpms = (act.StatusUpms || "")
-                                .toLowerCase()
-                                .trim();
-                              const stLpm = (act.StatusLpm || "")
-                                .toLowerCase()
-                                .trim();
-                              const isLpmApproved =
-                                stLpm === "disetujui" ||
-                                (act.StatusVerifikator || "")
-                                  .toLowerCase()
-                                  .trim() === "terima_verifikator" ||
-                                (act.Status || "")
-                                  .toLowerCase()
-                                  .trim() === "disetujui" ||
-                                (act.Status || "")
-                                  .toLowerCase()
-                                  .trim() === "terima_anggaran";
-
-                              if (isLpmApproved) {
-                                return (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    <span>DISETUJUI</span>
-                                  </span>
-                                );
-                              }
-                              if (stLpm === "ditolak") {
-                                const noteLpm =
-                                  act.CatatanTolakLpm ||
-                                  act.CatatanVerifikator ||
-                                  act.CatatanPenolakan;
-                                return (
-                                  <div className="flex flex-col gap-1 items-start">
-                                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
-                                      DITOLAK
-                                    </span>
-                                    {noteLpm && (
-                                      <span
-                                        className="text-[10px] text-rose-700 italic bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 line-clamp-2 max-w-[160px]"
-                                        title={`Catatan LPM: ${noteLpm}`}
-                                      >
-                                        "{noteLpm}"
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              if (isProdi) {
-                                if (stUpms !== "disetujui") {
-                                  return (
-                                    <span
-                                      className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
-                                      title="Menunggu verifikasi UPMS disetujui"
-                                    >
-                                      MENUNGGU UPMS
-                                    </span>
-                                  );
-                                }
-                                if (stUpmf !== "disetujui") {
-                                  return (
-                                    <span
-                                      className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
-                                      title="Menunggu verifikasi UPMF disetujui"
-                                    >
-                                      MENUNGGU UPMF
-                                    </span>
-                                  );
-                                }
-                              } else {
-                                if (stUpml !== "disetujui") {
-                                  return (
-                                    <span
-                                      className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-500 uppercase tracking-wider"
-                                      title="Menunggu verifikasi UPML disetujui"
-                                    >
-                                      MENUNGGU UPML
-                                    </span>
-                                  );
-                                }
-                              }
-                              return (
-                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border border-purple-300 bg-purple-50 text-purple-800 uppercase tracking-wider">
-                                  MENUNGGU LPM
-                                </span>
+                              const stLpm =
+                                act.StatusLpm || act.status_lpm || "";
+                              const noteLpm =
+                                act.CatatanTolakLpm ||
+                                act.catatan_tolak_lpm ||
+                                act.CatatanVerifikator ||
+                                act.CatatanPenolakan;
+                              return renderTableRubberStamp(
+                                stLpm,
+                                "LPM",
+                                noteLpm,
+                                true,
+                                actStatusStr,
                               );
                             })()}
                           </td>
@@ -2114,9 +3129,181 @@ export default function ProkerV3AktivitasPage() {
                                 </>
                               )}
 
+                              {/* 4. LPM / EVALUATOR VERIFY / REJECT ACTION */}
+                              {(curRole === "evaluator" || curRole === "lpm") &&
+                                (() => {
+                                  const stUpms = (
+                                    act.StatusUpms ||
+                                    act.status_upms ||
+                                    ""
+                                  )
+                                    .toLowerCase()
+                                    .trim();
+                                  const stUpmf = (
+                                    act.StatusUpmf ||
+                                    act.status_upmf ||
+                                    ""
+                                  )
+                                    .toLowerCase()
+                                    .trim();
+                                  const stUpml = (
+                                    act.StatusUpml ||
+                                    act.status_upml ||
+                                    ""
+                                  )
+                                    .toLowerCase()
+                                    .trim();
+                                  const canLpmAct = isProdi
+                                    ? stUpms === "disetujui" &&
+                                      stUpmf === "disetujui"
+                                    : stUpml === "disetujui";
+                                  const disabledReason = isProdi
+                                    ? stUpms !== "disetujui"
+                                      ? "Menunggu persetujuan UPMS terlebih dahulu"
+                                      : "Menunggu persetujuan UPMF terlebih dahulu"
+                                    : "Menunggu persetujuan UPML terlebih dahulu";
+
+                                  return (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleVerifySingleRow(act, "lpm")
+                                        }
+                                        disabled={
+                                          !canLpmAct ||
+                                          verifyingRowUuid === act.UUID ||
+                                          isBatchProcessing
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title={
+                                          !canLpmAct
+                                            ? disabledReason
+                                            : "Setujui verifikasi LPM"
+                                        }
+                                      >
+                                        {verifyingRowUuid === act.UUID ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <Check className="w-3 h-3" />
+                                        )}
+                                        <span>Verifikasi</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleOpenSingleRejectModal(
+                                            act,
+                                            "lpm",
+                                          )
+                                        }
+                                        disabled={
+                                          !canLpmAct ||
+                                          verifyingRowUuid === act.UUID ||
+                                          isBatchProcessing
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title={
+                                          !canLpmAct
+                                            ? disabledReason
+                                            : "Tolak verifikasi LPM"
+                                        }
+                                      >
+                                        <X className="w-3 h-3" />
+                                        <span>Tolak</span>
+                                      </button>
+                                    </>
+                                  );
+                                })()}
+
+                              {/* 5. ADMIN VERIFY / REJECT ACTION */}
+                              {isAdmin &&
+                                (() => {
+                                  let roleToUse = "lpm";
+                                  if (isProdi) {
+                                    const stUpms = (
+                                      act.StatusUpms ||
+                                      act.status_upms ||
+                                      ""
+                                    )
+                                      .toLowerCase()
+                                      .trim();
+                                    const stUpmf = (
+                                      act.StatusUpmf ||
+                                      act.status_upmf ||
+                                      ""
+                                    )
+                                      .toLowerCase()
+                                      .trim();
+                                    if (stUpms !== "disetujui")
+                                      roleToUse = "upms";
+                                    else if (stUpmf !== "disetujui")
+                                      roleToUse = "upmf";
+                                    else roleToUse = "lpm";
+                                  } else {
+                                    const stUpml = (
+                                      act.StatusUpml ||
+                                      act.status_upml ||
+                                      ""
+                                    )
+                                      .toLowerCase()
+                                      .trim();
+                                    if (stUpml !== "disetujui")
+                                      roleToUse = "upml";
+                                    else roleToUse = "lpm";
+                                  }
+
+                                  return (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleVerifySingleRow(act, roleToUse)
+                                        }
+                                        disabled={
+                                          verifyingRowUuid === act.UUID ||
+                                          isBatchProcessing
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                        title={`Setujui tahap ${roleToUse.toUpperCase()} (Admin)`}
+                                      >
+                                        {verifyingRowUuid === act.UUID ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <Check className="w-3 h-3" />
+                                        )}
+                                        <span>
+                                          Verifikasi ({roleToUse.toUpperCase()})
+                                        </span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleOpenSingleRejectModal(
+                                            act,
+                                            roleToUse,
+                                          )
+                                        }
+                                        disabled={
+                                          verifyingRowUuid === act.UUID ||
+                                          isBatchProcessing
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                        title={`Tolak tahap ${roleToUse.toUpperCase()} (Admin)`}
+                                      >
+                                        <X className="w-3 h-3" />
+                                        <span>Tolak</span>
+                                      </button>
+                                    </>
+                                  );
+                                })()}
+
                               {/* Option to revert single activity to draft (bukan untuk upml, upmf, upms) */}
                               {canRevisiActDraft &&
-                                (act.Status || "").toLowerCase() !== "draft" && (
+                                (act.Status || "").toLowerCase() !==
+                                  "draft" && (
                                   <button
                                     type="button"
                                     onClick={() => handleRevisiActDraft(act)}
@@ -2144,20 +3331,95 @@ export default function ProkerV3AktivitasPage() {
                                       <Pencil className="w-3.5 h-3.5" />
                                     </button>
                                   </Tooltip>
-                                  <Tooltip title="Hapus Aktivitas">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActToDelete(act);
-                                        setConfirmDelete(true);
-                                      }}
-                                      className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 hover:border-rose-300 transition cursor-pointer shadow-2xs"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </Tooltip>
+                                  {!isActApprovedByEvaluator(act) && (
+                                    <Tooltip title="Hapus Aktivitas">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActToDelete(act);
+                                          setConfirmDelete(true);
+                                        }}
+                                        className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 hover:border-rose-300 transition cursor-pointer shadow-2xs"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </Tooltip>
+                                  )}
                                 </>
                               )}
+
+                              {/* Switch Proker / Aktivitas Batal untuk User Fakultas Unit */}
+                              {(() => {
+                                const isTerimaAnggaranAct =
+                                  isProkerAccAnggaran ||
+                                  (act.StatusAnggaran || "").toLowerCase() ===
+                                    "terima_anggaran" ||
+                                  (act.Status || "").toLowerCase() ===
+                                    "terima_anggaran";
+
+                                const canShowBatalActSwitch =
+                                  !isAdmin &&
+                                  isLevelUser &&
+                                  !isUpmUser &&
+                                  hasAssignedTarget &&
+                                  isYearMatch &&
+                                  isTerimaAnggaranAct &&
+                                  isJadwalProkerOpen;
+
+                                if (!canShowBatalActSwitch) return null;
+
+                                return (
+                                  <div className="flex items-center gap-1.5 pl-1 border-l border-gray-200">
+                                    <label
+                                      className="text-[11px] font-medium text-gray-700 select-none cursor-pointer flex items-center gap-1.5"
+                                      title="Tandai pembatalan aktivitas ini"
+                                    >
+                                      <span className="text-[10px] text-gray-500 font-semibold whitespace-nowrap">
+                                        Batal:
+                                      </span>
+                                      {(() => {
+                                        const isActBatal = Boolean(
+                                          act.IsBatal || proker?.IsBatal,
+                                        );
+                                        return (
+                                          <>
+                                            <button
+                                              type="button"
+                                              role="switch"
+                                              aria-checked={isActBatal}
+                                              onClick={() =>
+                                                handleToggleBatalAktivitas(act)
+                                              }
+                                              className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                                                isActBatal
+                                                  ? "bg-rose-600"
+                                                  : "bg-gray-300"
+                                              }`}
+                                            >
+                                              <span
+                                                className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                                  isActBatal
+                                                    ? "translate-x-3"
+                                                    : "translate-x-0"
+                                                }`}
+                                              />
+                                            </button>
+                                            <span
+                                              className={`text-[10px] font-bold ${
+                                                isActBatal
+                                                  ? "text-rose-600"
+                                                  : "text-gray-500"
+                                              }`}
+                                            >
+                                              {isActBatal ? "Ya" : "Tidak"}
+                                            </span>
+                                          </>
+                                        );
+                                      })()}
+                                    </label>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </td>
                         </tr>
@@ -2182,8 +3444,8 @@ export default function ProkerV3AktivitasPage() {
                                     ? 9
                                     : 11
                                   : isEvaluatorOrAnggaran
-                                  ? 8
-                                  : 10
+                                    ? 8
+                                    : 10
                               }
                               className="py-3 px-6"
                             >
@@ -2256,7 +3518,7 @@ export default function ProkerV3AktivitasPage() {
 
           <div className="fixed inset-0 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
-              <Dialog.Panel className="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl border border-gray-100 flex flex-col max-h-[92vh]">
+              <Dialog.Panel className="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-5xl border border-gray-100 flex flex-col max-h-[92vh]">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-purple-50/80 via-indigo-50/30 to-white">
                   <div className="flex items-center gap-3.5">
@@ -2322,50 +3584,430 @@ export default function ProkerV3AktivitasPage() {
                     />
                   </div>
 
-                  {/* PIC & Anggaran Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* PIC Penanggung Jawab */}
-                    <div>
-                      <label className="block text-xs font-bold text-gray-800 mb-1.5">
-                        PIC Penanggung Jawab
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Nama penanggung jawab kegiatan"
-                          value={actPic}
-                          onChange={(e) => setActPic(e.target.value)}
-                          className="w-full pl-9 pr-3.5 py-2.5 text-xs rounded-xl border border-gray-200 bg-gray-50/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition shadow-2xs"
-                        />
+                  {/* PIC Penanggung Jawab */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1.5">
+                      PIC Penanggung Jawab
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                        <User className="w-4 h-4" />
                       </div>
+                      <input
+                        type="text"
+                        placeholder="Nama penanggung jawab kegiatan"
+                        value={actPic}
+                        onChange={(e) => setActPic(e.target.value)}
+                        className="w-full pl-9 pr-3.5 py-2.5 text-xs rounded-xl border border-gray-200 bg-gray-50/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Rincian Anggaran Biaya (RAB) & SBU Dinamis */}
+                  <div className="space-y-3 pt-2 border-t border-gray-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Coins className="w-4 h-4 text-purple-600" />
+                          <h4 className="text-xs font-bold text-gray-900">
+                            Rincian Anggaran Biaya
+                          </h4>
+                        </div>
+                      </div>
+
+                      {isActModalRabLocked ? (
+                        <div className="flex flex-col items-start sm:items-end">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs self-start sm:self-auto">
+                            <Lock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>RAB Terkunci</span>
+                          </span>
+                          <span className="text-[10px] text-amber-700/90 text-left sm:text-right mt-1 font-medium">
+                            Sudah disetujui Verifikator & Anggaran
+                          </span>
+                        </div>
+                      ) : (
+                        canEditActModalRab && (
+                          <button
+                            type="button"
+                            onClick={handleAddRabRow}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs hover:shadow-md transition cursor-pointer self-start sm:self-auto"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Tambah Rincian SBU</span>
+                          </button>
+                        )
+                      )}
                     </div>
 
-                    {/* Alokasi Anggaran Program */}
-                    <div>
-                      <label className="block text-xs font-bold text-gray-800 mb-1.5">
-                        Alokasi Anggaran Program (Rp)
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500 font-bold text-xs font-mono">
-                          Rp
+                    {/* Lock Explanation Note */}
+                    {isActModalRabLocked && (
+                      <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl px-4 py-3 flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs">
+                        <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                        <div className="space-y-1 text-xs">
+                          <div className="font-bold text-amber-950">
+                            Mengapa RAB ini terkunci?
+                          </div>
+                          <p className="text-amber-800 leading-relaxed text-[11px]">
+                            RAB terkunci otomatis karena usulan
+                            aktivitas/program kerja ini telah diverifikasi dan
+                            disetujui oleh Verifikator & Tim Anggaran (status{" "}
+                            <em>Diterima</em> / <em>Disetujui</em>), atau role
+                            Anda memiliki hak akses baca saja (read-only).
+                          </p>
+                          <p className="text-amber-700 leading-relaxed text-[11px]">
+                            <span className="font-semibold text-amber-900">
+                              Aturan:{" "}
+                            </span>
+                            Penambahan rincian SBU, perubahan nominal, dan
+                            penghapusan item dinonaktifkan agar alokasi pagu
+                            anggaran yang sudah disahkan tetap valid dan
+                            terjaga. Jika perlu penyesuaian rincian RAB, silakan
+                            hubungi Verifikator atau Tim Anggaran untuk
+                            mengembalikan status ke tahap{" "}
+                            <em>Draft / Revisi</em>.
+                          </p>
                         </div>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="0"
-                          value={actAnggaranStr}
-                          onChange={handleAnggaranInputChange}
-                          className="w-full pl-11 pr-3.5 py-2.5 text-xs rounded-xl border border-gray-200 bg-gray-50/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition font-mono font-bold text-gray-900 shadow-2xs placeholder:text-gray-400"
-                        />
                       </div>
-                      {actAnggaran > 0 && (
-                        <p className="text-[10px] text-gray-500 mt-1 font-mono">
-                          Terbilang: {formatRupiah(actAnggaran)}
-                        </p>
-                      )}
+                    )}
+
+                    {/* Pagu Anggaran Banner (Case 1 vs Case 2) */}
+                    {proker?.HasPagu && Number(proker?.PaguUnit) > 0 ? (
+                      (() => {
+                        const paguUnit = Number(proker.PaguUnit);
+                        const totalTerpakai =
+                          Number(proker.TotalAnggaranUnit) || 0;
+                        const oldActAnggaran =
+                          actModalMode === "edit"
+                            ? Number(selectedAct?.Anggaran) || 0
+                            : 0;
+                        const projectedTotal =
+                          totalTerpakai - oldActAnggaran + totalActRab;
+                        const isMelebihi = projectedTotal > paguUnit;
+                        const sisaUnit = paguUnit - projectedTotal;
+
+                        return (
+                          <div
+                            className={`rounded-2xl px-4 py-3 flex items-start gap-2.5 text-xs shadow-2xs border ${
+                              isMelebihi
+                                ? "bg-rose-50/80 border-rose-200 text-rose-900"
+                                : "bg-emerald-50/60 border-emerald-200 text-emerald-900"
+                            }`}
+                          >
+                            {isMelebihi ? (
+                              <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                            )}
+                            <div className="space-y-0.5 text-xs w-full">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-bold">
+                                  {isMelebihi
+                                    ? "Alokasi Melebihi Batas Pagu Anggaran Unit!"
+                                    : "Batas Pagu Anggaran Unit Terpenuhi"}
+                                </span>
+                                <span className="font-mono text-[11px] font-semibold">
+                                  Pagu Unit ({proker.Tahun}):{" "}
+                                  {formatRupiah(paguUnit)}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] opacity-90 mt-1">
+                                <span>
+                                  Total Terpakai Unit Saat Ini:{" "}
+                                  <strong>{formatRupiah(totalTerpakai)}</strong>
+                                </span>
+                                <span>
+                                  Proyeksi Total Unit:{" "}
+                                  <strong
+                                    className={
+                                      isMelebihi
+                                        ? "text-rose-700 font-extrabold"
+                                        : ""
+                                    }
+                                  >
+                                    {formatRupiah(projectedTotal)}
+                                  </strong>
+                                </span>
+                                <span>
+                                  {isMelebihi
+                                    ? `Melebihi Pagu Sebesar: ${formatRupiah(projectedTotal - paguUnit)}`
+                                    : `Sisa Pagu Tersedia: ${formatRupiah(sisaUnit)}`}
+                                </span>
+                              </div>
+                              {isMelebihi && (
+                                <p className="text-[11px] text-rose-700 font-medium pt-1">
+                                  ⚠️ Aktivitas tidak dapat disimpan karena
+                                  alokasi anggaran melebihi batas pagu unit.
+                                  Harap sesuaikan rincian anggaran.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="bg-amber-50/70 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 text-xs text-amber-900 shadow-2xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <div>
+                          <span className="font-bold">
+                            Case 1: Pagu Belum Ditetapkan
+                          </span>
+                          <span className="text-[11px] text-amber-800 ml-1.5">
+                            Pagu anggaran unit untuk tahun{" "}
+                            {proker?.Tahun || "-"} belum ditentukan di sistem.
+                            Pengisian form tidak dibatasi, namun proker ini akan
+                            ditandai <strong>"Tidak Sesuai Pagu"</strong> pada
+                            tabel.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tabel Dinamis RAB */}
+                    <div className="border border-gray-200 rounded-2xl overflow-x-auto shadow-2xs bg-white">
+                      <table className="w-full text-xs min-w-[700px] border-collapse">
+                        <thead>
+                          <tr className="bg-purple-50/80 text-gray-800 border-b border-gray-200">
+                            <th
+                              rowSpan={2}
+                              className="px-2.5 py-2 text-center font-bold border-r border-gray-200 w-10 text-[11px] text-gray-600"
+                            >
+                              No
+                            </th>
+                            <th
+                              rowSpan={2}
+                              className="px-3 py-2 text-left font-bold border-r border-gray-200 w-60 min-w-[220px]"
+                            >
+                              Kategori (COA)
+                            </th>
+                            <th
+                              rowSpan={2}
+                              className="px-3 py-2 text-left font-bold border-r border-gray-200 min-w-[180px]"
+                            >
+                              Rincian / Uraian
+                            </th>
+                            <th
+                              colSpan={2}
+                              className="px-2 py-1.5 text-center font-bold border-r border-gray-200"
+                            >
+                              qty
+                            </th>
+                            <th
+                              rowSpan={2}
+                              className="px-3 py-2 text-right font-bold border-r border-gray-200 w-36"
+                            >
+                              Harga satuan (SBU)
+                            </th>
+                            <th
+                              rowSpan={2}
+                              className="px-3 py-2 text-right font-bold border-r border-gray-200 w-36"
+                            >
+                              Total (Rp)
+                            </th>
+                            {canEditActModalRab && (
+                              <th
+                                rowSpan={2}
+                                className="px-2 py-2 text-center font-bold w-12"
+                              >
+                                Aksi
+                              </th>
+                            )}
+                          </tr>
+                          <tr className="bg-purple-100/50 text-gray-700 border-b border-gray-200">
+                            <th className="px-2 py-1 text-center font-semibold border-r border-gray-200 w-20">
+                              satuan
+                            </th>
+                            <th className="px-2 py-1 text-center font-semibold border-r border-gray-200 w-20">
+                              paket
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 bg-white">
+                          {actRabRows.map((row, idx) => (
+                            <tr
+                              key={row.id || idx}
+                              className="hover:bg-purple-50/20 transition"
+                            >
+                              {/* No */}
+                              <td className="p-2 text-center border-r border-gray-100 text-gray-400 font-mono text-[11px] align-middle">
+                                {idx + 1}
+                              </td>
+
+                              {/* Kategori */}
+                              <td className="p-2 border-r border-gray-100 align-middle">
+                                {!canEditActModalRab ? (
+                                  <div
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-gray-50/50 font-medium text-gray-800 truncate"
+                                    title={
+                                      row.no_akun
+                                        ? `${row.no_akun} - ${row.nama_akun || row.kategori}`
+                                        : row.kategori || "-"
+                                    }
+                                  >
+                                    {row.no_akun
+                                      ? `${row.no_akun} - ${row.nama_akun || row.kategori}`
+                                      : row.kategori || "-"}
+                                  </div>
+                                ) : (
+                                  <CoaSearchSelect
+                                    valueNoAkun={row.no_akun}
+                                    valueNamaAkun={row.nama_akun}
+                                    valueKategori={row.kategori}
+                                    onChange={(val) =>
+                                      handleRabRowChange(idx, "coa", val)
+                                    }
+                                  />
+                                )}
+                              </td>
+
+                              {/* Rincian / Uraian */}
+                              <td className="p-2 border-r border-gray-100 align-middle">
+                                {!canEditActModalRab ? (
+                                  <div className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-gray-50/50 font-medium text-gray-800">
+                                    {row.keterangan || "-"}
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="text"
+                                    placeholder="Contoh: Honor narasumber / Konsumsi..."
+                                    value={row.keterangan || ""}
+                                    onChange={(e) =>
+                                      handleRabRowChange(
+                                        idx,
+                                        "keterangan",
+                                        e.target.value,
+                                      )
+                                    }
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium placeholder:text-gray-400"
+                                  />
+                                )}
+                              </td>
+
+                              {/* qty: satuan */}
+                              <td className="p-2 border-r border-gray-100 align-middle w-20">
+                                {!canEditActModalRab ? (
+                                  <div className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-200 bg-gray-50/50 font-mono font-bold text-gray-800">
+                                    {row.qty_satuan ?? 1}
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="1"
+                                    value={row.qty_satuan ?? ""}
+                                    onChange={(e) =>
+                                      handleRabRowChange(
+                                        idx,
+                                        "qty_satuan",
+                                        e.target.value,
+                                      )
+                                    }
+                                    className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono font-semibold"
+                                  />
+                                )}
+                              </td>
+
+                              {/* qty: paket */}
+                              <td className="p-2 border-r border-gray-100 align-middle w-20">
+                                {!canEditActModalRab ? (
+                                  <div className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-200 bg-gray-50/50 font-mono font-bold text-gray-800">
+                                    {row.qty_paket ?? 1}
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="1"
+                                    value={row.qty_paket ?? ""}
+                                    onChange={(e) =>
+                                      handleRabRowChange(
+                                        idx,
+                                        "qty_paket",
+                                        e.target.value,
+                                      )
+                                    }
+                                    className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono font-semibold"
+                                  />
+                                )}
+                              </td>
+
+                              {/* SBU (Harga satuan) */}
+                              <td className="p-2 border-r border-gray-100 align-middle w-36">
+                                {!canEditActModalRab ? (
+                                  <div className="w-full px-2.5 py-1.5 text-xs text-right rounded-lg border border-gray-200 bg-gray-50/50 font-mono font-bold text-gray-800">
+                                    {new Intl.NumberFormat("id-ID").format(
+                                      row.sbu || 0,
+                                    )}
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1000"
+                                    placeholder="0"
+                                    value={row.sbu ?? ""}
+                                    onChange={(e) =>
+                                      handleRabRowChange(
+                                        idx,
+                                        "sbu",
+                                        e.target.value,
+                                      )
+                                    }
+                                    className="w-full px-2.5 py-1.5 text-xs text-right rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono font-bold text-gray-800"
+                                  />
+                                )}
+                              </td>
+
+                              {/* Total per row */}
+                              <td className="p-2 border-r border-gray-100 align-middle text-right font-mono font-bold text-purple-900 bg-purple-50/20 w-36">
+                                {formatRupiah(row.total || 0)}
+                              </td>
+
+                              {/* Aksi Hapus */}
+                              {canEditActModalRab && (
+                                <td className="p-2 text-center align-middle w-12">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveRabRow(idx)}
+                                    disabled={actRabRows.length <= 1}
+                                    className={`p-1.5 rounded-lg transition ${
+                                      actRabRows.length <= 1
+                                        ? "text-gray-300 cursor-not-allowed"
+                                        : "text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                                    }`}
+                                    title={
+                                      actRabRows.length <= 1
+                                        ? "Minimal 1 baris rincian anggaran"
+                                        : "Hapus baris ini"
+                                    }
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-purple-50/50 border-t-2 border-purple-200">
+                            <td
+                              colSpan={6}
+                              className="p-3 text-right font-bold text-gray-700"
+                            >
+                              Total Anggaran:
+                            </td>
+                            <td className="p-3 text-right font-mono text-sm text-purple-900 bg-purple-100/60 font-extrabold">
+                              {formatRupiah(totalActRab)}
+                            </td>
+                            {canEditActModalRab && (
+                              <td className="p-3 text-center text-[10px] text-gray-500 font-normal">
+                                {actRabRows.length} item
+                              </td>
+                            )}
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
                   </div>
 
@@ -2477,36 +4119,38 @@ export default function ProkerV3AktivitasPage() {
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setActModalOpen(false)}
-                      disabled={savingAct}
-                      className="px-4 py-2.5 text-xs font-semibold rounded-xl bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 transition cursor-pointer shadow-2xs"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={savingAct}
-                      className="px-5 py-2.5 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/25 transition active:scale-[0.99] disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-                    >
-                      {savingAct ? (
-                        <>
-                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Menyimpan...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4" />
-                          <span>
-                            {actModalMode === "edit"
-                              ? "Perbarui Aktivitas"
-                              : "Simpan Aktivitas"}
-                          </span>
-                        </>
-                      )}
-                    </button>
+                  <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-end gap-3">
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setActModalOpen(false)}
+                        disabled={savingAct}
+                        className="px-4 py-2.5 text-xs font-semibold rounded-xl bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 transition cursor-pointer shadow-2xs"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={savingAct}
+                        className="px-5 py-2.5 text-xs font-bold rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/25 transition active:scale-[0.99] disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                      >
+                        {savingAct ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Menyimpan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            <span>
+                              {actModalMode === "edit"
+                                ? "Perbarui Aktivitas"
+                                : "Simpan Aktivitas"}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </form>
               </Dialog.Panel>
@@ -2622,6 +4266,144 @@ export default function ProkerV3AktivitasPage() {
                 </Dialog.Panel>
               </Transition.Child>
             </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* ======================================================== */}
+      {/* MODAL: BATAL AKTIVITAS KEGIATAN                          */}
+      {/* ======================================================== */}
+      <Transition appear show={batalActModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => setBatalActModalOpen(false)}
+        >
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Dialog.Panel className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2 text-rose-600 font-bold text-base">
+                  <XCircle className="w-5 h-5" />
+                  <span>Batalkan Aktivitas Kegiatan</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBatalActModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs text-gray-600">
+                  Silakan berikan alasan mengapa aktivitas kegiatan ini
+                  dibatalkan:
+                </p>
+                <div className="text-xs font-bold text-gray-900 bg-rose-50 border border-rose-200 p-2.5 rounded-lg line-clamp-2">
+                  {batalTargetAct?.Aktivitas}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-700">
+                  Catatan Alasan Pembatalan{" "}
+                  <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={catatanBatalActInput}
+                  onChange={(e) => setCatatanBatalActInput(e.target.value)}
+                  placeholder="Tuliskan catatan detail alasan mengapa aktivitas ini dibatalkan..."
+                  className="w-full p-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setBatalActModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    isSubmittingBatalAct || !catatanBatalActInput.trim()
+                  }
+                  onClick={handleSubmitBatalAct}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>
+                    {isSubmittingBatalAct
+                      ? "Menyimpan..."
+                      : "Simpan Pembatalan"}
+                  </span>
+                </button>
+              </div>
+            </Dialog.Panel>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Confirmation Dialog Unbatal Aktivitas */}
+      <Transition appear show={confirmUnbatalActOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => setConfirmUnbatalActOpen(false)}
+        >
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Dialog.Panel className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2 text-emerald-600 font-bold text-base">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>Aktifkan Kembali Aktivitas</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmUnbatalActOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-600">
+                Apakah Anda yakin ingin membatalkan status Batal dan
+                mengaktifkan kembali aktivitas ini?
+              </p>
+              <div className="text-xs font-bold text-gray-900 bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg line-clamp-2">
+                {batalTargetAct?.Aktivitas}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setConfirmUnbatalActOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingBatalAct}
+                  onClick={handleConfirmUnbatalAct}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>
+                    {isSubmittingBatalAct
+                      ? "Menyimpan..."
+                      : "Ya, Aktifkan Kembali"}
+                  </span>
+                </button>
+              </div>
+            </Dialog.Panel>
           </div>
         </Dialog>
       </Transition>
@@ -2915,7 +4697,10 @@ export default function ProkerV3AktivitasPage() {
                 </div>
 
                 {/* Body Form */}
-                <form onSubmit={handleSaveRevisiAnggaran} className="p-6 space-y-4">
+                <form
+                  onSubmit={handleSaveRevisiAnggaran}
+                  className="p-6 space-y-4"
+                >
                   {/* Card Info Aktivitas & Anggaran Awal */}
                   <div className="bg-linear-to-br from-gray-50 to-slate-50 border border-gray-200/80 rounded-2xl p-4 space-y-3">
                     <div>
@@ -2993,7 +4778,7 @@ export default function ProkerV3AktivitasPage() {
                               const val = Number(actToRevisi.Anggaran) || 0;
                               setRevisiAnggaran(val);
                               setRevisiAnggaranStr(
-                                new Intl.NumberFormat("id-ID").format(val)
+                                new Intl.NumberFormat("id-ID").format(val),
                               );
                             }}
                             className="text-[10px] font-bold text-amber-600 hover:text-amber-800 hover:underline cursor-pointer"
@@ -3015,13 +4800,15 @@ export default function ProkerV3AktivitasPage() {
                           revisiAnggaran > Number(actToRevisi.Anggaran)
                             ? "text-rose-600"
                             : revisiAnggaran < Number(actToRevisi.Anggaran)
-                            ? "text-emerald-600"
-                            : "text-gray-600"
+                              ? "text-emerald-600"
+                              : "text-gray-600"
                         }`}
                       >
-                        {revisiAnggaran > Number(actToRevisi.Anggaran) ? "+" : ""}
+                        {revisiAnggaran > Number(actToRevisi.Anggaran)
+                          ? "+"
+                          : ""}
                         {formatRupiah(
-                          revisiAnggaran - Number(actToRevisi.Anggaran)
+                          revisiAnggaran - Number(actToRevisi.Anggaran),
                         )}
                       </span>
                     </div>
@@ -3057,6 +4844,542 @@ export default function ProkerV3AktivitasPage() {
                   </div>
                 </form>
               </Dialog.Panel>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Modal Detail / Kelola RAB & SBU (Gambar 2 -> Gambar 1) */}
+      <Transition appear show={rabDetailModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => {
+            if (!isSavingRabDetail) {
+              setRabDetailModalOpen(false);
+              setRabDetailAct(null);
+            }
+          }}
+        >
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-3 sm:p-5 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-4xl transform overflow-hidden rounded-3xl bg-white p-5 sm:p-6 text-left align-middle shadow-2xl transition-all border border-purple-100 space-y-4">
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 shadow-2xs">
+                        <Coins className="w-5 h-5" />
+                      </div>
+                      <Dialog.Title className="text-base font-extrabold text-gray-900 leading-tight">
+                        Rincian Anggaran Biaya
+                      </Dialog.Title>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      {isRabDetailLocked ? (
+                        <div className="flex flex-col items-end">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                            <Lock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>RAB Terkunci</span>
+                          </span>
+                          <span className="text-[10px] text-amber-700/90 text-right mt-1 font-medium">
+                            Sudah disetujui Verifikator & Anggaran
+                          </span>
+                        </div>
+                      ) : (
+                        canEditRabDetail && (
+                          <button
+                            type="button"
+                            onClick={handleAddRabDetailRow}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs hover:shadow-md transition cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Tambah Rincian SBU</span>
+                          </button>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRabDetailModalOpen(false);
+                          setRabDetailAct(null);
+                        }}
+                        className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lock Explanation Note */}
+                  {isRabDetailLocked && (
+                    <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl px-4 py-3 flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs">
+                      <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="space-y-1 text-xs">
+                        <div className="font-bold text-amber-950">
+                          Mengapa RAB ini terkunci?
+                        </div>
+                        <p className="text-amber-800 leading-relaxed text-[11px]">
+                          RAB terkunci otomatis karena usulan aktivitas/program
+                          kerja ini telah diverifikasi dan disetujui oleh
+                          Verifikator & Tim Anggaran (status <em>Diterima</em> /{" "}
+                          <em>Disetujui</em>), atau role Anda memiliki hak akses
+                          baca saja (read-only).
+                        </p>
+                        <p className="text-amber-700 leading-relaxed text-[11px]">
+                          <span className="font-semibold text-amber-900">
+                            Aturan:{" "}
+                          </span>
+                          Penambahan rincian SBU, perubahan nominal, dan
+                          penghapusan item dinonaktifkan agar alokasi pagu
+                          anggaran yang sudah disahkan tetap valid dan terjaga.
+                          Jika perlu penyesuaian rincian RAB, silakan hubungi
+                          Verifikator atau Tim Anggaran untuk mengembalikan
+                          status ke tahap <em>Draft / Revisi</em>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Activity Info Banner */}
+                  {rabDetailAct && (
+                    <div className="bg-purple-50/60 border border-purple-100 rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 font-medium">
+                          Aktivitas:
+                        </span>
+                        <span className="font-bold text-gray-900">
+                          {rabDetailAct.Aktivitas}
+                        </span>
+                      </div>
+                      {rabDetailAct.PIC && (
+                        <div className="flex items-center gap-1.5 text-gray-600">
+                          <span className="text-gray-400">PIC:</span>
+                          <span className="font-semibold text-gray-800">
+                            {rabDetailAct.PIC}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Pagu Anggaran Banner (Case 1 vs Case 2) */}
+                  {proker?.HasPagu && Number(proker?.PaguUnit) > 0 ? (
+                    (() => {
+                      const paguUnit = Number(proker.PaguUnit);
+                      const totalTerpakai =
+                        Number(proker.TotalAnggaranUnit) || 0;
+                      const oldActAnggaran =
+                        Number(rabDetailAct?.Anggaran) || 0;
+                      const projectedTotal =
+                        totalTerpakai - oldActAnggaran + totalRabDetail;
+                      const isMelebihi = projectedTotal > paguUnit;
+                      const sisaUnit = paguUnit - projectedTotal;
+
+                      return (
+                        <div
+                          className={`rounded-2xl px-4 py-3 flex items-start gap-2.5 text-xs shadow-2xs border ${
+                            isMelebihi
+                              ? "bg-rose-50/80 border-rose-200 text-rose-900"
+                              : "bg-emerald-50/60 border-emerald-200 text-emerald-900"
+                          }`}
+                        >
+                          {isMelebihi ? (
+                            <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                          )}
+                          <div className="space-y-0.5 text-xs w-full">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-bold">
+                                {isMelebihi
+                                  ? "Alokasi Melebihi Batas Pagu Anggaran Unit!"
+                                  : "Batas Pagu Anggaran Unit Terpenuhi"}
+                              </span>
+                              <span className="font-mono text-[11px] font-semibold">
+                                Pagu Unit ({proker.Tahun}):{" "}
+                                {formatRupiah(paguUnit)}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] opacity-90 mt-1">
+                              <span>
+                                Total Terpakai Unit Saat Ini:{" "}
+                                <strong>{formatRupiah(totalTerpakai)}</strong>
+                              </span>
+                              <span>
+                                Proyeksi Total Unit:{" "}
+                                <strong
+                                  className={
+                                    isMelebihi
+                                      ? "text-rose-700 font-extrabold"
+                                      : ""
+                                  }
+                                >
+                                  {formatRupiah(projectedTotal)}
+                                </strong>
+                              </span>
+                              <span>
+                                {isMelebihi
+                                  ? `Melebihi Pagu Sebesar: ${formatRupiah(projectedTotal - paguUnit)}`
+                                  : `Sisa Pagu Tersedia: ${formatRupiah(sisaUnit)}`}
+                              </span>
+                            </div>
+                            {isMelebihi && (
+                              <p className="text-[11px] text-rose-700 font-medium pt-1">
+                                ⚠️ Pengisian RAB tidak dapat disimpan karena
+                                melebihi pagu unit. Harap sesuaikan kuantitas
+                                atau harga satuan.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div className="bg-amber-50/70 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 text-xs text-amber-900 shadow-2xs">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <div>
+                        <span className="font-bold">
+                          Case 1: Pagu Belum Ditetapkan
+                        </span>
+                        <span className="text-[11px] text-amber-800 ml-1.5">
+                          Pagu anggaran unit untuk tahun {proker?.Tahun || "-"}{" "}
+                          belum ditentukan di sistem. Pengisian RAB tidak
+                          dibatasi, namun proker ini akan ditandai{" "}
+                          <strong>"Tidak Sesuai Pagu"</strong> pada tabel.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dynamic Table RAB */}
+                  <div className="border border-gray-200 rounded-2xl overflow-x-auto shadow-2xs bg-white">
+                    <table className="w-full text-xs min-w-[700px] border-collapse">
+                      <thead>
+                        <tr className="bg-purple-50/80 text-gray-800 border-b border-gray-200">
+                          <th
+                            rowSpan={2}
+                            className="px-2.5 py-2 text-center font-bold border-r border-gray-200 w-10 text-[11px] text-gray-600"
+                          >
+                            No
+                          </th>
+                          <th
+                            rowSpan={2}
+                            className="px-3 py-2 text-left font-bold border-r border-gray-200 w-60 min-w-[220px]"
+                          >
+                            Kategori (COA)
+                          </th>
+                          <th
+                            rowSpan={2}
+                            className="px-3 py-2 text-left font-bold border-r border-gray-200"
+                          >
+                            Rincian / Uraian
+                          </th>
+                          <th
+                            colSpan={2}
+                            className="px-2 py-1.5 text-center font-bold border-r border-gray-200"
+                          >
+                            qty
+                          </th>
+                          <th
+                            rowSpan={2}
+                            className="px-3 py-2 text-right font-bold border-r border-gray-200 w-36"
+                          >
+                            Harga satuan (SBU)
+                          </th>
+                          <th
+                            rowSpan={2}
+                            className="px-3 py-2 text-right font-bold border-r border-gray-200 w-36"
+                          >
+                            Total (Rp)
+                          </th>
+                          {canEditRabDetail && (
+                            <th
+                              rowSpan={2}
+                              className="px-2 py-2 text-center font-bold w-12"
+                            >
+                              Aksi
+                            </th>
+                          )}
+                        </tr>
+                        <tr className="bg-purple-100/50 text-gray-700 border-b border-gray-200">
+                          <th className="px-2 py-1 text-center font-semibold border-r border-gray-200 w-20">
+                            satuan
+                          </th>
+                          <th className="px-2 py-1 text-center font-semibold border-r border-gray-200 w-20">
+                            paket
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {rabDetailRows.map((row, idx) => (
+                          <tr
+                            key={row.id || idx}
+                            className="hover:bg-purple-50/20 transition"
+                          >
+                            {/* No */}
+                            <td className="p-2 text-center border-r border-gray-100 text-gray-400 font-mono text-[11px] align-middle">
+                              {idx + 1}
+                            </td>
+
+                            {/* Kategori */}
+                            <td className="p-2 border-r border-gray-100 align-middle">
+                              {!canEditRabDetail ? (
+                                <div
+                                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-gray-50/50 font-medium text-gray-800 truncate"
+                                  title={
+                                    row.no_akun
+                                      ? `${row.no_akun} - ${row.nama_akun || row.kategori}`
+                                      : row.kategori || "-"
+                                  }
+                                >
+                                  {row.no_akun
+                                    ? `${row.no_akun} - ${row.nama_akun || row.kategori}`
+                                    : row.kategori || "-"}
+                                </div>
+                              ) : (
+                                <CoaSearchSelect
+                                  valueNoAkun={row.no_akun}
+                                  valueNamaAkun={row.nama_akun}
+                                  valueKategori={row.kategori}
+                                  onChange={(val) =>
+                                    handleRabDetailRowChange(idx, "coa", val)
+                                  }
+                                />
+                              )}
+                            </td>
+
+                            {/* Rincian / Uraian */}
+                            <td className="p-2 border-r border-gray-100 align-middle">
+                              {!canEditRabDetail ? (
+                                <div className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-gray-50/50 font-medium text-gray-800">
+                                  {row.keterangan || "-"}
+                                </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  placeholder="Contoh: Honor narasumber / Konsumsi..."
+                                  value={row.keterangan || ""}
+                                  onChange={(e) =>
+                                    handleRabDetailRowChange(
+                                      idx,
+                                      "keterangan",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium placeholder:text-gray-400"
+                                />
+                              )}
+                            </td>
+
+                            {/* qty: satuan */}
+                            <td className="p-2 border-r border-gray-100 align-middle w-20">
+                              {!canEditRabDetail ? (
+                                <div className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-200 bg-gray-50/50 font-mono font-bold text-gray-800">
+                                  {row.qty_satuan ?? 1}
+                                </div>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  placeholder="1"
+                                  value={row.qty_satuan ?? ""}
+                                  onChange={(e) =>
+                                    handleRabDetailRowChange(
+                                      idx,
+                                      "qty_satuan",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono font-semibold"
+                                />
+                              )}
+                            </td>
+
+                            {/* qty: paket */}
+                            <td className="p-2 border-r border-gray-100 align-middle w-20">
+                              {!canEditRabDetail ? (
+                                <div className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-200 bg-gray-50/50 font-mono font-bold text-gray-800">
+                                  {row.qty_paket ?? 1}
+                                </div>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  placeholder="1"
+                                  value={row.qty_paket ?? ""}
+                                  onChange={(e) =>
+                                    handleRabDetailRowChange(
+                                      idx,
+                                      "qty_paket",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="w-full px-2 py-1.5 text-xs text-center rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono font-semibold"
+                                />
+                              )}
+                            </td>
+
+                            {/* SBU (Harga satuan) */}
+                            <td className="p-2 border-r border-gray-100 align-middle w-36">
+                              {!canEditRabDetail ? (
+                                <div className="w-full px-2.5 py-1.5 text-xs text-right rounded-lg border border-gray-200 bg-gray-50/50 font-mono font-bold text-gray-800">
+                                  {new Intl.NumberFormat("id-ID").format(
+                                    row.sbu || 0,
+                                  )}
+                                </div>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1000"
+                                  placeholder="0"
+                                  value={row.sbu ?? ""}
+                                  onChange={(e) =>
+                                    handleRabDetailRowChange(
+                                      idx,
+                                      "sbu",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="w-full px-2.5 py-1.5 text-xs text-right rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono font-bold text-gray-800"
+                                />
+                              )}
+                            </td>
+
+                            {/* Total per row */}
+                            <td className="p-2 border-r border-gray-100 align-middle text-right font-mono font-bold text-purple-900 bg-purple-50/20 w-36">
+                              {formatRupiah(row.total || 0)}
+                            </td>
+
+                            {/* Aksi Hapus */}
+                            {canEditRabDetail && (
+                              <td className="p-2 text-center align-middle w-12">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveRabDetailRow(idx)}
+                                  disabled={rabDetailRows.length <= 1}
+                                  className={`p-1.5 rounded-lg transition ${
+                                    rabDetailRows.length <= 1
+                                      ? "text-gray-300 cursor-not-allowed"
+                                      : "text-rose-500 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                                  }`}
+                                  title={
+                                    rabDetailRows.length <= 1
+                                      ? "Minimal 1 baris rincian anggaran"
+                                      : "Hapus baris ini"
+                                  }
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-purple-50/50 border-t-2 border-purple-200">
+                          <td
+                            colSpan={6}
+                            className="p-3 text-right font-bold text-gray-700"
+                          >
+                            Total Alokasi Anggaran (Akumulasi SBU):
+                          </td>
+                          <td className="p-3 text-right font-mono text-sm text-purple-900 bg-purple-100/60 font-extrabold">
+                            {formatRupiah(totalRabDetail)}
+                          </td>
+                          {canEditRabDetail && (
+                            <td className="p-3 text-center text-[10px] text-gray-500 font-normal">
+                              {rabDetailRows.length} item
+                            </td>
+                          )}
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Summary Card below table */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-purple-50/80 to-indigo-50/50 border border-purple-200/80 rounded-2xl p-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                        <Coins className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider font-extrabold text-purple-700">
+                          Total Alokasi Anggaran Program
+                        </div>
+                        <div className="text-sm font-extrabold font-mono text-gray-900">
+                          {formatRupiah(totalRabDetail)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-gray-500 text-right font-mono">
+                      Terbilang:{" "}
+                      <span className="font-semibold text-gray-700">
+                        {formatRupiah(totalRabDetail)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Modal Footer Buttons */}
+                  <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRabDetailModalOpen(false);
+                        setRabDetailAct(null);
+                      }}
+                      disabled={isSavingRabDetail}
+                      className="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                    >
+                      Tutup
+                    </button>
+                    {canEditRabDetail && (
+                      <button
+                        type="button"
+                        onClick={handleSaveRabDetail}
+                        disabled={isSavingRabDetail}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/25 transition cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingRabDetail ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menyimpan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-3.5 h-3.5" />
+                            <span>Simpan Perubahan RAB</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
             </div>
           </div>
         </Dialog>
@@ -3109,7 +5432,9 @@ export default function ProkerV3AktivitasPage() {
 
               <div className="space-y-1">
                 <p className="text-xs text-gray-600">
-                  Program kerja dan seluruh aktivitas di dalamnya akan dikembalikan ke status <b>Draft</b> agar dapat diedit/disesuaikan kembali oleh pengaju:
+                  Program kerja dan seluruh aktivitas di dalamnya akan
+                  dikembalikan ke status <b>Draft</b> agar dapat
+                  diedit/disesuaikan kembali oleh pengaju:
                 </p>
                 <div className="text-xs font-bold text-gray-900 bg-amber-50 border border-amber-200 p-2.5 rounded-lg line-clamp-2">
                   {proker?.NamaProgram}
@@ -3118,7 +5443,8 @@ export default function ProkerV3AktivitasPage() {
 
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-gray-700">
-                  Catatan / Alasan Revisi <span className="text-gray-400 font-normal">(opsional)</span>
+                  Catatan / Alasan Revisi{" "}
+                  <span className="text-gray-400 font-normal">(opsional)</span>
                 </label>
                 <textarea
                   rows={4}
@@ -3144,7 +5470,11 @@ export default function ProkerV3AktivitasPage() {
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer inline-flex items-center gap-1.5"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>{isSubmittingRevisiDraft ? "Memproses..." : "Kembalikan ke Draft"}</span>
+                  <span>
+                    {isSubmittingRevisiDraft
+                      ? "Memproses..."
+                      : "Kembalikan ke Draft"}
+                  </span>
                 </button>
               </div>
             </Dialog.Panel>

@@ -6,7 +6,12 @@ import { useAuth } from "@/Providers/AuthProvider";
 import ProkerAnnouncementCard from "./ProkerAnnouncementCard";
 import MonitoringTableCard from "./MonitoringTableCard";
 import PemetaanChartCard from "./PemetaanChartCard";
-import { isDashboardProkerVisibleForVersion } from "@/Common/versionConfig";
+import DashboardIkuAnggaranChartCard from "./DashboardIkuAnggaranChartCard";
+import DashboardProkerAktivitasRabCard from "./DashboardProkerAktivitasRabCard";
+import {
+  isDashboardProkerVisibleForVersion,
+  isDashboardProkerAnnouncementVisible,
+} from "@/Common/versionConfig";
 import { Sparkles, Calendar, Layers, ShieldCheck, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -22,12 +27,17 @@ const DashboardContent = () => {
     openChangeLevel,
     setOpenChangeLevel,
     appVersion,
+    positionYear,
   } = useContent();
   const { user } = useAuth();
-  const isAdmin = String(level || user?.level || "").toLowerCase().trim() === "admin";
+  const currentLevel = String(level || user?.level || "").toLowerCase().trim();
+  const isAdmin = currentLevel === "admin";
+  const isAdminOrAnggaran = currentLevel === "admin" || currentLevel === "anggaran";
+  const activeYear = String(positionYear || localStorage.getItem("positionYear") || "2027");
 
   const showProkerMonitoring = isDashboardProkerVisibleForVersion(appVersion || "v2");
   const showPemetaanChart = (appVersion || "v2") === "v2" || (appVersion || "v2") === "v3";
+  const showProkerAnnouncement = isDashboardProkerAnnouncementVisible(appVersion || "v2");
 
   return (
     <>
@@ -47,13 +57,21 @@ const DashboardContent = () => {
       />
 
       <main className="p-6 space-y-6">
+        {/* SECTION MONITORING PROKER, AKTIVITAS & RAB (Wakil Rektor 1-4 & Fakultas) */}
+        <DashboardProkerAktivitasRabCard currentYear={activeYear} />
+
         {showProkerMonitoring ? (
           <>
-            {/* ANNOUNCEMENT (Hanya untuk versi V1 & V2) */}
-            <ProkerAnnouncementCard
-              status="Ditutup"
-              closedAt="25 Januari 2026, 23:59 WIB"
-            />
+            {/* ANNOUNCEMENT (Hanya untuk versi V2) */}
+            {showProkerAnnouncement && (
+              <ProkerAnnouncementCard
+                status="Ditutup"
+                closedAt="25 Januari 2026, 23:59 WIB"
+              />
+            )}
+
+            {/* CHART REALTIME ANGGARAN & REALISASI IKU (RAB TAHAPAN) - Level Admin & Anggaran */}
+            {isAdminOrAnggaran && <DashboardIkuAnggaranChartCard />}
 
             {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN (Hanya muncul untuk Admin) */}
             {isAdmin && showPemetaanChart && <PemetaanChartCard />}
@@ -129,6 +147,9 @@ const DashboardContent = () => {
                 </Link>
               </div>
             </div>
+
+            {/* CHART REALTIME ANGGARAN & REALISASI IKU (RAB TAHAPAN) - Level Admin & Anggaran */}
+            {isAdminOrAnggaran && <DashboardIkuAnggaranChartCard />}
 
             {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN (Hanya muncul untuk Admin) */}
             {isAdmin && <PemetaanChartCard />}

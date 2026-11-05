@@ -13,6 +13,8 @@ export default function RubberStamp({
   size = "md", // "sm" | "md" | "lg"
   customText,
   date,
+  headerText,
+  subText,
   className = "",
   delay = 0.15,
 }) {
@@ -20,7 +22,7 @@ export default function RubberStamp({
   const isLg = size === "lg";
 
   // Format tanggal selalu 'tanggal nama bulan tahun' (contoh: '10 Mei 2025')
-  const displayDate = date
+  const displayDate = subText || (date
     ? formatTanggalBulanTahun(date)
     : status === "terverifikasi"
     ? "SAH & MEMENUHI STANDAR"
@@ -28,7 +30,7 @@ export default function RubberStamp({
     ? "PERLU REVISI / PERBAIKAN"
     : status === "verifikasi"
     ? "MENUNGGU EVALUASI AUDITOR"
-    : "BERKAS BELUM DIUNGGAH";
+    : "BERKAS BELUM DIUNGGAH");
 
   // Target sudut kemiringan khas cap stempel basah
   const targetRotation =
@@ -87,7 +89,7 @@ export default function RubberStamp({
         >
           <div className="flex items-center gap-1.5 opacity-90">
             <span className={isSm ? "text-[7px]" : isLg ? "text-[8.5px] sm:text-[9.5px]" : "text-[8px]"}>
-              ★ LPMI UNPAK ★
+              {headerText || "★ LPMI UNPAK ★"}
             </span>
           </div>
 
@@ -124,7 +126,7 @@ export default function RubberStamp({
         >
           <div className="flex items-center gap-1 opacity-90">
             <span className={isSm ? "text-[6.5px]" : isLg ? "text-[8.5px] sm:text-[9.5px]" : "text-[7.5px]"}>
-              ✖ TIM AUDITOR DOKUMEN ✖
+              {headerText || "✖ TIM AUDITOR DOKUMEN ✖"}
             </span>
           </div>
 
@@ -161,7 +163,7 @@ export default function RubberStamp({
         >
           <div className="flex items-center gap-1 opacity-90">
             <span className={isSm ? "text-[6.5px]" : isLg ? "text-[8.5px] sm:text-[9.5px]" : "text-[7.5px]"}>
-              SUBMISI BERKAS DUKUNG
+              {headerText || "SUBMISI BERKAS DUKUNG"}
             </span>
           </div>
 
@@ -197,7 +199,7 @@ export default function RubberStamp({
       >
         <div className="flex items-center gap-1 opacity-70">
           <span className={isSm ? "text-[6px]" : isLg ? "text-[8.5px]" : "text-[7px]"}>
-            PORTOFOLIO KOSONG
+            {headerText || "PORTOFOLIO KOSONG"}
           </span>
         </div>
 
@@ -215,7 +217,7 @@ export default function RubberStamp({
             isSm ? "text-[6px]" : isLg ? "text-[9px]" : "text-[7px]"
           }`}
         >
-          BERKAS BELUM DIUNGGAH
+          {displayDate}
         </div>
       </div>
     );

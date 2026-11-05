@@ -15,6 +15,7 @@ import {
   ArrowRight,
   RefreshCw,
   Calendar,
+  RotateCcw,
 } from "lucide-react";
 
 const parseFormattedDate = (dateStr) => {
@@ -88,6 +89,22 @@ const getStateConfig = (stateStr) => {
       iconBg: "bg-rose-600 text-white ring-rose-100",
       icon: <XCircle className="w-4 h-4" />,
       isReject: true,
+    };
+  }
+
+  if (s.includes("revisi")) {
+    let label = "Perlu Revisi";
+    if (s.includes("verif") || s.includes("evaluator")) {
+      label = "Revisi Verifikator";
+    } else if (s.includes("anggar")) {
+      label = "Revisi Anggaran";
+    }
+    return {
+      label,
+      badgeColor: "bg-amber-100 text-amber-800 border-amber-300",
+      iconBg: "bg-amber-600 text-white ring-amber-100",
+      icon: <RotateCcw className="w-3.5 h-3.5" />,
+      isRevisi: true,
     };
   }
 
@@ -204,6 +221,11 @@ export default function StateHistoryDrawer({
     return s.includes("tolak") && s.includes("verif");
   });
 
+  const isVerifierRevisi = historyList.some((h) => {
+    const s = getNormState(h);
+    return s.includes("revisi") && (s.includes("verif") || s.includes("evaluator") || !s.includes("anggar"));
+  });
+
   const hasAnggaranApproved = historyList.some((h) => {
     const s = getNormState(h);
     return s.includes("terima anggaran") || s.includes("terima anggar");
@@ -309,6 +331,8 @@ export default function StateHistoryDrawer({
                           className={`px-1.5 py-1 rounded border text-[10px] font-bold ${
                             isVerifierRejected
                               ? "bg-rose-50 text-rose-800 border-rose-300"
+                              : isVerifierRevisi
+                              ? "bg-amber-50 text-amber-800 border-amber-300"
                               : hasVerifierApproved
                               ? "bg-indigo-50 text-indigo-800 border-indigo-300"
                               : "bg-gray-50 text-gray-400 border-gray-200"
@@ -442,7 +466,9 @@ export default function StateHistoryDrawer({
                                       className={`p-2.5 rounded-lg text-xs border ${
                                         config.isReject
                                           ? "bg-rose-50/70 border-rose-200 text-rose-800"
-                                          : "bg-amber-50/70 border-amber-200 text-amber-900"
+                                          : config.isRevisi
+                                          ? "bg-amber-50/70 border-amber-200 text-amber-900"
+                                          : "bg-blue-50/70 border-blue-200 text-blue-900"
                                       }`}
                                     >
                                       <div className="font-bold text-[10px] uppercase tracking-wider mb-0.5 flex items-center gap-1">
@@ -450,6 +476,11 @@ export default function StateHistoryDrawer({
                                           <>
                                             <AlertCircle className="w-3 h-3 text-rose-600" />
                                             <span>Alasan Penolakan:</span>
+                                          </>
+                                        ) : config.isRevisi ? (
+                                          <>
+                                            <RotateCcw className="w-3 h-3 text-amber-600" />
+                                            <span>Catatan Revisi:</span>
                                           </>
                                         ) : (
                                           <span>Catatan:</span>

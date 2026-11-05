@@ -990,7 +990,7 @@ export default function ProkerV3DokumenPage() {
             <div className="flex items-center gap-2">
               <Upload className="w-4 h-4 text-indigo-600" />
               <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                Form Unggah Dokumen (Bisa Multiple Form Data)
+                Form Unggah Dokumen
               </h3>
             </div>
 

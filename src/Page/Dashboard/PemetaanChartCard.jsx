@@ -263,33 +263,24 @@ export default function PemetaanChartCard() {
   useEffect(() => {
     async function loadYears() {
       try {
-        const [resRenstra, resProker] = await Promise.allSettled([
-          apiClient.get("/tahunrenstras?mode=all"),
-          apiClient.get("/mastertahuns?mode=all"),
-        ]);
+        const resMaster = await apiClient.get("/mastertahuns?mode=all");
+        const list = Array.isArray(resMaster?.data) ? resMaster.data : [];
         const ySet = new Set(["2027", "2026", "2025", "2024"]);
-        if (resRenstra.status === "fulfilled" && Array.isArray(resRenstra.value?.data)) {
-          resRenstra.value.data.forEach((y) => {
-            const yr = String(y.Tahun || y.tahun || "").trim();
-            // Pemetaan Renstra & Dokumen Tambahan berlaku 2024 ke atas (tidak ada 2023)
-            if (yr && yr !== "2023" && Number(yr) >= 2024) ySet.add(yr);
-          });
-        }
-        if (resProker.status === "fulfilled" && Array.isArray(resProker.value?.data)) {
-          resProker.value.data.forEach((y) => {
-            const yr = String(y.Tahun || y.tahun || "").trim();
-            if (yr && yr !== "2023" && Number(yr) >= 2024) ySet.add(yr);
-          });
-        }
-        // Hapus 2023 jika ada
-        ySet.delete("2023");
+        list.forEach((item) => {
+          const yr = String(item.Tahun || item.tahun || "").trim();
+          if (yr) ySet.add(yr);
+        });
+
         const sorted = Array.from(ySet)
-          .filter((yr) => yr !== "2023" && Number(yr) >= 2024)
           .sort((a, b) => Number(b) - Number(a));
 
         setAvailableYears(sorted);
-        if (!selectedTahun || selectedTahun === "2023" || !sorted.includes(selectedTahun)) {
-          setSelectedTahun(sorted[0] || "2026");
+        if (!selectedTahun || !sorted.includes(selectedTahun)) {
+          setSelectedTahun(
+            positionYear && sorted.includes(String(positionYear))
+              ? String(positionYear)
+              : sorted[0] || "2026"
+          );
         }
       } catch (e) {
         console.warn("Gagal memuat list tahun master:", e);
@@ -1237,6 +1228,29 @@ export default function PemetaanChartCard() {
 
           {/* CONTROLS */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* FILTER TAHUN MASTER */}
+            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-gray-300 shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-gray-400" />
+              <label htmlFor="filter-pemetaan-tahun" className="sr-only">Tahun Dokumen Renstra</label>
+              <select
+                id="filter-pemetaan-tahun"
+                aria-label="Filter Tahun Master Pemetaan"
+                value={selectedTahun}
+                onChange={(e) => {
+                  const yr = e.target.value;
+                  setSelectedTahun(yr);
+                  fetchData(yr);
+                }}
+                className="text-xs font-semibold text-gray-700 bg-transparent border-none outline-none cursor-pointer"
+              >
+                {availableYears.map((yr) => (
+                  <option key={yr} value={yr}>
+                    Tahun {yr}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* FILTER STATUS / TIPE */}
             <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-gray-300 shadow-2xs">
               <Filter className="w-3.5 h-3.5 text-gray-400" />

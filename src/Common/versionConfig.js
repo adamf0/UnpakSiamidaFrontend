@@ -125,3 +125,11 @@ export const isDashboardProkerVisibleForVersion = (versionId = "v2") => {
   return versionId === "v1" || versionId === "v2" || versionId === "v3";
 };
 
+/**
+ * Menentukan apakah Banner Pengumuman Pelaporan Proker tampil di Dashboard
+ * Hanya muncul di versi V2 (audit periode 2024–2026)
+ */
+export const isDashboardProkerAnnouncementVisible = (versionId = "v2") => {
+  return (versionId || "v2") === "v2";
+};
+

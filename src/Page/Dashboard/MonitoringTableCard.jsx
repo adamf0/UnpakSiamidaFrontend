@@ -70,19 +70,28 @@ export default function MonitoringTableCard() {
     setLoadingTahun(true);
     setErrorTahun(null);
     try {
-      const res = await apiClient.get("/tahunprokers?mode=all");
-      const data = res.data;
-      const mapped = (data ?? []).map((j) => ({
-        id: j.UUID,
-        nama: j.Tahun,
-        ...j,
-      }));
+      const res = await apiClient.get("/mastertahuns?mode=all");
+      const list = Array.isArray(res?.data) ? res.data : [];
+      const mapped = list
+        .map((j) => ({
+          id: j.UUID || j.uuid,
+          nama: String(j.Tahun ?? j.tahun ?? ""),
+          UUID: j.UUID || j.uuid,
+          uuid: j.UUID || j.uuid,
+          Tahun: String(j.Tahun ?? j.tahun ?? ""),
+          tahun: String(j.Tahun ?? j.tahun ?? ""),
+          Status: j.Status || j.status || "",
+          status: j.Status || j.status || "",
+          ...j,
+        }))
+        .filter((j) => j.nama)
+        .sort((a, b) => Number(b.nama) - Number(a.nama));
 
       setDataTahun(mapped);
       return mapped;
     } catch (err) {
-      console.error("Fetch data tahun proker gagal:", err);
-      setErrorTahun(formatFetchError(err, "Gagal memuat tahun proker"));
+      console.error("Fetch data master tahun gagal:", err);
+      setErrorTahun(formatFetchError(err, "Gagal memuat master tahun"));
       return [];
     } finally {
       setLoadingTahun(false);
@@ -380,32 +389,63 @@ export default function MonitoringTableCard() {
             </p>
           </div>
 
-          {viewMode === "3d" && unlockedUnit && (
-            <button
-              type="button"
-              onClick={handleLockAndReturn}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition shadow-2xs cursor-pointer active:scale-95"
-              title="Kunci kembali lemari dan kembali ke rak gantungan kunci admin"
-            >
-              <Key className="w-3.5 h-3.5 text-amber-700" />
-              <span>Ganti</span>
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* FILTER TAHUN MASTER */}
+            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-gray-300 shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-gray-400" />
+              <label htmlFor="monitoring-tahun-select" className="sr-only">Tahun Program Kerja</label>
+              <select
+                id="monitoring-tahun-select"
+                aria-label="Filter Tahun Master Dokumen Program Kerja"
+                value={tahun?.UUID || tahun?.uuid || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const selected = dataTahun.find((t) => (t.UUID || t.uuid) === val);
+                  if (selected) {
+                    handleTahunChange(selected);
+                  }
+                }}
+                className="text-xs font-semibold text-gray-700 bg-transparent border-none outline-none cursor-pointer"
+              >
+                {dataTahun.map((t) => (
+                  <option key={t.UUID || t.uuid || t.nama} value={t.UUID || t.uuid}>
+                    Tahun {t.nama || t.Tahun} {String(t.Status || t.status).toLowerCase().includes("aktif") ? "(Aktif)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {viewMode === "3d" && unlockedUnit && (
+              <button
+                type="button"
+                onClick={handleLockAndReturn}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition shadow-2xs cursor-pointer active:scale-95"
+                title="Kunci kembali lemari dan kembali ke rak gantungan kunci admin"
+              >
+                <Key className="w-3.5 h-3.5 text-amber-700" />
+                <span>Ganti Unit</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* FILTER BADGES */}
-        {unlockedUnit && (
-          <div className="px-6 py-2.5 flex flex-wrap items-center gap-2.5 border-b bg-gray-50/40">
-            <span className="text-xs text-gray-500 font-medium">
-              Filter Aktif:
-            </span>
+        <div className="px-6 py-2.5 flex flex-wrap items-center gap-2.5 border-b bg-gray-50/40">
+          <span className="text-xs text-gray-500 font-medium">
+            Filter Aktif:
+          </span>
 
-            {/* BADGE UNIT (JIKA UNIT TELAH DIBUKA / DIPILIH) */}
+          <span className="bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1">
+            <Calendar className="w-3 h-3 text-indigo-600" />
+            Tahun: {tahun?.nama || tahun?.Tahun || "Semua"}
+          </span>
+
+          {unlockedUnit && (
             <span className="bg-blue-50 text-blue-800 border border-blue-200 text-xs px-2.5 py-1 rounded-full font-bold">
               Unit: {unlockedUnit.Nama || unlockedUnit.nama}
             </span>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* BODY WORKSPACE */}
         {viewMode === "3d" ? (
