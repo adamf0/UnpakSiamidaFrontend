@@ -162,16 +162,14 @@ const MataProgramPage = () => {
             }}
             renderAddAction={
               canAdd ? (
-                <Tooltip content="Tambah Mata Program">
-                  <button
-                    type="button"
-                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
-                    onClick={() => openNew()}
-                    aria-label="Tambah Mata Program"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </Tooltip>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
+                  onClick={() => openNew()}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Mata Program</span>
+                </button>
               ) : null
             }
             listcolumns={[

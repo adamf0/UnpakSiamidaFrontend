@@ -393,15 +393,15 @@ export default function UserAssignmentModal({
             leaveFrom="scale-100 opacity-100"
             leaveTo="scale-95 opacity-0"
           >
-            <Dialog.Panel className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-gray-100 transition-all my-8">
+            <Dialog.Panel className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-gray-150 transition-all my-8">
               {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-5">
+              <div className="flex items-start justify-between pb-4 border-b border-gray-100 mb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                    <UserCheck size={20} />
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
+                    <UserCheck className="w-5 h-5 stroke-[1.8]" />
                   </div>
                   <div>
-                    <Dialog.Title className="text-lg font-bold text-gray-900 leading-tight">
+                    <Dialog.Title className="text-base font-bold text-gray-900 leading-tight">
                       {mode === "edit"
                         ? "Edit Penugasan Role (ABAC)"
                         : "Tambah Penugasan Role Baru"}
@@ -416,9 +416,9 @@ export default function UserAssignmentModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition"
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                 >
-                  <X size={18} />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
@@ -635,14 +635,14 @@ export default function UserAssignmentModal({
                     type="button"
                     onClick={onClose}
                     disabled={isSubmitting}
-                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
+                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-2xs transition disabled:opacity-50 cursor-pointer"
                   >
                     {isSubmitting ? (
                       <>

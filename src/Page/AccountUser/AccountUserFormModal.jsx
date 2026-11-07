@@ -7,7 +7,7 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty, fetchFakultasUnits } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
-import { Eye, EyeOff, Shield, Building2, User, KeyRound, Mail } from "lucide-react";
+import { Eye, EyeOff, Shield, Building2, User, KeyRound, Mail, X } from "lucide-react";
 
 const LEVEL_OPTIONS = [
   { value: "admin", label: "Admin (Administrator Sistem / LPM)" },
@@ -244,21 +244,31 @@ export default function AccountUserFormModal({
             leaveFrom="scale-100 opacity-100"
             leaveTo="scale-95 opacity-0"
           >
-            <Dialog.Panel className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-gray-100 transition-all my-8">
-              <div className="flex items-center gap-3 pb-4 border-b border-gray-100 mb-5">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
-                  <User size={20} />
+            <Dialog.Panel className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-gray-150 transition-all my-8">
+              <div className="flex items-start justify-between gap-3 pb-4 border-b border-gray-100 mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5 stroke-[1.8]" />
+                  </div>
+                  <div>
+                    <Dialog.Title className="text-base font-bold text-gray-900 leading-tight">
+                      {mode === "edit" ? "Edit Akun Pengguna" : "Tambah Akun Pengguna Baru"}
+                    </Dialog.Title>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {mode === "edit"
+                        ? "Perbarui informasi akun, level hak akses, dan unit kerja"
+                        : "Daftarkan akun pengguna baru ke dalam sistem SIAMIDA"}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <Dialog.Title className="text-lg font-bold text-gray-900 leading-tight">
-                    {mode === "edit" ? "Edit Akun User" : "Tambah Akun User Baru"}
-                  </Dialog.Title>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {mode === "edit"
-                      ? "Perbarui informasi akun, level hak akses, dan unit kerja"
-                      : "Buat akun pengguna baru ke dalam sistem SIAMIDA"}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                  title="Tutup"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -308,13 +318,15 @@ export default function AccountUserFormModal({
 
                 {/* LEVEL ROLE */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Level / Hak Akses <span className="text-red-500">*</span>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Level / Hak Akses <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <select
-                      className={`w-full px-3 py-2 text-sm border rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-purple-500 transition ${
-                        errors.level ? "border-red-500" : "border-gray-300"
+                      className={`w-full px-3.5 py-2.5 text-sm border rounded-xl appearance-none bg-white outline-none transition cursor-pointer ${
+                        errors.level
+                          ? "border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15"
+                          : "border-gray-200 focus:border-purple-600 focus:ring-3 focus:ring-purple-600/15"
                       }`}
                       {...register("level", {
                         required: "Level user wajib dipilih",
@@ -326,12 +338,12 @@ export default function AccountUserFormModal({
                         </option>
                       ))}
                     </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-gray-400">
                       <Shield size={16} />
                     </div>
                   </div>
                   {errors.level && (
-                    <span className="text-xs text-red-500 mt-1 block">
+                    <span className="text-xs text-rose-500 mt-1 block">
                       {errors.level.message}
                     </span>
                   )}
@@ -370,10 +382,10 @@ export default function AccountUserFormModal({
 
                 {/* PASSWORD */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                     Password{" "}
                     {mode === "new" ? (
-                      <span className="text-red-500">*</span>
+                      <span className="text-rose-500">*</span>
                     ) : (
                       <span className="text-gray-400 font-normal">
                         (Kosongkan jika tidak diubah)
@@ -388,8 +400,10 @@ export default function AccountUserFormModal({
                           ? "Masukkan password akun"
                           : "Masukkan password baru (opsional)"
                       }
-                      className={`w-full px-3 py-2 pr-10 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-purple-500 transition ${
-                        errors.password ? "border-red-500" : "border-gray-300"
+                      className={`w-full px-3.5 py-2.5 pr-10 text-sm border rounded-xl bg-white outline-none transition ${
+                        errors.password
+                          ? "border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15"
+                          : "border-gray-200 focus:border-purple-600 focus:ring-3 focus:ring-purple-600/15"
                       }`}
                       {...register("password", {
                         required:
@@ -403,37 +417,37 @@ export default function AccountUserFormModal({
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+                      className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
                       tabIndex={-1}
                     >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                   {errors.password && (
-                    <span className="text-xs text-red-500 mt-1 block">
+                    <span className="text-xs text-rose-500 mt-1 block">
                       {errors.password.message}
                     </span>
                   )}
                 </div>
 
                 {/* ACTIONS */}
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
                   <button
                     type="button"
                     onClick={onClose}
                     disabled={isSubmitting}
-                    className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
+                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 active:bg-purple-800 rounded-lg shadow-sm transition flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 active:bg-purple-900 rounded-xl shadow-2xs transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     {isSubmitting ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         <span>Menyimpan...</span>
                       </>
                     ) : (

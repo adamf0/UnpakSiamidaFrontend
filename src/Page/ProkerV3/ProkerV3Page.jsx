@@ -1314,9 +1314,9 @@ export default function ProkerV3Page() {
     const nextVal = !Boolean(row.BebanYayasan);
     setUpdatingBebanUuids((prev) => ({ ...prev, [uuid]: true }));
     try {
-      await apiClient.put(`/proker_v3/${uuid}/beban_yayasan`, {
-        beban_yayasan: nextVal,
-      });
+      const fd = new FormData();
+      fd.append("beban_yayasan", nextVal ? "1" : "0");
+      await apiClient.put(`/proker_v3/${uuid}/beban_yayasan`, fd);
       row.BebanYayasan = nextVal;
       addToast(
         "success",
@@ -1358,10 +1358,10 @@ export default function ProkerV3Page() {
     }
     setIsSubmittingBatal(true);
     try {
-      await apiClient.put(`/proker_v3/${batalTargetProker.UUID}/batal`, {
-        is_batal: true,
-        catatan_batal: catatanBatalInput.trim(),
-      });
+      const fd = new FormData();
+      fd.append("is_batal", "1");
+      fd.append("catatan_batal", catatanBatalInput.trim());
+      await apiClient.put(`/proker_v3/${batalTargetProker.UUID}/batal`, fd);
       addToast(
         "success",
         `Program kerja "${batalTargetProker.NamaProgram}" berhasil dibatalkan`
@@ -1386,10 +1386,10 @@ export default function ProkerV3Page() {
     if (!batalTargetProker?.UUID) return;
     setIsSubmittingBatal(true);
     try {
-      await apiClient.put(`/proker_v3/${batalTargetProker.UUID}/batal`, {
-        is_batal: false,
-        catatan_batal: "",
-      });
+      const fd = new FormData();
+      fd.append("is_batal", "0");
+      fd.append("catatan_batal", "");
+      await apiClient.put(`/proker_v3/${batalTargetProker.UUID}/batal`, fd);
       addToast(
         "success",
         `Program kerja "${batalTargetProker.NamaProgram}" berhasil diaktifkan kembali`

@@ -15,19 +15,19 @@ export default function Choice({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium mb-2">
+      <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-2">
         {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
+        {required && <span className="text-rose-500 ml-1">*</span>}
       </label>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3.5">
         {/* === YA === */}
         <label
           className={`
-            ${disabled ? "cursor-default opacity-85" : "cursor-pointer"} rounded-xl border p-4 transition
+            ${disabled ? "cursor-default opacity-80" : "cursor-pointer"} rounded-xl border p-3.5 transition-all
             ${watchValue === "1"
-              ? "border-blue-500 bg-blue-50 ring-1 ring-blue-400"
-              : "border-gray-300 hover:border-gray-400"}
+              ? "border-purple-600 bg-purple-50/70 ring-2 ring-purple-600/20 text-purple-950 shadow-2xs"
+              : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/60 text-gray-800"}
           `}
         >
           <input
@@ -43,19 +43,19 @@ export default function Choice({
           <div className="flex items-center gap-3">
             <div
               className={`
-                h-4 w-4 rounded-full border flex items-center justify-center
+                h-4 w-4 rounded-full border flex items-center justify-center shrink-0
                 ${watchValue === "1"
-                  ? "border-blue-500"
+                  ? "border-purple-600 bg-white"
                   : "border-gray-400"}
               `}
             >
               {watchValue === "1" && (
-                <div className="h-2 w-2 rounded-full bg-blue-500" />
+                <div className="h-2 w-2 rounded-full bg-purple-600" />
               )}
             </div>
 
             <div>
-              <p className="font-medium text-sm">{yesLabel}</p>
+              <p className="font-semibold text-sm">{yesLabel}</p>
               <p className="text-xs text-gray-500">{yesDesc}</p>
             </div>
           </div>
@@ -64,10 +64,10 @@ export default function Choice({
         {/* === TIDAK === */}
         <label
           className={`
-            ${disabled ? "cursor-default opacity-85" : "cursor-pointer"} rounded-xl border p-4 transition
+            ${disabled ? "cursor-default opacity-80" : "cursor-pointer"} rounded-xl border p-3.5 transition-all
             ${watchValue === "0"
-              ? "border-red-500 bg-red-50 ring-1 ring-red-400"
-              : "border-gray-300 hover:border-gray-400"}
+              ? "border-rose-500 bg-rose-50/70 ring-2 ring-rose-500/20 text-rose-950 shadow-2xs"
+              : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/60 text-gray-800"}
           `}
         >
           <input
@@ -83,19 +83,19 @@ export default function Choice({
           <div className="flex items-center gap-3">
             <div
               className={`
-                h-4 w-4 rounded-full border flex items-center justify-center
+                h-4 w-4 rounded-full border flex items-center justify-center shrink-0
                 ${watchValue === "0"
-                  ? "border-red-500"
+                  ? "border-rose-500 bg-white"
                   : "border-gray-400"}
               `}
             >
               {watchValue === "0" && (
-                <div className="h-2 w-2 rounded-full bg-red-500" />
+                <div className="h-2 w-2 rounded-full bg-rose-500" />
               )}
             </div>
 
             <div>
-              <p className="font-medium text-sm">{noLabel}</p>
+              <p className="font-semibold text-sm">{noLabel}</p>
               <p className="text-xs text-gray-500">{noDesc}</p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export default function Choice({
       </div>
 
       {error?.message && (
-        <p className="text-xs text-red-500 mt-2">{error.message}</p>
+        <p className="text-xs font-medium text-rose-600 mt-2">{error.message}</p>
       )}
     </div>
   );

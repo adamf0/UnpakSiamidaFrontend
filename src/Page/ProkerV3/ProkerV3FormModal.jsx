@@ -863,7 +863,7 @@ export default function ProkerV3FormModal({
                                 <div className="sm:col-span-12">
                                   <div className="flex items-center justify-between mb-1">
                                     <label className="block text-xs font-semibold text-gray-700">
-                                      Standar & Sub Standar (master_standar_renstra) <span className="text-rose-500">*</span>
+                                      Standar Mutu Renstra <span className="text-rose-500">*</span>
                                     </label>
                                     {sc.selectedStandar && (
                                       <button
@@ -888,7 +888,7 @@ export default function ProkerV3FormModal({
                                 <div className="sm:col-span-12">
                                   <div className="flex items-center justify-between mb-1">
                                     <label className="block text-xs font-semibold text-gray-700">
-                                      Indikator Kinerja Utama (IKU) / IKT (master_indikator_renstra) <span className="text-rose-500">*</span>
+                                      Indikator Kinerja Utama (IKU / IKPT) <span className="text-rose-500">*</span>
                                     </label>
                                     {sc.selectedStandar && (
                                       <span className="text-[10px] text-purple-600 font-medium">

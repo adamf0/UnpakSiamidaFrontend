@@ -65,6 +65,7 @@ const RiskAssessmentPage = () => {
   const [fakultasList, setFakultasList] = useState([]);
   const [programList, setProgramList] = useState([]);
   const [riskLevels, setRiskLevels] = useState([]);
+  const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [userUnitData, setUserUnitData] = useState(null);
 
   // Cek apakah user memiliki fakultas_unit yang ditugaskan
@@ -104,27 +105,31 @@ const RiskAssessmentPage = () => {
   useEffect(() => {
     const fetchMetadata = async () => {
       const token = getValidToken();
-      if (isEmpty(token)) return;
+      if (isEmpty(token)) {
+        setLoadingMetadata(false);
+        return;
+      }
 
+      setLoadingMetadata(true);
       try {
         // 1. Fetch Master Tahun
         const resTahun = await apiClient.get("/tahunprokers?mode=all");
-        const jsonTahun = resTahun.data;
+        const jsonTahun = resTahun?.data ?? resTahun;
         setTahunList(Array.isArray(jsonTahun) ? jsonTahun : []);
 
         // 2. Fetch Risk Master Options (Levels, Criteria, Programs)
         const resRisk = await apiClient.get("/risk_options");
-        const jsonRisk = resRisk.data;
-        if (Array.isArray(jsonRisk.levels)) {
+        const jsonRisk = resRisk?.data ?? resRisk;
+        if (Array.isArray(jsonRisk?.levels)) {
           setRiskLevels(jsonRisk.levels);
         }
-        if (Array.isArray(jsonRisk.programs)) {
+        if (Array.isArray(jsonRisk?.programs)) {
           setProgramList(jsonRisk.programs);
         }
 
         // 3. Fetch Fakultas / Unit
         const resFu = await apiClient.get("/fakultasunits?mode=all");
-        const jsonFu = resFu.data;
+        const jsonFu = resFu?.data ?? resFu;
         const list = Array.isArray(jsonFu) ? jsonFu : [];
         setFakultasList(list);
 
@@ -182,6 +187,8 @@ const RiskAssessmentPage = () => {
         }
       } catch (err) {
         console.error("Gagal mengambil master data filter risiko:", err);
+      } finally {
+        setLoadingMetadata(false);
       }
     };
 
@@ -699,62 +706,79 @@ const RiskAssessmentPage = () => {
           </div>
         </div>
 
-        {/* Level Risiko Quick Filter Cards (Dynamic dari database risk_levels: R, M, T) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {riskLevels.map((lvl) => {
-            const isSelected = selectedLevel === lvl.kode || selectedLevel === lvl.nama_level;
-            let Icon = Skull;
-            let iconColor = "text-black";
-            let cardBg = "bg-gradient-to-br from-amber-500/10 via-amber-50 to-white border-amber-200 text-amber-900";
-            let ringColor = "ring-amber-500";
+        {/* Level Risiko Quick Filter Cards (Dynamic dari database risk_levels: R, M, T, E) */}
+        <div
+          className="grid grid-cols-1 md:grid-cols-3 gap-3"
+          aria-busy={loadingMetadata}
+        >
+          {loadingMetadata
+            ? Array.from({ length: 4 }).map((_, idx) => (
+                <div
+                  key={`risk-skeleton-${idx}`}
+                  className="p-4 rounded-xl border border-gray-200 bg-white animate-pulse"
+                >
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="w-9 h-9 rounded-lg bg-gray-200/80" />
+                    <div className="h-5 w-16 rounded-full bg-gray-200/80" />
+                  </div>
+                  <div className="h-4 w-24 rounded bg-gray-200/90 mb-2" />
+                  <div className="h-3 w-48 max-w-full rounded bg-gray-100" />
+                </div>
+              ))
+            : riskLevels.map((lvl) => {
+                const isSelected = selectedLevel === lvl.kode || selectedLevel === lvl.nama_level;
+                let Icon = AlertTriangle;
+                let iconColor = "text-gray-700";
+                let cardBg = "bg-gray-50/70 border-gray-300 text-gray-900";
+                let ringColor = "ring-purple-600";
 
-            if (lvl.kode === "T" || lvl.nama_level?.toLowerCase().includes("tinggi")) {
-              Icon = Flame;
-              iconColor = "text-rose-600";
-              cardBg = "bg-gradient-to-br from-rose-500/10 via-rose-50 to-white border-rose-200 text-rose-900";
-              ringColor = "ring-rose-600";
-            } else if (lvl.kode === "M" || lvl.nama_level?.toLowerCase().includes("menengah") || lvl.nama_level?.toLowerCase().includes("sedang")) {
-              Icon = AlertTriangle;
-              iconColor = "text-amber-600";
-              cardBg = "bg-gradient-to-br from-amber-500/10 via-amber-50 to-white border-amber-200 text-amber-900";
-              ringColor = "ring-amber-500";
-            } else if (lvl.kode === "R" || lvl.nama_level?.toLowerCase().includes("rendah")) {
-              Icon = CheckCircle2;
-              iconColor = "text-emerald-600";
-              cardBg = "bg-gradient-to-br from-emerald-500/10 via-emerald-50 to-white border-emerald-200 text-emerald-900";
-              ringColor = "ring-emerald-600";
-            }
-
-            return (
-              <button
-                key={lvl.id || lvl.kode}
-                type="button"
-                onClick={() =>
-                  setSelectedLevel((prev) => (prev === lvl.kode ? "" : lvl.kode))
+                if (lvl.kode === "T" || lvl.nama_level?.toLowerCase().includes("tinggi")) {
+                  Icon = Flame;
+                  iconColor = "text-rose-700";
+                  cardBg = "bg-rose-50/70 border-rose-300 text-rose-950";
+                  ringColor = "ring-rose-600";
+                } else if (lvl.kode === "M" || lvl.nama_level?.toLowerCase().includes("menengah") || lvl.nama_level?.toLowerCase().includes("sedang")) {
+                  Icon = AlertTriangle;
+                  iconColor = "text-amber-700";
+                  cardBg = "bg-amber-50/70 border-amber-300 text-amber-950";
+                  ringColor = "ring-amber-500";
+                } else if (lvl.kode === "R" || lvl.nama_level?.toLowerCase().includes("rendah")) {
+                  Icon = CheckCircle2;
+                  iconColor = "text-emerald-700";
+                  cardBg = "bg-emerald-50/70 border-emerald-300 text-emerald-950";
+                  ringColor = "ring-emerald-600";
                 }
-                className={`p-4 rounded-xl border text-left transition relative cursor-pointer ${
-                  isSelected
-                    ? `${cardBg} ring-2 ${ringColor} shadow-md`
-                    : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-xs"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                      isSelected ? "bg-white/80 shadow-xs" : "bg-gray-100"
+
+                return (
+                  <button
+                    key={lvl.id || lvl.kode}
+                    type="button"
+                    onClick={() =>
+                      setSelectedLevel((prev) => (prev === lvl.kode ? "" : lvl.kode))
+                    }
+                    className={`p-4 rounded-xl border text-left transition relative cursor-pointer ${
+                      isSelected
+                        ? `${cardBg} ring-2 ${ringColor} shadow-md`
+                        : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-xs"
                     }`}
                   >
-                    <Icon className={`w-5 h-5 ${iconColor}`} />
-                  </div>
-                  <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-white/70 border border-gray-200 font-mono">
-                    Level {lvl.kode}
-                  </span>
-                </div>
-                <div className="font-bold text-sm text-gray-900">{lvl.nama_level}</div>
-                <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{lvl.keterangan}</div>
-              </button>
-            );
-          })}
+                    <div className="flex items-center justify-between mb-2">
+                      <div
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                          isSelected ? "bg-white shadow-2xs" : "bg-gray-100"
+                        }`}
+                      >
+                        <Icon className={`w-5 h-5 ${iconColor}`} />
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-white border border-gray-200 font-mono shadow-2xs">
+                        Level {lvl.kode}
+                      </span>
+                    </div>
+                    <div className="font-bold text-sm text-gray-900">{lvl.nama_level}</div>
+                    <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{lvl.keterangan}</div>
+                  </button>
+                );
+              })}
         </div>
 
         {/* Remote Table */}
@@ -765,6 +789,18 @@ const RiskAssessmentPage = () => {
             listcolumns={listColumns}
             token={getValidToken()}
             mode="paging"
+            renderAddAction={
+              canManage ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
+                  onClick={openNew}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Risiko</span>
+                </button>
+              ) : null
+            }
             onError={(err) => {
               console.error("TABLE RISK ERROR:", err);
             }}

@@ -1321,10 +1321,10 @@ export default function ProkerV3AktivitasPage() {
     }
     setIsSubmittingBatalAct(true);
     try {
-      await apiClient.put(`/proker_v3/aktivitas/${batalTargetAct.UUID}/batal`, {
-        is_batal: true,
-        catatan_batal: catatanBatalActInput.trim(),
-      });
+      const fd = new FormData();
+      fd.append("is_batal", "1");
+      fd.append("catatan_batal", catatanBatalActInput.trim());
+      await apiClient.put(`/proker_v3/aktivitas/${batalTargetAct.UUID}/batal`, fd);
       addToast(
         "success",
         `Aktivitas "${batalTargetAct.Aktivitas}" berhasil dibatalkan`,
@@ -1349,10 +1349,10 @@ export default function ProkerV3AktivitasPage() {
     if (!batalTargetAct?.UUID) return;
     setIsSubmittingBatalAct(true);
     try {
-      await apiClient.put(`/proker_v3/aktivitas/${batalTargetAct.UUID}/batal`, {
-        is_batal: false,
-        catatan_batal: "",
-      });
+      const fd = new FormData();
+      fd.append("is_batal", "0");
+      fd.append("catatan_batal", "");
+      await apiClient.put(`/proker_v3/aktivitas/${batalTargetAct.UUID}/batal`, fd);
       addToast(
         "success",
         `Status pembatalan aktivitas "${batalTargetAct.Aktivitas}" berhasil dibatalkan (diaktifkan kembali)`,

@@ -214,8 +214,8 @@ const SearchSelect = ({
             ${disabled ? "bg-gray-100 cursor-not-allowed text-gray-400" : "bg-white text-gray-800"}
             ${
               error || formattedLoadError
-                ? "border-red-500 focus:ring-0"
-                : "border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                ? "border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15"
+                : "border-gray-200 hover:border-gray-300 focus:ring-3 focus:ring-purple-600/15 focus:border-purple-600 shadow-2xs"
             }
             ${className}
           `}
@@ -231,7 +231,7 @@ const SearchSelect = ({
                 setQuery("");
                 setIsSearching(false);
               }}
-              className="p-0.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition cursor-pointer"
+              className="p-1 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100 transition cursor-pointer"
               title="Hapus pilihan"
             >
               <X className="w-3.5 h-3.5" />
@@ -239,7 +239,7 @@ const SearchSelect = ({
           )}
           <ChevronDown
             className={`w-4 h-4 text-gray-400 pointer-events-none transition-transform duration-200 ${
-              open ? "rotate-180 text-blue-600" : ""
+              open ? "rotate-180 text-purple-700" : ""
             }`}
           />
         </div>

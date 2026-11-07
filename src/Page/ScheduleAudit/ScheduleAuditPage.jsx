@@ -17,6 +17,8 @@ import {
   Copy,
   Check,
   CalendarClock,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useNavigate } from "react-router-dom";
@@ -30,82 +32,82 @@ import ScheduleAuditFilterDrawer, {
 
 const getAuditeeRenstraStatus = (row) => {
   if (!row?.Auditee || !row.Auditee.trim()) {
-    return { text: "Belum Ditugaskan", color: "bg-gray-500" };
+    return { text: "Belum Ditugaskan", color: "bg-gray-50 text-gray-600 border border-gray-200" };
   }
   const tra = parseInt(row?.TotalRenstraAuditee || "0", 10);
   const tr = parseInt(row?.TotalRenstra || "0", 10);
 
   if (tra === 0) {
-    return { text: "Belum Mengisi", color: "bg-red-500" };
+    return { text: "Belum Mengisi", color: "bg-rose-50 text-rose-800 border border-rose-200" };
   }
   if (tr > 0 && tra >= tr) {
-    return { text: "Selesai", color: "bg-green-500" };
+    return { text: "Selesai", color: "bg-emerald-50 text-emerald-800 border border-emerald-200" };
   }
   const countStr = tr > 0 ? ` (${tra}/${tr})` : ` (${tra})`;
-  return { text: `Dalam Proses${countStr}`, color: "bg-orange-500" };
+  return { text: `Dalam Proses${countStr}`, color: "bg-amber-50 text-amber-800 border border-amber-200" };
 };
 
 const getAuditeeDokumenStatus = (row) => {
   if (!row?.Auditee || !row.Auditee.trim()) {
-    return { text: "Belum Ditugaskan", color: "bg-gray-500" };
+    return { text: "Belum Ditugaskan", color: "bg-gray-50 text-gray-600 border border-gray-200" };
   }
   const tda = parseInt(row?.TotalDokumenAuditee || "0", 10);
   const td = parseInt(row?.TotalDokumen || "0", 10);
 
   if (tda === 0) {
-    return { text: "Belum Mengisi", color: "bg-red-500" };
+    return { text: "Belum Mengisi", color: "bg-rose-50 text-rose-800 border border-rose-200" };
   }
   if (td > 0 && tda >= td) {
-    return { text: "Selesai", color: "bg-green-500" };
+    return { text: "Selesai", color: "bg-emerald-50 text-emerald-800 border border-emerald-200" };
   }
   const countStr = td > 0 ? ` (${tda}/${td})` : ` (${tda})`;
-  return { text: `Dalam Proses${countStr}`, color: "bg-orange-500" };
+  return { text: `Dalam Proses${countStr}`, color: "bg-amber-50 text-amber-800 border border-amber-200" };
 };
 
 const getAuditorRenstraStatus = (auditorName, catatan, row) => {
   if (!auditorName || !auditorName.trim()) {
-    return { text: "Belum Ditugaskan", color: "bg-gray-500" };
+    return { text: "Belum Ditugaskan", color: "bg-gray-50 text-gray-600 border border-gray-200" };
   }
   if (catatan && typeof catatan === "string" && catatan.trim().length > 0) {
-    return { text: "Selesai", color: "bg-green-500" };
+    return { text: "Selesai", color: "bg-emerald-50 text-emerald-800 border border-emerald-200" };
   }
   const traud = parseInt(row?.TotalRenstraAuditor || "0", 10);
   const tr = parseInt(row?.TotalRenstra || "0", 10);
 
   if (traud === 0) {
-    return { text: "Belum Menilai", color: "bg-gray-500" };
+    return { text: "Belum Menilai", color: "bg-rose-50 text-rose-800 border border-rose-200" };
   }
   if (tr > 0 && traud >= tr) {
-    return { text: "Selesai", color: "bg-green-500" };
+    return { text: "Selesai", color: "bg-emerald-50 text-emerald-800 border border-emerald-200" };
   }
   const countStr = tr > 0 ? ` (${traud}/${tr})` : ` (${traud})`;
-  return { text: `Sedang Menilai${countStr}`, color: "bg-blue-500" };
+  return { text: `Sedang Menilai${countStr}`, color: "bg-sky-50 text-sky-800 border border-sky-200" };
 };
 
 const getAuditorDokumenStatus = (auditorName, catatan, row) => {
   if (!auditorName || !auditorName.trim()) {
-    return { text: "Belum Ditugaskan", color: "bg-gray-500" };
+    return { text: "Belum Ditugaskan", color: "bg-gray-50 text-gray-600 border border-gray-200" };
   }
   if (catatan && typeof catatan === "string" && catatan.trim().length > 0) {
-    return { text: "Selesai", color: "bg-green-500" };
+    return { text: "Selesai", color: "bg-emerald-50 text-emerald-800 border border-emerald-200" };
   }
   const tdaud = parseInt(row?.TotalDokumenAuditor || "0", 10);
   const td = parseInt(row?.TotalDokumen || "0", 10);
 
   if (tdaud === 0) {
-    return { text: "Belum Menilai", color: "bg-gray-500" };
+    return { text: "Belum Menilai", color: "bg-rose-50 text-rose-800 border border-rose-200" };
   }
   if (td > 0 && tdaud >= td) {
-    return { text: "Selesai", color: "bg-green-500" };
+    return { text: "Selesai", color: "bg-emerald-50 text-emerald-800 border border-emerald-200" };
   }
   const countStr = td > 0 ? ` (${tdaud}/${td})` : ` (${tdaud})`;
-  return { text: `Sedang Menilai${countStr}`, color: "bg-blue-500" };
+  return { text: `Sedang Menilai${countStr}`, color: "bg-sky-50 text-sky-800 border border-sky-200" };
 };
 
 const renderStatusAuditee = (row) => {
   if (!row?.Auditee || !row.Auditee.trim()) {
     return (
-      <span className="bg-gray-500 px-2 py-1 text-xs text-white rounded-full inline-block whitespace-nowrap">
+      <span className="bg-gray-50 text-gray-600 border border-gray-200 px-2.5 py-1 text-xs font-semibold rounded-full inline-block whitespace-nowrap shadow-2xs">
         Belum Ditugaskan
       </span>
     );
@@ -117,12 +119,12 @@ const renderStatusAuditee = (row) => {
   return (
     <div className="flex flex-col gap-1 items-start py-0.5">
       <span
-        className={`${renstra.color} px-2 py-0.5 text-xs text-white rounded-full whitespace-nowrap`}
+        className={`${renstra.color} px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap shadow-2xs`}
       >
         Renstra: {renstra.text}
       </span>
       <span
-        className={`${dokumen.color} px-2 py-0.5 text-xs text-white rounded-full whitespace-nowrap`}
+        className={`${dokumen.color} px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap shadow-2xs`}
       >
         Dokumen Tambahan: {dokumen.text}
       </span>
@@ -133,7 +135,7 @@ const renderStatusAuditee = (row) => {
 const renderStatusAuditor = (auditorName, catatan, row) => {
   if (!auditorName || !auditorName.trim()) {
     return (
-      <span className="bg-gray-500 px-2 py-1 text-xs text-white rounded-full inline-block whitespace-nowrap">
+      <span className="bg-gray-50 text-gray-600 border border-gray-200 px-2.5 py-1 text-xs font-semibold rounded-full inline-block whitespace-nowrap shadow-2xs">
         Belum Ditugaskan
       </span>
     );
@@ -145,12 +147,12 @@ const renderStatusAuditor = (auditorName, catatan, row) => {
   return (
     <div className="flex flex-col gap-1 items-start py-0.5">
       <span
-        className={`${renstra.color} px-2 py-0.5 text-xs text-white rounded-full whitespace-nowrap`}
+        className={`${renstra.color} px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap shadow-2xs`}
       >
         Renstra: {renstra.text}
       </span>
       <span
-        className={`${dokumen.color} px-2 py-0.5 text-xs text-white rounded-full whitespace-nowrap`}
+        className={`${dokumen.color} px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap shadow-2xs`}
       >
         Dokumen Tambahan: {dokumen.text}
       </span>
@@ -238,28 +240,8 @@ const renderStatusJadwal = (rowOrStatus) => {
     formatDateSchedule(rowOrStatus.PeriodeAssesmentLapanganAkhir);
   const rangeAssLapangan = formatScheduleRange(tglAssLapanganMulai, tglAssLapanganAkhir);
 
-  const isSpecialStatus =
-    status === "audit telah berakhir" ||
-    status === "jadwal bentrok" ||
-    status === "belum mulai audit";
-
   return (
     <div className="flex flex-col items-start gap-2.5 py-1 min-w-[240px]">
-      {/* Status Utama jika berakhir, bentrok, atau belum mulai */}
-      {isSpecialStatus && (
-        <span
-          className={`${
-            status === "audit telah berakhir"
-              ? "bg-red-500"
-              : status === "jadwal bentrok"
-              ? "bg-orange-500"
-              : "bg-gray-500"
-          } px-2.5 py-0.5 text-xs text-white rounded-full whitespace-nowrap font-medium`}
-        >
-          {status}
-        </span>
-      )}
-
       {/* 1. Upload Dokumen */}
       <div className="flex flex-col items-start gap-0.5">
         <span
@@ -307,6 +289,87 @@ const renderStatusJadwal = (rowOrStatus) => {
           {rangeAssLapangan}
         </span>
       </div>
+    </div>
+  );
+};
+
+const renderInformasiTambahan = (row, onOpenMismatchModal) => {
+  const statusJadwal = (row?.StatusJadwal || "belum mulai audit")
+    .toLowerCase()
+    .trim();
+
+  const statusJadwalBadgeColor =
+    statusJadwal === "audit telah berakhir"
+      ? "bg-red-500 text-white"
+      : statusJadwal === "jadwal bentrok"
+      ? "bg-orange-500 text-white"
+      : statusJadwal === "upload dokumen"
+      ? "bg-green-600 text-white"
+      : statusJadwal === "assesment dokumen"
+      ? "bg-blue-600 text-white"
+      : statusJadwal === "assesment lapangan"
+      ? "bg-purple-600 text-white"
+      : "bg-gray-500 text-white";
+
+  const rawStatuses =
+    Array.isArray(row?.RawStatus) && row.RawStatus.length > 0
+      ? row.RawStatus
+      : ["Template belum ada"];
+  const mismatchDetails = Array.isArray(row?.MismatchDetails)
+    ? row.MismatchDetails
+    : [];
+
+  const getInfoBadgeColor = (issue) => {
+    switch (issue) {
+      case "Sesuai":
+        return "bg-emerald-600 text-white";
+      case "Belum generate":
+        return "bg-amber-400 text-gray-900";
+      case "Duplikat data":
+      case "Tidak sesuai kepemilikan tugas pada indikator":
+        return "bg-red-500 text-white";
+      case "Template belum ada":
+      default:
+        return "bg-gray-500 text-white";
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-start gap-1.5 py-1 min-w-[210px]">
+      {/* 1. Status Jadwal Audit */}
+      <span
+        className={`${statusJadwalBadgeColor} px-2.5 py-0.5 text-xs rounded-full whitespace-nowrap font-medium shadow-2xs`}
+      >
+        {statusJadwal}
+      </span>
+
+      {/* 2. Informasi Tambahan dari DatatableRenstraController */}
+      {rawStatuses.map((issue, idx) => (
+        <div key={`${issue}-${idx}`} className="flex flex-col items-start gap-1">
+          <span
+            className={`${getInfoBadgeColor(
+              issue
+            )} px-2.5 py-0.5 text-xs rounded-full whitespace-nowrap font-medium shadow-2xs`}
+          >
+            {issue}
+          </span>
+          {issue === "Tidak sesuai kepemilikan tugas pada indikator" &&
+            mismatchDetails.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onOpenMismatchModal) onOpenMismatchModal(row);
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold text-red-600 bg-white hover:bg-red-50 border border-red-400 rounded-lg transition cursor-pointer shadow-2xs"
+                title="Lihat detail indikator tidak sesuai"
+              >
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>Detail ({mismatchDetails.length} Indikator)</span>
+              </button>
+            )}
+        </div>
+      ))}
     </div>
   );
 };
@@ -498,6 +561,10 @@ const ScheduleAuditPage = () => {
     row: null,
     loading: false,
   });
+  const [mismatchModal, setMismatchModal] = useState({
+    open: false,
+    row: null,
+  });
 
   const handleSaveKodeAkses = async () => {
     if (!kodeAksesModal.row) return;
@@ -565,6 +632,16 @@ const ScheduleAuditPage = () => {
         const rowStatus = (row.StatusJadwal || "").toLowerCase().trim();
         const targetStatus = auditFilters.statusJadwal.toLowerCase().trim();
         if (rowStatus !== targetStatus) {
+          return false;
+        }
+      }
+
+      // 6. Informasi Tambahan
+      if (auditFilters.informasiTambahan) {
+        const rawList = Array.isArray(row?.RawStatus)
+          ? row.RawStatus
+          : ["Template belum ada"];
+        if (!rawList.includes(auditFilters.informasiTambahan)) {
           return false;
         }
       }
@@ -637,11 +714,74 @@ const ScheduleAuditPage = () => {
 
     try {
       await apiClient.delete(`/renstra/${selectedRow.UUID}`);
+      setSelectedRows((prev) => prev.filter((item) => item.UUID !== selectedRow.UUID));
       addToast("success", "Data berhasil dihapus");
     } catch (err) {
       addToast("error", err?.message || "Data tidak ditemukan");
     } finally {
       setConfirmDelete(false);
+      tableRef.current?.reload?.({ resetPage: true });
+    }
+  };
+
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [bulkEmailLoading, setBulkEmailLoading] = useState(false);
+
+  const handleNavigateGenerate = (rowsToGen = []) => {
+    const validUUIDs = rowsToGen.map((r) => r?.UUID).filter(Boolean);
+    if (validUUIDs.length === 0) {
+      addToast("error", "Pilih minimal 1 jadwal audit untuk generate data.");
+      return;
+    }
+    navigate(`/schedule_audit/generate?uuids=${encodeURIComponent(validUUIDs.join(","))}`);
+  };
+
+  const handleSendEmailOutbox = async (rowsToEmail = []) => {
+    const validUUIDs = rowsToEmail.map((r) => r?.UUID).filter(Boolean);
+    if (validUUIDs.length === 0) {
+      addToast("error", "Pilih minimal 1 jadwal audit untuk dikirim email.");
+      return false;
+    }
+
+    try {
+      setBulkEmailLoading(true);
+      const fd = new FormData();
+      fd.append("uuids", validUUIDs.join(","));
+      const res = await apiClient.post("/renstra/send-email", fd);
+      const msg =
+        res?.message ||
+        `Berhasil memasukkan ${validUUIDs.length} pengiriman email ke antrean background job (Outbox).`;
+      addToast("success", msg);
+      if (Array.isArray(res?.skippedTargets) && res.skippedTargets.length > 0) {
+        addToast(
+          "error",
+          `Dilewati karena belum memiliki Kode Akses: ${res.skippedTargets.join(", ")}`
+        );
+      }
+      return true;
+    } catch (err) {
+      addToast("error", err?.message || "Gagal memproses pengiriman email kode akses");
+      return false;
+    } finally {
+      setBulkEmailLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const validUUIDs = selectedRows.map((r) => r?.UUID).filter(Boolean);
+    if (validUUIDs.length === 0) return;
+
+    try {
+      const fd = new FormData();
+      fd.append("uuids", validUUIDs.join(","));
+      const res = await apiClient.post("/renstra/bulk-delete", fd);
+      addToast("success", res?.message || `Berhasil menghapus ${validUUIDs.length} jadwal audit.`);
+      setSelectedRows([]);
+    } catch (err) {
+      addToast("error", err?.message || "Gagal menghapus data jadwal audit");
+    } finally {
+      setConfirmBulkDelete(false);
       tableRef.current?.reload?.({ resetPage: true });
     }
   };
@@ -764,6 +904,24 @@ const ScheduleAuditPage = () => {
                 </button>
               </span>
             )}
+            {auditFilters.informasiTambahan && (
+              <span className="inline-flex items-center gap-1 bg-white border border-purple-200 text-purple-800 px-2 py-0.5 rounded-full font-medium shadow-2xs">
+                Informasi Tambahan: {auditFilters.informasiTambahan}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAuditFilters((prev) => ({
+                      ...prev,
+                      informasiTambahan: "",
+                    }))
+                  }
+                  className="text-gray-400 hover:text-purple-900"
+                  aria-label="Hapus filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
             {auditFilters.temuanKts && (
               <span className="inline-flex items-center gap-1 bg-white border border-purple-200 text-purple-800 px-2 py-0.5 rounded-full font-medium shadow-2xs">
                 Temuan KTS: {auditFilters.temuanKts.replace(/_/g, " ")}
@@ -797,9 +955,81 @@ const ScheduleAuditPage = () => {
             token={getValidToken()}
             adapter={ScheduleAuditAdapter}
             filterFn={filterFn}
+            selectable={true}
+            selectedRows={selectedRows}
+            onSelectionChange={setSelectedRows}
+            rowKey="UUID"
             onError={(err) => {
               console.error("TABLE ERROR:", err);
             }}
+            renderBulkAction={
+              selectedRows.length > 0 && (
+                <div className="mb-4 p-3.5 rounded-xl bg-purple-50/80 border border-purple-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-700 text-white text-xs font-semibold shadow-2xs">
+                      <Check className="w-3.5 h-3.5" />
+                      {selectedRows.length} Jadwal Dipilih
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap max-w-xl">
+                      {selectedRows.slice(0, 3).map((r) => (
+                        <span
+                          key={r.UUID}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-purple-200 text-[11px] font-medium text-gray-700"
+                        >
+                          {r.FakultasUnit} ({r.Tahun})
+                        </span>
+                      ))}
+                      {selectedRows.length > 3 && (
+                        <span className="text-xs font-medium text-purple-800">
+                          +{selectedRows.length - 3} lainnya
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRows([])}
+                      className="text-xs font-medium text-gray-500 hover:text-gray-800 underline cursor-pointer ml-1"
+                    >
+                      Batal Pilih
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleNavigateGenerate(selectedRows)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Generate ({selectedRows.length})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={bulkEmailLoading}
+                      onClick={() => handleSendEmailOutbox(selectedRows)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                    >
+                      {bulkEmailLoading ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Mail className="w-3.5 h-3.5" />
+                      )}
+                      <span>Kirim Email</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConfirmBulkDelete(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus Bulk</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            }
             renderAddAction={
               <div className="flex items-center gap-2 shrink-0">
                 <Tooltip content="Filter Jadwal Audit">
@@ -880,14 +1110,38 @@ const ScheduleAuditPage = () => {
                 key: "StatusJadwal",
                 label: "Status Jadwal",
                 searchable: false,
-                width: "280px",
-                minWidth: "260px",
-                className: "min-w-[260px]",
+                width: "260px",
+                minWidth: "240px",
+                className: "min-w-[240px]",
                 renderKey: (row) => renderStatusJadwal(row),
+              },
+              {
+                key: "InformasiTambahan",
+                label: "Informasi Tambahan",
+                searchable: false,
+                width: "240px",
+                minWidth: "220px",
+                className: "min-w-[220px]",
+                renderKey: (row) =>
+                  renderInformasiTambahan(row, (r) =>
+                    setMismatchModal({ open: true, row: r })
+                  ),
               },
             ]}
             renderAction={({ row, close }) => (
               <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-purple-700 hover:bg-purple-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                  onClick={() => {
+                    handleNavigateGenerate([row]);
+                    close();
+                  }}
+                >
+                  <RefreshCw className="w-4 h-4 text-purple-600 shrink-0 group-hover:rotate-45 transition-transform" />
+                  <span>Generate Data</span>
+                </button>
+
                 <button
                   type="button"
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-purple-700 hover:bg-purple-50/80 rounded-xl transition-all cursor-pointer text-left group"
@@ -1057,7 +1311,7 @@ const ScheduleAuditPage = () => {
                     <Mail className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900">Kirim Notifikasi Email</h3>
+                    <h3 className="text-sm font-bold text-gray-900">Kirim Notifikasi Email (Outbox)</h3>
                     <p className="text-xs text-gray-500">
                       {emailModal.row.FakultasUnit} ({emailModal.row.Tahun})
                     </p>
@@ -1073,7 +1327,7 @@ const ScheduleAuditPage = () => {
               </div>
 
               <div className="p-5 space-y-3 text-xs text-gray-600">
-                <p>Notifikasi email jadwal audit akan dikirimkan kepada pihak terkait:</p>
+                <p>Notifikasi email kode akses jadwal audit akan dikirimkan via background job (Outbox Pattern) kepada:</p>
                 <div className="space-y-2 p-3 bg-gray-50 rounded-xl border border-gray-150">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Auditee:</span>
@@ -1087,9 +1341,13 @@ const ScheduleAuditPage = () => {
                     <span className="text-gray-500">Auditor 2:</span>
                     <span className="font-semibold text-gray-800">{emailModal.row.Auditor2 || "-"}</span>
                   </div>
+                  <div className="flex justify-between pt-1.5 border-t border-gray-200">
+                    <span className="text-gray-500">Kode Akses:</span>
+                    <span className="font-mono font-bold text-purple-700">{emailModal.row.KodeAkses || "(Belum diatur)"}</span>
+                  </div>
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  Email berisi informasi rentang tanggal jadwal dan petunjuk pelaksanaan AMI.
+                  Pesan akan dimasukkan ke tabel outbox_messages dan dieksekusi oleh Outbox Worker secara asynchronous.
                 </p>
               </div>
 
@@ -1105,9 +1363,12 @@ const ScheduleAuditPage = () => {
                   type="button"
                   onClick={async () => {
                     setEmailModal((prev) => ({ ...prev, loading: true }));
-                    await new Promise((r) => setTimeout(r, 600));
-                    addToast("success", `Notifikasi email untuk ${emailModal.row.FakultasUnit} berhasil diproses`);
-                    setEmailModal({ open: false, row: null, loading: false });
+                    const ok = await handleSendEmailOutbox([emailModal.row]);
+                    if (ok) {
+                      setEmailModal({ open: false, row: null, loading: false });
+                    } else {
+                      setEmailModal((prev) => ({ ...prev, loading: false }));
+                    }
                   }}
                   disabled={emailModal.loading}
                   className="px-4 py-2 text-xs font-semibold text-white bg-sky-600 rounded-xl hover:bg-sky-700 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
@@ -1122,10 +1383,151 @@ const ScheduleAuditPage = () => {
           </div>
         )}
 
+        {/* MODAL DETAIL KETIDAKSESUAIAN KEPEMILIKAN TUGAS INDIKATOR */}
+        {mismatchModal.open && mismatchModal.row && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-gray-100">
+              <div className="p-4 sm:p-5 bg-red-600 text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="w-5 h-5 shrink-0" />
+                  <h3 className="text-sm sm:text-base font-bold">
+                    Detail Ketidaksesuaian Kepemilikan Tugas Indikator
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMismatchModal({ open: false, row: null })}
+                  className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-red-700 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-4 sm:p-5 overflow-y-auto space-y-4">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900">
+                  <div>
+                    <span className="font-bold">Tahun:</span>{" "}
+                    <span>{mismatchModal.row.Tahun || "-"}</span>
+                  </div>
+                  <div>
+                    <span className="font-bold">Fakultas / Unit:</span>{" "}
+                    <span>{mismatchModal.row.FakultasUnit || "-"}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold">Total Tidak Sesuai:</span>
+                    <span className="px-2 py-0.5 rounded-full bg-red-600 text-white font-semibold">
+                      {(mismatchModal.row.MismatchDetails || []).length} Indikator
+                    </span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead className="bg-gray-50 text-gray-700 border-b border-gray-200">
+                      <tr>
+                        <th className="py-2.5 px-3 text-center w-12 font-semibold">#</th>
+                        <th className="py-2.5 px-3 font-semibold">Nama Indikator</th>
+                        <th className="py-2.5 px-3 font-semibold w-36">Target</th>
+                        <th className="py-2.5 px-3 text-center font-semibold w-44">
+                          Tugas di Template (Seharusnya)
+                        </th>
+                        <th className="py-2.5 px-3 text-center font-semibold w-56">
+                          Saat Ini Terjadi
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {(mismatchModal.row.MismatchDetails || []).map((item, idx) => {
+                        const seharusnyaClass =
+                          item.seharusnya === "Auditor 1"
+                            ? "bg-blue-600 text-white"
+                            : item.seharusnya === "Auditor 2"
+                            ? "bg-sky-500 text-white"
+                            : "bg-gray-500 text-white";
+                        const saatIniClass =
+                          item.saat_ini === "Auditor 1" || item.saat_ini === "Auditor1"
+                            ? "bg-blue-600 text-white"
+                            : item.saat_ini === "Auditor 2" || item.saat_ini === "Auditor2"
+                            ? "bg-sky-500 text-white"
+                            : "bg-red-500 text-white";
+
+                        return (
+                          <tr key={idx} className="hover:bg-gray-50/80">
+                            <td className="py-2.5 px-3 text-center text-gray-500">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2.5 px-3 font-semibold text-gray-800">
+                              {item.indikator}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-800 border border-gray-200 font-medium">
+                                {item.target || "-"}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${seharusnyaClass}`}
+                              >
+                                {item.seharusnya}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${saatIniClass}`}
+                              >
+                                {item.saat_ini}
+                              </span>
+                              {item.keterangan && (
+                                <div className="text-[11px] text-red-600 mt-1">
+                                  {item.keterangan}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetRow = mismatchModal.row;
+                    setMismatchModal({ open: false, row: null });
+                    handleNavigateGenerate([targetRow]);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Generate Ulang Data Ini</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMismatchModal({ open: false, row: null })}
+                  className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <ConfirmDeleteDialog
           open={confirmDelete}
           onClose={() => setConfirmDelete(false)}
           onConfirm={async () => deleteData()}
+        />
+
+        <ConfirmDeleteDialog
+          open={confirmBulkDelete}
+          onClose={() => setConfirmBulkDelete(false)}
+          onConfirm={async () => handleBulkDelete()}
+          title={`Hapus ${selectedRows.length} Jadwal Audit?`}
+          message={`Anda akan menghapus ${selectedRows.length} jadwal audit terpilih secara permanen. Tindakan ini tidak dapat dibatalkan.`}
         />
 
         <ScheduleAuditFilterDrawer

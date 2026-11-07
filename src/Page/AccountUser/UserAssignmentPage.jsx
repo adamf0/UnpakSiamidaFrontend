@@ -359,7 +359,7 @@ export default function UserAssignmentPage() {
               <button
                 type="button"
                 onClick={openNew}
-                className="inline-flex items-center gap-1.5 h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Tambah Penugasan</span>
@@ -372,7 +372,7 @@ export default function UserAssignmentPage() {
         {targetUser && (
           <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-800 border border-purple-200/80 flex items-center justify-center font-bold text-lg shadow-2xs shrink-0">
                 {targetName ? targetName.charAt(0).toUpperCase() : "U"}
               </div>
               <div>

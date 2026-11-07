@@ -23,6 +23,11 @@ const RemoteTable = forwardRef(function RemoteTable(
     mode = "paging", // paging | sse | ndjson
     renderAction,
     renderAddAction,
+    renderBulkAction,
+    selectable = false,
+    selectedRows = [],
+    onSelectionChange,
+    rowKey = "UUID",
     allowedOps = ["like", "eq", "neq", "in"],
     adapter,
     onError,
@@ -55,6 +60,52 @@ const RemoteTable = forwardRef(function RemoteTable(
 
   const abortRef = useRef(null);
   const actionRef = useRef(null);
+  const selectAllRef = useRef(null);
+
+  const getRowId = (r, idx) => r?.[rowKey] ?? r?.UUID ?? r?.uuid ?? r?.id ?? idx;
+
+  const isRowSelected = (r, idx) => {
+    const id = getRowId(r, idx);
+    return selectedRows.some((item) => (typeof item === "object" && item !== null ? getRowId(item) : item) === id);
+  };
+
+  const allPageSelected = selectable && rows.length > 0 && rows.every((r, idx) => isRowSelected(r, idx));
+  const somePageSelected = selectable && rows.some((r, idx) => isRowSelected(r, idx)) && !allPageSelected;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = somePageSelected;
+    }
+  }, [somePageSelected, allPageSelected]);
+
+  const handleToggleAllPage = () => {
+    if (typeof onSelectionChange !== "function") return;
+    const pageIds = new Set(rows.map((r, idx) => getRowId(r, idx)));
+    if (allPageSelected) {
+      const next = selectedRows.filter(
+        (item) => !pageIds.has(typeof item === "object" && item !== null ? getRowId(item) : item)
+      );
+      onSelectionChange(next);
+    } else {
+      const existingIds = new Set(
+        selectedRows.map((item) => (typeof item === "object" && item !== null ? getRowId(item) : item))
+      );
+      const additions = rows.filter((r, idx) => !existingIds.has(getRowId(r, idx)));
+      onSelectionChange([...selectedRows, ...additions]);
+    }
+  };
+
+  const handleToggleRow = (row, idx) => {
+    if (typeof onSelectionChange !== "function") return;
+    const id = getRowId(row, idx);
+    if (isRowSelected(row, idx)) {
+      onSelectionChange(
+        selectedRows.filter((item) => (typeof item === "object" && item !== null ? getRowId(item) : item) !== id)
+      );
+    } else {
+      onSelectionChange([...selectedRows, row]);
+    }
+  };
 
   useEffect(() => {
     if (!isManual) return;
@@ -379,11 +430,14 @@ const RemoteTable = forwardRef(function RemoteTable(
         {renderAddAction}
       </div>
 
+      {renderBulkAction}
+
       {/* TABLE */}
       {/*table-fixed*/}
       <div className="overflow-x-auto w-full max-w-full scroll-custom">
         <table className="w-full">
           <colgroup>
+            {selectable && <col style={{ width: "44px" }} />}
             {listcolumns.map((c, i) => (
               <col
                 key={c.key ? `${c.key}-${i}` : i}
@@ -399,8 +453,22 @@ const RemoteTable = forwardRef(function RemoteTable(
             {typeof renderAction === "function" && <col style={{ width: "60px" }} />}
           </colgroup>
 
-          <thead className="bg-gray-100">
+          <thead className="bg-gray-50/90 border-b border-gray-200/80">
             <tr>
+              {selectable && (
+                <th className="px-3 py-2.5 text-center align-top w-11">
+                  <div className="flex items-center justify-center pt-0.5">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={handleToggleAllPage}
+                      aria-label="Pilih semua baris di halaman ini"
+                      className="w-4 h-4 rounded border-gray-300 text-purple-700 focus:ring-purple-500 cursor-pointer accent-purple-700"
+                    />
+                  </div>
+                </th>
+              )}
               {listcolumns.map((c, i) => {
                 const effectiveMinWidth =
                   c.minWidth ||
@@ -415,7 +483,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                     key={c.key ? `${c.key}-${c.label || i}` : (c.label || i)}
                     className={`px-4 py-2.5 text-sm text-left ${c.className || ""} ${
                       isStickyRight
-                        ? "sticky right-0 z-20 bg-gray-100 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]"
+                        ? "sticky right-0 z-20 bg-gray-50 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]"
                         : ""
                     }`}
                     style={{
@@ -427,45 +495,47 @@ const RemoteTable = forwardRef(function RemoteTable(
                     <div className="font-semibold text-gray-800 mb-1.5 whitespace-nowrap">{c.label}</div>
 
                     {c.searchable && (
-                      <div className="flex h-9 border border-gray-300 rounded-lg overflow-hidden bg-white shadow-2xs focus-within:ring-2 focus-within:ring-purple-500/30 focus-within:border-purple-500 transition">
-                        <select
-                          className="px-2 text-xs bg-gray-50 border-r border-gray-200 shrink-0 text-gray-700 outline-none cursor-pointer font-medium"
-                          value={draftFilters[c.key]?.op ?? allowedOps[0]}
-                          onChange={(e) => {
-                            const op = e.target.value;
-
-                            setDraftFilters((prev) => ({
-                              ...prev,
-                              [c.key]: {
-                                ...prev[c.key],
-                                op,
-                              },
-                            }));
-                          }}
-                        >
-                          {(c.allowedOps || allowedOps).map((op) => (
-                            <option key={op} value={op}>
-                              {op}
-                            </option>
-                          ))}
-                        </select>
-
+                      <div className="relative flex items-center h-8 border border-gray-300 rounded-lg overflow-hidden bg-white shadow-2xs focus-within:ring-2 focus-within:ring-purple-500/25 focus-within:border-purple-600 transition">
+                        <span className="pl-2.5 pr-1 text-gray-400 pointer-events-none shrink-0 flex items-center">
+                          <FiSearch size={13} />
+                        </span>
                         <input
-                          className="flex-1 min-w-0 px-2.5 text-xs outline-none text-gray-800 placeholder-gray-400"
-                          placeholder="filter…"
+                          type="text"
+                          className="flex-1 min-w-0 px-1 py-1 text-xs text-gray-800 placeholder-gray-400 bg-transparent outline-none"
+                          placeholder="Cari..."
                           value={draftFilters[c.key]?.value ?? ""}
                           onChange={(e) => {
                             const value = e.target.value;
-
                             setDraftFilters((prev) => ({
                               ...prev,
                               [c.key]: {
-                                op: prev[c.key]?.op ?? "like",
+                                op: prev[c.key]?.op ?? (c.defaultOp || "like"),
                                 value,
                               },
                             }));
                           }}
                         />
+                        {Boolean(draftFilters[c.key]?.value) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDraftFilters((prev) => ({
+                                ...prev,
+                                [c.key]: {
+                                  op: prev[c.key]?.op ?? (c.defaultOp || "like"),
+                                  value: "",
+                                },
+                              }));
+                            }}
+                            className="px-2 h-full flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors shrink-0"
+                            title="Hapus filter kolom"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18"></line>
+                              <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     )}
                   </th>
@@ -480,23 +550,41 @@ const RemoteTable = forwardRef(function RemoteTable(
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={listcolumns.length + (typeof renderAction === "function" ? 1 : 0)} className="py-6 text-center">
+                <td colSpan={listcolumns.length + (typeof renderAction === "function" ? 1 : 0) + (selectable ? 1 : 0)} className="py-6 text-center">
                   Loading...
                 </td>
               </tr>
             )}
 
             {!loading && (() => {
-              const renderTableRow = (r, idx) => (
-                <tr key={r.id || r.UUID || r.uuid || idx} className="border-t group hover:bg-gray-50/70 transition-colors">
+              const renderTableRow = (r, idx) => {
+                const checked = selectable && isRowSelected(r, idx);
+                return (
+                <tr
+                  key={r.id || r.UUID || r.uuid || idx}
+                  className={`border-t border-gray-100 group transition-colors ${
+                    checked ? "bg-purple-50/50 hover:bg-purple-50/75" : "hover:bg-purple-50/30"
+                  }`}
+                >
+                  {selectable && (
+                    <td className="px-3 py-3.5 text-center w-11">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => handleToggleRow(r, idx)}
+                        aria-label={`Pilih baris ${idx + 1}`}
+                        className="w-4 h-4 rounded border-gray-300 text-purple-700 focus:ring-purple-500 cursor-pointer accent-purple-700"
+                      />
+                    </td>
+                  )}
                   {listcolumns.map((c, i) => {
                     const isStickyRight = c.isStickyRight || c.sticky === "right";
                     return (
                       <td
                         key={c.key ? `${c.key}-${i}` : i}
-                        className={`px-4 py-3 text-sm ${c.className || ""} ${
+                        className={`px-4 py-3.5 text-sm text-gray-800 ${c.className || ""} ${
                           isStickyRight
-                            ? "sticky right-0 z-10 bg-white group-hover:bg-gray-50/90 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]"
+                            ? "sticky right-0 z-10 bg-white group-hover:bg-[#faf8fd] shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]"
                             : ""
                         }`}
                         style={{
@@ -510,7 +598,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                     );
                   })}
                   {typeof renderAction === "function" && (
-                    <td className="px-4 py-3 text-right relative">
+                    <td className="px-4 py-3.5 text-right relative">
                       <button
                         type="button"
                         className={`w-8 h-8 rounded-lg inline-flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 active:bg-gray-200 transition-colors cursor-pointer ${
@@ -552,7 +640,8 @@ const RemoteTable = forwardRef(function RemoteTable(
                     </td>
                   )}
                 </tr>
-              );
+                );
+              };
 
               if (typeof groupBy !== "function" || typeof renderGroupHeader !== "function") {
                 return rows.map((r, idx) => renderTableRow(r, idx));
@@ -571,7 +660,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                 groupMap.get(key).items.push(r);
               });
 
-              const colSpan = listcolumns.length + (typeof renderAction === "function" ? 1 : 0);
+              const colSpan = listcolumns.length + (typeof renderAction === "function" ? 1 : 0) + (selectable ? 1 : 0);
 
               return groups.map((g, gIdx) => (
                 <React.Fragment key={`grp-${g.key || gIdx}`}>
@@ -584,7 +673,7 @@ const RemoteTable = forwardRef(function RemoteTable(
             {!loading && rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={listcolumns.length + (typeof renderAction === "function" ? 1 : 0)}
+                  colSpan={listcolumns.length + (typeof renderAction === "function" ? 1 : 0) + (selectable ? 1 : 0)}
                   className="py-6 text-center text-gray-500"
                 >
                   Data tidak ditemukan

@@ -7,7 +7,8 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { renderLabelFakultasUnit } from "@/Common/Utils";
-import { FileSpreadsheet, FileText, Trash2, History } from "lucide-react";
+import { FileSpreadsheet, FileText, Trash2, History, ShieldCheck } from "lucide-react";
+import PageHeader from "@/Components/PageHeader";
 
 const AuditPage = () => {
   const navigate = useNavigate();
@@ -44,10 +45,14 @@ const AuditPage = () => {
           />
         )}
       />
-      <div className="p-3 bg-white">
-        <h2 className="text-lg font-semibold mb-4">Audit</h2>
+      <main className="p-4 sm:p-6 bg-gray-50 min-h-screen space-y-4">
+        <PageHeader
+          icon={ShieldCheck}
+          title="Audit Mutu Internal"
+          subtitle="Pemeriksaan dokumen bukti dukung, capaian indikator Renstra, dan penilaian auditor tingkat prodi & unit"
+        />
 
-        <div className="border rounded">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           {
             tahun>0 && 
             <RemoteTable
@@ -64,18 +69,18 @@ const AuditPage = () => {
                 { key: "Auditor2", label: "Auditor 2", searchable: true, renderKey: (row) => row.Auditor2 || "-" },
                 { key: "Auditee", label: "Auditee", searchable: true, renderKey: (row) => row.Auditee || "-" },
                 { key: "PeriodeUploadDokumenMulai", label: "Status Jadwal", className: "w-64", renderKey: (row) => {
-                  let styleBadge = "bg-gray-500 hover:bg-gray-600";
+                  let styleBadge = "bg-gray-50 text-gray-700 border-gray-200";
 
                   if (row.StatusJadwal === "jadwal bentrok") {
-                    styleBadge = "bg-orange-500 hover:bg-orange-600";
+                    styleBadge = "bg-amber-50 text-amber-800 border-amber-200";
                   } else if (row.StatusJadwal === "upload dokumen") {
-                    styleBadge = "bg-green-500 hover:bg-green-600";
+                    styleBadge = "bg-emerald-50 text-emerald-800 border-emerald-200";
                   } else if (row.StatusJadwal === "assesment dokumen") {
-                    styleBadge = "bg-blue-500 hover:bg-blue-600";
+                    styleBadge = "bg-sky-50 text-sky-800 border-sky-200";
                   } else if (row.StatusJadwal === "assesment lapangan") {
-                    styleBadge = "bg-purple-500 hover:bg-purple-600";
+                    styleBadge = "bg-purple-50 text-purple-800 border-purple-200";
                   } else if (row.StatusJadwal === "audit telah berakhir") {
-                    styleBadge = "bg-red-500 hover:bg-red-600";
+                    styleBadge = "bg-rose-50 text-rose-800 border-rose-200";
                   }
 
                   return (
@@ -84,7 +89,7 @@ const AuditPage = () => {
                         setJadwalOpen(true);
                         setJadwalRow(row);
                       }}
-                      className={`${styleBadge} px-2 py-1 text-xs text-white rounded-full block max-w-[16rem] truncate`}
+                      className={`${styleBadge} px-2.5 py-1 text-xs font-semibold rounded-full border block max-w-[16rem] truncate cursor-pointer hover:shadow-2xs transition`}
                     >
                       {row.StatusJadwal}
                     </span>
@@ -195,7 +200,7 @@ const AuditPage = () => {
             row={jadwalRow}
           />
         )}
-      </div>
+      </main>
     </>
   );
 };

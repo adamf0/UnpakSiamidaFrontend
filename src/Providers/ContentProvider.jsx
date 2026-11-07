@@ -155,8 +155,22 @@ export const ContentProvider = ({ children }) => {
       .filter((m) => String(m.tahun ?? m.Tahun) === String(positionYear))
       .map((m) => String(m.role ?? m.Role).toLowerCase());
 
+    // Cek apakah user memiliki peran audit (auditee, auditor1, auditor2) di tahun manapun
+    const auditRolesAllYears = (user?.extra_role ?? [])
+      .map((m) => String(m.role ?? m.Role).toLowerCase())
+      .filter((r) => ["auditee", "auditor1", "auditor2"].includes(r));
+
+    // Jika pada tahun aktif (>= 2024) belum ada penugasan spesifik tetapi user adalah auditor/auditee,
+    // tetap sertakan role audit tersebut agar menu Auditing dan hak akses audit tetap aktif di semua tahun nav >= 2024
+    const effectiveRoles =
+      matchingRoles.length > 0
+        ? matchingRoles
+        : parseInt(positionYear, 10) >= 2024 && auditRolesAllYears.length > 0
+        ? [auditRolesAllYears[0]]
+        : [];
+
     // Gabungkan level dasar pengguna ("user") dengan role penugasan ABAC (prioritaskan penugasan)
-    const allRoles = Array.from(new Set([...matchingRoles, userBaseLevel])).filter(Boolean);
+    const allRoles = Array.from(new Set([...effectiveRoles, ...matchingRoles, userBaseLevel])).filter(Boolean);
 
     setListLevel(allRoles);
 
@@ -166,10 +180,10 @@ export const ContentProvider = ({ children }) => {
 
     if (savedLevel && savedLevelYear === String(positionYear) && allRoles.includes(savedLevel)) {
       setLevel(savedLevel);
-    } else if (matchingRoles.length > 0) {
+    } else if (effectiveRoles.length > 0) {
       // Prioritaskan role penugasan (auditee, auditor1, auditor2, dll.) agar langsung aktif
-      setLevel(matchingRoles[0]);
-      localStorage.setItem("activeLevel", matchingRoles[0]);
+      setLevel(effectiveRoles[0]);
+      localStorage.setItem("activeLevel", effectiveRoles[0]);
       localStorage.setItem("activeLevelYear", String(positionYear));
     } else {
       setLevel(userBaseLevel);

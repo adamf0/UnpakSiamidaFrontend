@@ -12,7 +12,7 @@ import {
   fetchFakultasUnits,
 } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
-import { ShieldCheck, AlertTriangle, TrendingUp, AlertCircle, Building2, Calendar } from "lucide-react";
+import { ShieldCheck, AlertTriangle, TrendingUp, AlertCircle, Building2, Calendar, X } from "lucide-react";
 
 const KATEGORI_OPTIONS = [
   {
@@ -282,10 +282,10 @@ export default function SwotFormModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition cursor-pointer"
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                   title="Tutup"
                 >
-                  ✕
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
@@ -391,17 +391,17 @@ export default function SwotFormModal({
                     type="button"
                     onClick={onClose}
                     disabled={submitting}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-100 transition cursor-pointer"
+                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition cursor-pointer"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2 text-sm font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="px-4 py-2 text-xs font-semibold text-white bg-purple-700 rounded-xl hover:bg-purple-800 transition shadow-2xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {submitting && (
-                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     )}
                     <span>{mode === "edit" ? "Perbarui Analisis" : "Simpan Analisis SWOT"}</span>
                   </button>

@@ -16,6 +16,7 @@ import TemplateRenstraFormPage from "./Page/TemplateRenstra/TemplateRenstraFormP
 import PreviewTemplatePage from "./Page/PreviewTemplate/PreviewTemplatePage";
 import ScheduleAuditPage from "./Page/ScheduleAudit/ScheduleAuditPage";
 import ScheduleAuditFormPage from "./Page/ScheduleAudit/ScheduleAuditFormPage";
+import ScheduleAuditGeneratePage from "./Page/ScheduleAudit/ScheduleAuditGeneratePage";
 import AuditPage from "./Page/Audit/AuditPage";
 import { ContentProvider } from "./Providers/ContentProvider";
 import KtsPage from "./Page/Kts/KtsPage";
@@ -106,6 +107,8 @@ export default function App() {
                       <Route path="/schedule_audit" element={<ScheduleAuditPage />} />
                       <Route path="/schedule_audit/new" element={<ScheduleAuditFormPage />} />
                       <Route path="/schedule_audit/edit/:uuidSchedule" element={<ScheduleAuditFormPage />} />
+                      <Route path="/schedule_audit/generate" element={<ScheduleAuditGeneratePage />} />
+                      <Route path="/schedule_audit/generate/:uuidSchedule" element={<ScheduleAuditGeneratePage />} />
 
                       <Route path="/audit" element={<AuditPage />} />
                       <Route path="/audit/renstra/:uuidRenstra" element={<AuditRenstraEditPage />} />

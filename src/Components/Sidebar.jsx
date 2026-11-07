@@ -1,16 +1,27 @@
 import { useState } from "react";
 import {
-  IoNotificationsOutline,
-  IoFileTrayStacked,
-  IoCalendarOutline,
-  IoChevronDownOutline,
-  IoStatsChartOutline,
-  IoWarningOutline,
-} from "react-icons/io5";
-import { LiaHomeSolid } from "react-icons/lia";
-import { FaRegUser, FaFileAlt, FaUsersCog } from "react-icons/fa";
-import { BsPersonLock } from "react-icons/bs";
-import { HiOutlineDocumentText, HiOutlineClipboardList } from "react-icons/hi";
+  LayoutDashboard,
+  Users,
+  Calendar,
+  Layers,
+  Target,
+  ShieldCheck,
+  BarChart2,
+  AlertTriangle,
+  FileText,
+  FilePlus,
+  ClipboardList,
+  CalendarDays,
+  FolderKanban,
+  Activity,
+  FileCheck,
+  Files,
+  CalendarClock,
+  ScrollText,
+  FileSearch,
+  FileBarChart,
+  ChevronDown,
+} from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useContent } from "@/Providers/ContentProvider";
 import { useAuth } from "@/Providers/AuthProvider";
@@ -63,6 +74,15 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
     });
 
   const hasFakultasUnit = directHasUnit || hasUserRoleUnit;
+  const hasAuditRole =
+    currentLevel === "auditee" ||
+    currentLevel === "auditor1" ||
+    currentLevel === "auditor2" ||
+    (Array.isArray(user?.extra_role) &&
+      user.extra_role.some((r) => {
+        const role = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        return role === "auditee" || role === "auditor1" || role === "auditor2";
+      }));
   const [closedGroups, setClosedGroups] = useState({});
 
   const toggleGroup = (groupName) => {
@@ -72,8 +92,10 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
     }));
   };
 
-  const active = "bg-white text-[#1f2937] font-medium shadow-sm";
-  const inactive = "text-[#4b5563] hover:bg-white hover:text-[#1f2937]";
+  const active =
+    "bg-purple-50 text-purple-900 border-r-2 border-purple-700 font-semibold shadow-2xs";
+  const inactive =
+    "text-gray-600 hover:text-gray-900 hover:bg-gray-50 font-normal transition-colors";
 
   function getMenuGroups() {
     let groups = [];
@@ -86,7 +108,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Dashboard",
               path: "/dashboard",
-              icon: <LiaHomeSolid size={22} />,
+              icon: <LayoutDashboard size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -96,47 +118,47 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Account User",
               path: "/users",
-              icon: <FaUsersCog size={19} />,
+              icon: <Users size={18} strokeWidth={1.5} />,
             },
             {
               name: "Master Tahun",
               path: "/master_tahun",
-              icon: <IoCalendarOutline size={20} />,
+              icon: <Calendar size={18} strokeWidth={1.5} />,
             },
             {
               name: "Standar Renstra",
               path: "/standar_renstra",
-              icon: <IoFileTrayStacked size={20} />,
+              icon: <Layers size={18} strokeWidth={1.5} />,
             },
             {
               name: "Indikator Renstra",
               path: "/indikator_renstra",
-              icon: <FaRegUser size={18} />,
+              icon: <Target size={18} strokeWidth={1.5} />,
             },
             {
               name: "Jenis File Audit",
               path: "/jenis_file_audit",
-              icon: <BsPersonLock size={20} />,
+              icon: <ShieldCheck size={18} strokeWidth={1.5} />,
             },
             {
               name: "Analisis SWOT",
               path: "/swot",
-              icon: <IoStatsChartOutline size={20} />,
+              icon: <BarChart2 size={18} strokeWidth={1.5} />,
             },
             {
               name: "Analisis Risiko",
               path: "/risk_assessment",
-              icon: <IoWarningOutline size={20} />,
+              icon: <AlertTriangle size={18} strokeWidth={1.5} />,
             },
             {
               name: "Template Renstra",
               path: "/template_renstra",
-              icon: <HiOutlineDocumentText size={20} />,
+              icon: <FileText size={18} strokeWidth={1.5} />,
             },
             {
               name: "Template Dokumen Tambahan",
               path: "/template_dokumen_tambahan",
-              icon: <FaFileAlt size={18} />,
+              icon: <FilePlus size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -146,32 +168,32 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Program Kerja",
               path: "/proker_v3",
-              icon: <HiOutlineClipboardList size={20} />,
+              icon: <ClipboardList size={18} strokeWidth={1.5} />,
             },
             {
               name: "Jadwal Proker",
               path: "/jadwal_proker",
-              icon: <IoCalendarOutline size={19} />,
+              icon: <CalendarDays size={18} strokeWidth={1.5} />,
             },
             {
               name: "Mata Program",
               path: "/mata_program",
-              icon: <IoFileTrayStacked size={20} />,
+              icon: <FolderKanban size={18} strokeWidth={1.5} />,
             },
             {
               name: "Aktivitas",
               path: "/aktivitas",
-              icon: <HiOutlineDocumentText size={20} />,
+              icon: <Activity size={18} strokeWidth={1.5} />,
             },
             {
               name: "Pelaporan Pelaksanaan",
               path: "/pelaporan_pelaksanaan",
-              icon: <FaFileAlt size={18} />,
+              icon: <FileCheck size={18} strokeWidth={1.5} />,
             },
             {
               name: "Pelaporan Dokumen",
               path: "/pelaporan_dokumen",
-              icon: <IoFileTrayStacked size={18} />,
+              icon: <Files size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -181,12 +203,12 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Schedule Audit",
               path: "/schedule_audit",
-              icon: <IoCalendarOutline size={20} />,
+              icon: <CalendarClock size={18} strokeWidth={1.5} />,
             },
             {
               name: "Berita Acara",
               path: "/berita_acara",
-              icon: <IoNotificationsOutline size={20} />,
+              icon: <ScrollText size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -196,7 +218,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Report",
               path: "/report",
-              icon: <IoNotificationsOutline size={20} />,
+              icon: <FileBarChart size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -209,7 +231,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Dashboard",
               path: "/dashboard",
-              icon: <LiaHomeSolid size={22} />,
+              icon: <LayoutDashboard size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -219,47 +241,56 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Program Kerja",
               path: "/proker_v3",
-              icon: <HiOutlineClipboardList size={19} />,
+              icon: <ClipboardList size={18} strokeWidth={1.5} />,
             },
             {
               name: "Analisis SWOT",
               path: "/swot",
-              icon: <IoStatsChartOutline size={19} />,
+              icon: <BarChart2 size={18} strokeWidth={1.5} />,
             },
             {
               name: "Analisis Risiko",
               path: "/risk_assessment",
-              icon: <IoWarningOutline size={19} />,
+              icon: <AlertTriangle size={18} strokeWidth={1.5} />,
             },
             {
               name: "Mata Program",
               path: "/mata_program",
-              icon: <IoFileTrayStacked size={19} />,
+              icon: <FolderKanban size={18} strokeWidth={1.5} />,
             },
             {
               name: "Aktivitas",
               path: "/aktivitas",
-              icon: <HiOutlineDocumentText size={20} />,
+              icon: <Activity size={18} strokeWidth={1.5} />,
             },
             {
               name: "Pelaporan Pelaksanaan",
               path: "/pelaporan_pelaksanaan",
-              icon: <FaFileAlt size={18} />,
+              icon: <FileCheck size={18} strokeWidth={1.5} />,
             },
             {
               name: "Pelaporan Dokumen",
               path: "/pelaporan_dokumen",
-              icon: <IoFileTrayStacked size={18} />,
+              icon: <Files size={18} strokeWidth={1.5} />,
             },
           ],
         },
         {
           group: "Auditing",
           items: [
+            ...(selectedYear >= 2024
+              ? [
+                  {
+                    name: "Audit",
+                    path: "/audit",
+                    icon: <FileSearch size={18} strokeWidth={1.5} />,
+                  },
+                ]
+              : []),
             {
               name: "Berita Acara",
               path: "/berita_acara",
-              icon: <IoNotificationsOutline size={20} />,
+              icon: <ScrollText size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -269,7 +300,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Report",
               path: "/report",
-              icon: <IoNotificationsOutline size={20} />,
+              icon: <FileBarChart size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -289,7 +320,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Dashboard",
               path: "/dashboard",
-              icon: <LiaHomeSolid size={22} />,
+              icon: <LayoutDashboard size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -299,7 +330,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Program Kerja",
               path: "/proker_v3",
-              icon: <HiOutlineClipboardList size={19} />,
+              icon: <ClipboardList size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -316,7 +347,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Dashboard",
               path: "/dashboard",
-              icon: <LiaHomeSolid size={22} />,
+              icon: <LayoutDashboard size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -328,37 +359,37 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                   {
                     name: "Program Kerja",
                     path: "/proker_v3",
-                    icon: <HiOutlineClipboardList size={19} />,
+                    icon: <ClipboardList size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Analisis SWOT",
                     path: "/swot",
-                    icon: <IoStatsChartOutline size={19} />,
+                    icon: <BarChart2 size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Analisis Risiko",
                     path: "/risk_assessment",
-                    icon: <IoWarningOutline size={19} />,
+                    icon: <AlertTriangle size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Mata Program",
                     path: "/mata_program",
-                    icon: <IoFileTrayStacked size={19} />,
+                    icon: <FolderKanban size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Aktivitas",
                     path: "/aktivitas",
-                    icon: <HiOutlineDocumentText size={20} />,
+                    icon: <Activity size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Pelaporan Pelaksanaan",
                     path: "/pelaporan_pelaksanaan",
-                    icon: <FaFileAlt size={18} />,
+                    icon: <FileCheck size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Pelaporan Dokumen",
                     path: "/pelaporan_dokumen",
-                    icon: <IoFileTrayStacked size={18} />,
+                    icon: <Files size={18} strokeWidth={1.5} />,
                   },
                 ],
               },
@@ -370,12 +401,12 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Audit",
               path: "/audit",
-              icon: <IoNotificationsOutline size={20} />,
+              icon: <FileSearch size={18} strokeWidth={1.5} />,
             },
             {
               name: "Berita Acara",
               path: "/berita_acara",
-              icon: <IoNotificationsOutline size={20} />,
+              icon: <ScrollText size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -388,7 +419,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             {
               name: "Dashboard",
               path: "/dashboard",
-              icon: <LiaHomeSolid size={22} />,
+              icon: <LayoutDashboard size={18} strokeWidth={1.5} />,
             },
           ],
         },
@@ -400,37 +431,56 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                   {
                     name: "Program Kerja",
                     path: "/proker_v3",
-                    icon: <HiOutlineClipboardList size={19} />,
+                    icon: <ClipboardList size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Analisis SWOT",
                     path: "/swot",
-                    icon: <IoStatsChartOutline size={19} />,
+                    icon: <BarChart2 size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Analisis Risiko",
                     path: "/risk_assessment",
-                    icon: <IoWarningOutline size={19} />,
+                    icon: <AlertTriangle size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Mata Program",
                     path: "/mata_program",
-                    icon: <IoFileTrayStacked size={19} />,
+                    icon: <FolderKanban size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Aktivitas",
                     path: "/aktivitas",
-                    icon: <HiOutlineDocumentText size={20} />,
+                    icon: <Activity size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Pelaporan Pelaksanaan",
                     path: "/pelaporan_pelaksanaan",
-                    icon: <FaFileAlt size={18} />,
+                    icon: <FileCheck size={18} strokeWidth={1.5} />,
                   },
                   {
                     name: "Pelaporan Dokumen",
                     path: "/pelaporan_dokumen",
-                    icon: <IoFileTrayStacked size={18} />,
+                    icon: <Files size={18} strokeWidth={1.5} />,
+                  },
+                ],
+              },
+            ]
+          : []),
+        ...((hasAuditRole || selectedYear >= 2024)
+          ? [
+              {
+                group: "Auditing",
+                items: [
+                  {
+                    name: "Audit",
+                    path: "/audit",
+                    icon: <FileSearch size={18} strokeWidth={1.5} />,
+                  },
+                  {
+                    name: "Berita Acara",
+                    path: "/berita_acara",
+                    icon: <ScrollText size={18} strokeWidth={1.5} />,
                   },
                 ],
               },
@@ -470,7 +520,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
       <aside
         className={`
           fixed top-0 left-0 z-50 h-screen h-[100svh] max-h-[100svh]
-          bg-[#F3F4F6] border-r
+          bg-white border-r border-gray-200/90 shadow-sm
           flex flex-col
           transition-all duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
@@ -480,20 +530,29 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
         `}
       >
         {/* HEADER / LOGO */}
-        <div className="h-16 shrink-0 flex items-center justify-center border-b">
-          <span
-            className={`text-lg font-bold transition-all ${
-              isCollapsed ? "hidden" : "block"
-            }`}
-          >
-            SIAMIDA
-          </span>
+        <div className="h-16 shrink-0 flex items-center justify-between px-4 border-b border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-800 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-2xs shrink-0">
+              S
+            </div>
+            <div className={`transition-all ${isCollapsed ? "hidden" : "block"}`}>
+              <div className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-1.5">
+                SIAMIDA
+                <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200/60 px-1 py-0.2 rounded">
+                  UNPAK
+                </span>
+              </div>
+              <div className="text-[10px] text-gray-400 font-normal">
+                Sistem Penjaminan Mutu
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ACTIVE VERSION BADGE (ADMIN) */}
         {isAdmin && !isCollapsed && (
           <div className="px-3 pt-2.5 pb-1 shrink-0">
-            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-gray-200/60 border border-gray-200">
+            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-purple-50/60 border border-purple-100">
               <span className="text-gray-500 font-semibold text-[10px] uppercase tracking-wider">
                 Mode Versi
               </span>
@@ -520,11 +579,12 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                     <button
                       type="button"
                       onClick={() => toggleGroup(section.group)}
-                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-700 transition-colors"
+                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-700 transition-colors"
                     >
                       <span>{section.group}</span>
-                      <IoChevronDownOutline
+                      <ChevronDown
                         size={14}
+                        strokeWidth={2}
                         className={`transition-transform duration-200 ${
                           isGroupOpen ? "rotate-0" : "-rotate-90"
                         }`}
@@ -540,7 +600,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                     <ul className="flex flex-col gap-1 mt-1">
                       {section.items.map((item) => {
                         const isActive = currentPath.startsWith(item.path);
-                        const isV2 = isV2FeaturePath(item.path);
+                        const isV2 = isV2FeaturePath(item.path) && item.path !== "/audit" && item.path !== "/berita_acara";
                         const isV3 = isV3FeaturePath(item.path);
 
                         return (
@@ -550,12 +610,16 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                               onClick={closeSidebarOnMobile}
                               className={`
                                 flex items-center justify-between
-                                p-3 rounded-lg transition-all
+                                px-3 py-2 rounded-lg transition-all text-sm
                                 ${isActive ? active : inactive}
                               `}
                             >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="min-w-[24px] flex justify-center shrink-0">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className={`min-w-[20px] flex justify-center shrink-0 ${
+                                    isActive ? "text-purple-700" : "text-gray-400 group-hover:text-gray-600"
+                                  }`}
+                                >
                                   {item.icon}
                                 </div>
 

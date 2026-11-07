@@ -4,9 +4,10 @@ import { STATUS_LEGEND, formatTanggalBulanTahun } from "@/Common/Utils";
  * Normalisasi status verifikasi dari backend maupun monitoring counts
  */
 export function resolveDocumentStatus(doc, countR0 = 0, countR1 = 0, countR2 = 0, countR3 = 0) {
-  if (doc?.Status) {
-    const s = String(doc.Status).trim().toLowerCase();
-    if (s === "terverifikasi" || s === "disetujui" || s === "approved") {
+  const statusVal = doc?.Status || doc?.StatusVerifikasi || doc?.status_verifikasi;
+  if (statusVal) {
+    const s = String(statusVal).trim().toLowerCase();
+    if (s === "terverifikasi" || s === "disetujui" || s === "approved" || s === "r2") {
       return {
         key: "terverifikasi",
         label: "Terverifikasi",
@@ -17,7 +18,7 @@ export function resolveDocumentStatus(doc, countR0 = 0, countR1 = 0, countR2 = 0
         bgLight: "bg-emerald-50",
       };
     }
-    if (s === "gagal_verifikasi" || s === "ditolak" || s === "rejected" || s === "revisi") {
+    if (s === "gagal_verifikasi" || s === "gagal_terverifikasi" || s === "ditolak" || s === "rejected" || s === "revisi" || s === "r3") {
       return {
         key: "gagal",
         label: "Gagal Verifikasi",
@@ -28,7 +29,7 @@ export function resolveDocumentStatus(doc, countR0 = 0, countR1 = 0, countR2 = 0
         bgLight: "bg-rose-50",
       };
     }
-    if (s === "belum_terverifikasi" || s === "pending" || s === "menunggu") {
+    if (s === "belum_terverifikasi" || s === "pending" || s === "menunggu" || s === "r1" || s === "proses") {
       return {
         key: "verifikasi",
         label: "Belum Diverifikasi",
@@ -236,11 +237,12 @@ export function aggregateMataProgramDossiers(rawData = [], realDocuments = [], c
     const mpUuid = row.MataProgramUuid || row.MataProgramUUID;
     const mpTitle = row.MataProgram || `Mata Program #${idx + 1}`;
 
-    // Ambil dokumen riil dari tabel pelaporandokumens yang cocok dengan mata program ini
     const matchedDocs = (realDocuments || []).filter((d) => {
       if (d.MataProgramId && mpId && String(d.MataProgramId) === String(mpId)) return true;
       if (d.MataProgramUuid && mpUuid && String(d.MataProgramUuid) === String(mpUuid)) return true;
-      if (d.MataProgram && String(d.MataProgram).trim().toLowerCase() === mpTitle.trim().toLowerCase()) return true;
+      const dName = (d.MataProgram || d.NamaProgram || d.mata_program || "").trim().toLowerCase();
+      const targetTitle = mpTitle.trim().toLowerCase();
+      if (dName && targetTitle && (dName === targetTitle || targetTitle.includes(dName) || dName.includes(targetTitle))) return true;
       return false;
     });
 
@@ -319,8 +321,10 @@ export function aggregateMataProgramDossiers(rawData = [], realDocuments = [], c
             id: d.ID || d.id,
             version: `v${vNum}.0`,
             versionLabel: `Versi ${vNum}.0 (${d.JenisDokumen})`,
-            file: d.File || `Dokumen_${cat.key}_v${vNum}.pdf`,
-            fileType: getFileType(d.File || ".pdf"),
+            file: d.NamaFile || d.nama_file || d.File || d.file || `Dokumen_${cat.key}_v${vNum}.pdf`,
+            fileUrl: d.FileURL || d.file_url || d.fileUrl || d.File || d.file,
+            filePath: d.FileURL || d.file_url || d.filePath || d.File || d.file,
+            fileType: getFileType(d.NamaFile || d.nama_file || d.File || d.file || ".pdf"),
             tanggalUpload: formatTanggalBulanTahun(d.CreatedAt || d.created_at || "2025-05-10"),
             uploader: d.Uploader || unitName,
             ukuran: formatBytes(d.FileSize || 1540000),

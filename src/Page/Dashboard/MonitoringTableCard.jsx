@@ -125,29 +125,196 @@ export default function MonitoringTableCard() {
     async (targetTahun = tahun, targetUnit = fakultasunit) => {
       const tahunUuid = targetTahun?.UUID;
       const unitUuid = targetUnit?.UUID;
+      const unitId = targetUnit?.ID || targetUnit?.id || targetUnit?.UUID;
 
       if (!tahunUuid || !unitUuid) return;
 
       setLoading(true);
       try {
-        const [resMonitoring, resRealDocs] = await Promise.allSettled([
+        const [resMonitoring, resRealDocs, resProkerV3] = await Promise.allSettled([
           apiClient.get(`/monitoringproker/${tahunUuid}/${unitUuid}?mode=all`),
           apiClient.get(`/pelaporandokumens?mode=all&target=${unitUuid}`),
+          apiClient.get(`/proker_v3`, {
+            params: { mode: "all", filter_fakultas_unit: unitId },
+          }),
         ]);
 
+        let rawRows = [];
         if (resMonitoring.status === "fulfilled") {
           const json = resMonitoring.value?.data;
-          setRawData(Array.isArray(json) ? json : []);
-        } else {
-          setRawData([]);
+          rawRows = Array.isArray(json) ? [...json] : [];
         }
 
+        let legacyDocs = [];
         if (resRealDocs.status === "fulfilled") {
           const docsJson = resRealDocs.value?.data;
-          setRealDocs(Array.isArray(docsJson) ? docsJson : []);
-        } else {
-          setRealDocs([]);
+          legacyDocs = Array.isArray(docsJson) ? docsJson : [];
         }
+
+        // Ambil dokumen riil dari matrix_proker_dokumen via proker_v3
+        let v3Docs = [];
+        if (resProkerV3.status === "fulfilled") {
+          const prokerList = Array.isArray(resProkerV3.value?.data)
+            ? resProkerV3.value.data
+            : [];
+
+          const docPromises = prokerList.map(async (p) => {
+            if (!p.UUID) return [];
+            try {
+              const resDoc = await apiClient.get(`/proker_v3/${p.UUID}/dokumen`);
+              const docItems = Array.isArray(resDoc?.data?.data)
+                ? resDoc.data.data
+                : [];
+              return docItems.map((d) => ({
+                id: d.Id || d.id,
+                ID: d.Id || d.id,
+                uuid: d.UUID || d.uuid,
+                UUID: d.UUID || d.uuid,
+                MataProgram: p.NamaProgram || p.MataProgram || "",
+                NamaProgram: p.NamaProgram || p.MataProgram || "",
+                MataProgramId: p.IdMataProgram,
+                MataProgramUuid: p.UUID,
+                JenisDokumen: d.JenisDokumen,
+                File: d.NamaFile || d.nama_file || d.File || d.file,
+                file: d.NamaFile || d.nama_file || d.File || d.file,
+                fileUrl: d.FileURL || d.file_url || d.File || d.file,
+                filePath: d.FileURL || d.file_url || d.File || d.file,
+                NamaFile: d.NamaFile || d.nama_file,
+                FileSize: d.FileSize || d.file_size,
+                FileType: d.FileType || d.file_type,
+                Status: d.StatusVerifikasi || "belum_terverifikasi",
+                StatusVerifikasi: d.StatusVerifikasi || "belum_terverifikasi",
+                Catatan: d.Catatan || "",
+                CatatanPenolakan: d.CatatanPenolakan || "",
+                Keterangan: d.Keterangan || "",
+                CreatedAt: d.CreatedAt,
+                Uploader: p.NamaFakultasUnit || targetUnit?.Nama || targetUnit?.nama || "Unit",
+                Tahun: p.Tahun,
+                IdMatrikProker: d.IdMatrikProker || p.Id,
+                raw: d,
+              }));
+            } catch {
+              return [];
+            }
+          });
+
+          const docResults = await Promise.all(docPromises);
+          v3Docs = docResults.flat();
+        }
+
+        // Gabungkan seluruh dokumen riil
+        const combinedRealDocs = [...v3Docs, ...legacyDocs];
+        setRealDocs(combinedRealDocs);
+
+        // Sinkronisasi data ringkasan rawData dengan dokumen riil matrix_proker_dokumen
+        if (v3Docs.length > 0) {
+          const categorizeCount = (docs, catKey) => {
+            const catUpper = catKey.toUpperCase();
+            return docs.filter((d) => {
+              const jd = (d.JenisDokumen || "").trim().toUpperCase();
+              if (catUpper === "PROPOSAL/TOR") {
+                return jd.includes("PROPOSAL") || jd.includes("TOR");
+              }
+              return jd === catUpper || jd.startsWith(catUpper);
+            });
+          };
+
+          const countR = (docs, types) =>
+            docs.filter((d) => types.includes(String(d.Status).toLowerCase().trim())).length;
+
+          const docsByMp = {};
+          v3Docs.forEach((doc) => {
+            const mpName = doc.MataProgram || doc.NamaProgram;
+            if (!mpName) return;
+            const key = mpName.trim().toLowerCase();
+            if (!docsByMp[key]) {
+              docsByMp[key] = {
+                name: mpName,
+                prokerId: doc.IdMatrikProker,
+                mpId: doc.MataProgramId,
+                mpUuid: doc.MataProgramUuid,
+                tahun: doc.Tahun,
+                docs: [],
+              };
+            }
+            docsByMp[key].docs.push(doc);
+          });
+
+          Object.values(docsByMp).forEach((group) => {
+            const groupDocs = group.docs;
+            const skDocs = categorizeCount(groupDocs, "SK");
+            const sopDocs = categorizeCount(groupDocs, "SOP");
+            const torDocs = categorizeCount(groupDocs, "Proposal/TOR");
+            const lapDocs = categorizeCount(groupDocs, "Laporan");
+
+            let row = rawRows.find(
+              (r) =>
+                (r.MataProgram &&
+                  r.MataProgram.trim().toLowerCase() === group.name.trim().toLowerCase()) ||
+                (r.MataProgramId && group.mpId && String(r.MataProgramId) === String(group.mpId))
+            );
+
+            if (row) {
+              row.SK = Math.max(row.SK || 0, skDocs.length);
+              row.SKR0 = countR(skDocs, ["draft", "r0", ""]);
+              row.SKR1 = countR(skDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]);
+              row.SKR2 = countR(skDocs, ["terverifikasi", "disetujui", "approved", "r2"]);
+              row.SKR3 = countR(skDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]);
+
+              row.SOP = Math.max(row.SOP || 0, sopDocs.length);
+              row.SOPR0 = countR(sopDocs, ["draft", "r0", ""]);
+              row.SOPR1 = countR(sopDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]);
+              row.SOPR2 = countR(sopDocs, ["terverifikasi", "disetujui", "approved", "r2"]);
+              row.SOPR3 = countR(sopDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]);
+
+              row.ProposalTOR = Math.max(row.ProposalTOR || 0, torDocs.length);
+              row.ProposalTORR0 = countR(torDocs, ["draft", "r0", ""]);
+              row.ProposalTORR1 = countR(torDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]);
+              row.ProposalTORR2 = countR(torDocs, ["terverifikasi", "disetujui", "approved", "r2"]);
+              row.ProposalTORR3 = countR(torDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]);
+
+              row.Laporan = Math.max(row.Laporan || 0, lapDocs.length);
+              row.LaporanR0 = countR(lapDocs, ["draft", "r0", ""]);
+              row.LaporanR1 = countR(lapDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]);
+              row.LaporanR2 = countR(lapDocs, ["terverifikasi", "disetujui", "approved", "r2"]);
+              row.LaporanR3 = countR(lapDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]);
+            } else {
+              rawRows.push({
+                FakultasUnitId: targetUnit?.ID || targetUnit?.id || 41,
+                FakultasUnitUuid: unitUuid,
+                FakultasUnit: targetUnit?.Nama || targetUnit?.nama || "Unit",
+                MataProgramId: group.mpId,
+                MataProgramUuid: group.mpUuid,
+                MataProgram: group.name,
+                Tahun: group.tahun || targetTahun?.nama || targetTahun?.Tahun,
+                TahunId: targetTahun?.ID || targetTahun?.id,
+                TahunUuid: tahunUuid,
+                SK: skDocs.length,
+                SKR0: countR(skDocs, ["draft", "r0", ""]),
+                SKR1: countR(skDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]),
+                SKR2: countR(skDocs, ["terverifikasi", "disetujui", "approved", "r2"]),
+                SKR3: countR(skDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]),
+                SOP: sopDocs.length,
+                SOPR0: countR(sopDocs, ["draft", "r0", ""]),
+                SOPR1: countR(sopDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]),
+                SOPR2: countR(sopDocs, ["terverifikasi", "disetujui", "approved", "r2"]),
+                SOPR3: countR(sopDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]),
+                ProposalTOR: torDocs.length,
+                ProposalTORR0: countR(torDocs, ["draft", "r0", ""]),
+                ProposalTORR1: countR(torDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]),
+                ProposalTORR2: countR(torDocs, ["terverifikasi", "disetujui", "approved", "r2"]),
+                ProposalTORR3: countR(torDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]),
+                Laporan: lapDocs.length,
+                LaporanR0: countR(lapDocs, ["draft", "r0", ""]),
+                LaporanR1: countR(lapDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]),
+                LaporanR2: countR(lapDocs, ["terverifikasi", "disetujui", "approved", "r2"]),
+                LaporanR3: countR(lapDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]),
+              });
+            }
+          });
+        }
+
+        setRawData(rawRows);
       } catch (err) {
         console.error("Fetch monitoring proker gagal:", err);
         addToast(

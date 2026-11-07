@@ -12,6 +12,7 @@ import {
   formatFetchError,
 } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
+import { CheckSquare, X } from "lucide-react";
 
 const toDateInput = (val) => {
   if (!val) return "";
@@ -189,7 +190,7 @@ export default function AktivitasFormModal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/40" />
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] transition-opacity" />
         </Transition.Child>
 
         <div className="fixed inset-0 flex items-center justify-center p-4">
@@ -202,10 +203,29 @@ export default function AktivitasFormModal({
             leaveFrom="scale-100 opacity-100"
             leaveTo="scale-95 opacity-0"
           >
-            <Dialog.Panel className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg max-h-[90vh] overflow-y-auto">
-              <Dialog.Title className="text-lg font-semibold mb-4">
-                {mode === "edit" ? "Edit" : "Tambah"} Aktivitas
-              </Dialog.Title>
+            <Dialog.Panel className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-gray-150 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between gap-3 mb-5 pb-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
+                    <CheckSquare className="w-5 h-5 stroke-[1.8]" />
+                  </div>
+                  <div>
+                    <Dialog.Title className="text-base font-bold text-gray-900">
+                      {mode === "edit" ? "Edit" : "Tambah"} Aktivitas
+                    </Dialog.Title>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Kelola butir kegiatan dan target rencana pelaksanaan
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <SearchSelect
@@ -235,18 +255,18 @@ export default function AktivitasFormModal({
                 <TextInput
                   label="Aktivitas"
                   required
-                  placeholder="Masukkan aktivitas"
-                  error={errors.aktivitas}
+                  placeholder="Masukkan nama aktivitas kegiatan"
+                  error={errors.aktivitas?.message}
                   {...register("aktivitas", {
                     required: "Aktivitas wajib diisi",
                   })}
                 />
 
                 <TextInput
-                  label="PIC"
+                  label="Penanggung Jawab (PIC)"
                   required
-                  placeholder="Masukkan PIC"
-                  error={errors.pic}
+                  placeholder="Masukkan nama / unit PIC"
+                  error={errors.pic?.message}
                   {...register("pic", {
                     required: "PIC wajib diisi",
                   })}
@@ -265,19 +285,19 @@ export default function AktivitasFormModal({
                   endError={errors.tanggal_rk_akhir?.message}
                 />
 
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="flex justify-end items-center gap-2.5 pt-3 border-t border-gray-100">
                   <button
                     type="button"
                     onClick={onClose}
                     disabled={submitting}
-                    className="px-3 py-2 text-red-600 disabled:opacity-50"
+                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50"
+                    className="px-4 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-2xs transition cursor-pointer disabled:opacity-50"
                   >
                     {submitting ? "Menyimpan..." : "Simpan"}
                   </button>

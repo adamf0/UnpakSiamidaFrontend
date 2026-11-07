@@ -10,6 +10,7 @@ import {
   formatFetchError,
 } from "@/Common/Utils";
 import { apiClient, API_BASE_URL } from "@/Common/api";
+import { FolderArchive, X } from "lucide-react";
 
 const LIST_JENIS_DOKUMEN = [
   { id: "SK", UUID: "SK", nama: "SK (Wajib)" },
@@ -214,7 +215,7 @@ export default function PelaporanDokumenFormModal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/40" />
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] transition-opacity" />
         </Transition.Child>
 
         <div className="fixed inset-0 flex items-center justify-center p-4">
@@ -227,10 +228,29 @@ export default function PelaporanDokumenFormModal({
             leaveFrom="scale-100 opacity-100"
             leaveTo="scale-95 opacity-0"
           >
-            <Dialog.Panel className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg max-h-[90vh] overflow-y-auto">
-              <Dialog.Title className="text-lg font-semibold mb-4">
-                {mode === "edit" ? "Edit" : "Tambah"} Pelaporan Dokumen
-              </Dialog.Title>
+            <Dialog.Panel className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-gray-150 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between gap-3 mb-5 pb-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
+                    <FolderArchive className="w-5 h-5 stroke-[1.8]" />
+                  </div>
+                  <div>
+                    <Dialog.Title className="text-base font-bold text-gray-900">
+                      {mode === "edit" ? "Edit" : "Tambah"} Pelaporan Dokumen
+                    </Dialog.Title>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Unggah berkas bukti dukung dan pelaporan program kerja
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <SearchSelect
@@ -278,15 +298,15 @@ export default function PelaporanDokumenFormModal({
                   })}
                 />
 
-                <div className="space-y-1">
-                  <label className="block text-sm font-medium text-gray-700">
-                    File Dokumen {mode === "new" && <span className="text-red-500">*</span>}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-gray-700">
+                    Berkas Dokumen {mode === "new" && <span className="text-rose-500">*</span>}
                   </label>
                   <input
                     type="file"
                     accept=".pdf,.doc,.docx,.xls,.xlsx"
                     onChange={handleFileChange}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 border border-gray-300 rounded p-1"
+                    className="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 border border-gray-200 rounded-xl p-1.5 bg-white cursor-pointer"
                   />
                   {mode === "edit" && data?.File && (
                     <p className="text-xs text-gray-500">
@@ -295,34 +315,34 @@ export default function PelaporanDokumenFormModal({
                         href={`${API_BASE_URL}/upload/pelaporan_dokumen/${data.File}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-purple-600 underline font-medium"
+                        className="text-purple-700 hover:text-purple-900 underline font-medium"
                       >
                         {data.File}
                       </a>{" "}
                       (Biarkan kosong jika tidak ingin mengubah)
                     </p>
                   )}
-                  <p className="text-xs text-gray-400">
+                  <p className="text-3xs text-gray-400">
                     *Maksimal 10MB. Format yang didukung: .pdf, .doc, .docx, .xls, .xlsx
                   </p>
                   {fileError && (
-                    <p className="text-xs text-red-600 mt-1">{fileError}</p>
+                    <p className="text-xs text-rose-500 mt-1">{fileError}</p>
                   )}
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="flex justify-end items-center gap-2.5 pt-3 border-t border-gray-100">
                   <button
                     type="button"
                     onClick={onClose}
                     disabled={submitting}
-                    className="px-3 py-2 text-red-600 disabled:opacity-50 hover:bg-red-50 rounded"
+                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50"
+                    className="px-4 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-2xs transition cursor-pointer disabled:opacity-50"
                   >
                     {submitting ? "Menyimpan..." : "Simpan"}
                   </button>

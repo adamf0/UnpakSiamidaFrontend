@@ -54,13 +54,24 @@ export default function FileViewerModal({
 
   const formattedTanggal = formatTanggalBulanTahun(tanggalUpload);
 
-  const realFileUrl = `${API_BASE_URL}/upload/pelaporan_dokumen/${file}`;
+  const resolveFileUrl = () => {
+    const rawUrl = docData?.fileUrl || docData?.fileURL || docData?.File || file;
+    if (!rawUrl) return "";
+    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) return rawUrl;
+    const cleanPath = String(rawUrl).replace(/^\/+/, "");
+    if (cleanPath.startsWith("upload/")) {
+      return `${API_BASE_URL}/${cleanPath}`;
+    }
+    return `${API_BASE_URL}/upload/pelaporan_dokumen/${cleanPath}`;
+  };
+
+  const realFileUrl = resolveFileUrl();
 
   const handleDownload = () => {
     // Buat elemen download otomatis
     const a = document.createElement("a");
     a.href = realFileUrl;
-    a.download = file;
+    a.download = docData?.nama_file || docData?.NamaFile || file;
     a.target = "_blank";
     document.body.appendChild(a);
     a.click();

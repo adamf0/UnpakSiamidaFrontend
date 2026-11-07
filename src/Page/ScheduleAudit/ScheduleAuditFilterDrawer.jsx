@@ -9,6 +9,7 @@ export const initialAuditFilters = {
   statusAuditor2Renstra: "",
   statusAuditor2Dokumen: "",
   statusJadwal: "",
+  informasiTambahan: "",
   temuanKts: "",
 };
 
@@ -217,7 +218,32 @@ export default function ScheduleAuditFilterDrawer({
                       </select>
                     </div>
 
-                    {/* 6. Temuan KTS */}
+                    {/* 6. Informasi Tambahan */}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                        Informasi Tambahan
+                      </label>
+                      <select
+                        value={localFilters.informasiTambahan || ""}
+                        onChange={(e) =>
+                          handleChange("informasiTambahan", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition"
+                      >
+                        <option value="">Semua Informasi Tambahan</option>
+                        <option value="Sesuai">Sesuai</option>
+                        <option value="Belum generate">Belum generate</option>
+                        <option value="Duplikat data">Duplikat data</option>
+                        <option value="Tidak sesuai kepemilikan tugas pada indikator">
+                          Tidak sesuai kepemilikan tugas pada indikator
+                        </option>
+                        <option value="Template belum ada">
+                          Template belum ada
+                        </option>
+                      </select>
+                    </div>
+
+                    {/* 7. Temuan KTS */}
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                         Temuan KTS
@@ -264,22 +290,22 @@ export default function ScheduleAuditFilterDrawer({
                   </div>
 
                   {/* Footer Actions */}
-                  <div className="p-4 border-t border-gray-200 bg-gray-50/80 flex items-center justify-between gap-3">
+                  <div className="p-4 border-t border-gray-150 bg-gray-50 flex items-center justify-between gap-3">
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="px-4 py-2 border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition flex items-center gap-1.5"
+                      className="px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
                     >
-                      <RotateCcw className="w-4 h-4 text-gray-500" />
+                      <RotateCcw className="w-3.5 h-3.5 text-gray-500" />
                       Reset Filter
                     </button>
 
                     <button
                       type="button"
                       onClick={handleApply}
-                      className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition shadow-xs flex items-center gap-1.5"
+                      className="px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
                     >
-                      <Check className="w-4 h-4" />
+                      <Check className="w-3.5 h-3.5" />
                       Terapkan Filter
                     </button>
                   </div>

@@ -4,7 +4,7 @@ import { useForm, useWatch } from "react-hook-form";
 import SearchSelect from "@/Components/SearchSelect";
 import TextInput from "@/Components/TextInput";
 import RadioButton from "@/Components/RadioButton";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ArrowLeft, LayoutTemplate } from "lucide-react";
 import {
   delay,
   formatFetchError,
@@ -709,34 +709,46 @@ const TemplateRenstraFormPage = () => {
         )}
       />
 
-      <div className="p-4 pb-16 bg-white w-full">
-        <div className="mb-4 flex flex-col gap-4">
-          <nav
-            className="flex-1 text-sm text-gray-500 mb-1"
-            aria-label="Breadcrumb"
-          >
-            <ol className="list-none p-0 inline-flex">
-              <li className="flex items-center">
-                <Link to="/template_renstra" className="hover:underline">
-                  Template Renstra
-                </Link>
-                <span className="mx-2">/</span>
-              </li>
-              <li className="flex items-center text-gray-700 font-medium">
-                Form {mode == "edit" ? "Edit" : "Add"}
-              </li>
-            </ol>
-          </nav>
+      <div className="p-4 sm:p-6 bg-slate-50 min-h-screen w-full pb-16">
+        <div className="max-w-6xl mx-auto space-y-5">
+          <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              <Link
+                to="/template_renstra"
+                className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-600 hover:text-gray-900 transition cursor-pointer"
+                title="Kembali ke Template Renstra"
+              >
+                <ArrowLeft className="w-5 h-5 stroke-[1.8]" />
+              </Link>
+              <div>
+                <nav className="text-xs text-gray-500 mb-0.5" aria-label="Breadcrumb">
+                  <ol className="list-none p-0 inline-flex items-center gap-1.5">
+                    <li>
+                      <Link to="/template_renstra" className="hover:text-purple-700 transition">
+                        Template Renstra
+                      </Link>
+                    </li>
+                    <li className="text-gray-400">/</li>
+                    <li className="text-gray-700 font-medium">
+                      {mode === "edit" ? "Edit Template" : "Tambah Template Baru"}
+                    </li>
+                  </ol>
+                </nav>
+                <h1 className="text-lg font-bold text-gray-900">
+                  {mode === "edit" ? "Edit Template Matriks Renstra" : "Tambah Template Matriks Renstra"}
+                </h1>
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
+              <LayoutTemplate className="w-5 h-5 stroke-[1.8]" />
+            </div>
+          </div>
 
-          <h2 className="flex-1 text-lg font-semibold">
-            Form {mode == "edit" ? "Edit" : "Add"}
-          </h2>
-        </div>
-        {error.fakultas || error.template ? (
-          <ErrorSection />
-        ) : (
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="mb-6 p-6 space-y-4 border rounded-lg w-full">
+          {error.fakultas || error.template ? (
+            <ErrorSection />
+          ) : (
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="bg-white rounded-2xl border border-gray-150 p-6 shadow-xs space-y-5">
               <TextInput
                 type="number"
                 label="Tahun Renstra"
@@ -797,6 +809,7 @@ const TemplateRenstraFormPage = () => {
             />
           </form>
         )}
+        </div>
       </div>
 
       <AutoFillModalFill
@@ -1170,26 +1183,34 @@ const SubmitButtonWithLoading = ({
   const isLoading = isSaving || isDataLoading;
 
   return (
-    <button
-      type="submit"
-      disabled={isLoading || props.disabled}
-      className={`
-        inline-flex items-center justify-center gap-2
-        px-3 py-1.5 my-3 text-sm font-medium rounded text-white
-        transition-colors shadow-xs
-        ${
-          isLoading || props.disabled
-            ? "bg-purple-400 cursor-not-allowed opacity-90"
-            : "bg-purple-500 hover:bg-purple-400 cursor-pointer"
-        }
-      `}
-      {...props}
-    >
-      {isLoading && (
-        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-      )}
-      <span>{isSaving ? "Menyimpan..." : isDataLoading ? "Memuat..." : "Simpan"}</span>
-    </button>
+    <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-150">
+      <Link
+        to="/template_renstra"
+        className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer"
+      >
+        Batal
+      </Link>
+      <button
+        type="submit"
+        disabled={isLoading || props.disabled}
+        className={`
+          inline-flex items-center justify-center gap-2
+          px-5 py-2 text-xs font-semibold rounded-xl text-white
+          transition shadow-2xs
+          ${
+            isLoading || props.disabled
+              ? "bg-purple-300 cursor-not-allowed opacity-90"
+              : "bg-purple-700 hover:bg-purple-800 cursor-pointer"
+          }
+        `}
+        {...props}
+      >
+        {isLoading && (
+          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+        )}
+        <span>{isSaving ? "Menyimpan..." : isDataLoading ? "Memuat..." : "Simpan Template"}</span>
+      </button>
+    </div>
   );
 };
 

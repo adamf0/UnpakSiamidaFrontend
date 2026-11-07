@@ -258,13 +258,13 @@ export default function ReportPage() {
                 onClick={() => setActiveTab("indikator")}
                 className={`flex items-center gap-2 px-5 py-3 border-b-2 font-medium text-sm transition cursor-pointer ${
                   activeTab === "indikator"
-                    ? "border-blue-600 text-blue-600 font-semibold"
+                    ? "border-purple-700 text-purple-900 font-bold"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
               >
-                <Layers size={17} />
+                <Layers size={17} className={activeTab === "indikator" ? "text-purple-700" : "text-gray-400"} />
                 <span>Informasi Indikator</span>
-                <span className="ml-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold">
+                <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-semibold">
                   {monitoringData.length}
                 </span>
               </button>
@@ -273,11 +273,11 @@ export default function ReportPage() {
                 onClick={() => setActiveTab("temuan")}
                 className={`flex items-center gap-2 px-5 py-3 border-b-2 font-medium text-sm transition cursor-pointer ${
                   activeTab === "temuan"
-                    ? "border-blue-600 text-blue-600 font-semibold"
+                    ? "border-purple-700 text-purple-900 font-bold"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
               >
-                <BarChart3 size={17} />
+                <BarChart3 size={17} className={activeTab === "temuan" ? "text-purple-700" : "text-gray-400"} />
                 <span>Grafik Temuan KTS</span>
                 <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-semibold">
                   {rawTemuan.length}

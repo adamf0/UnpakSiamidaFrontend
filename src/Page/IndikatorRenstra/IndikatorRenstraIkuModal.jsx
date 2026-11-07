@@ -197,11 +197,10 @@ export default function IndikatorRenstraIkuModal({
 
     try {
       setSaving(true);
-      const payload = {
-        iku_ids: Array.from(selectedIds),
-      };
+      const fd = new FormData();
+      fd.append("iku_ids", Array.from(selectedIds).join(","));
 
-      await apiClient.post(`/indikatorrenstra/${identifier}/iku`, payload);
+      await apiClient.post(`/indikatorrenstra/${identifier}/iku`, fd);
       addToast("success", "Pemetaan IKU berhasil disimpan");
       onSuccess?.();
       onClose();
@@ -531,7 +530,7 @@ export default function IndikatorRenstraIkuModal({
                     type="button"
                     onClick={onClose}
                     disabled={saving}
-                    className="px-4 py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer disabled:opacity-50"
+                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
                   >
                     Batal
                   </button>
@@ -540,9 +539,9 @@ export default function IndikatorRenstraIkuModal({
                     type="button"
                     onClick={handleSave}
                     disabled={saving || loading}
-                    className="inline-flex items-center gap-2 px-5 py-2 text-xs sm:text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 active:bg-purple-800 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 active:bg-purple-900 rounded-xl transition shadow-2xs cursor-pointer disabled:opacity-50"
                   >
-                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>{saving ? "Menyimpan..." : "Simpan Pemetaan IKU"}</span>
                   </button>
                 </div>

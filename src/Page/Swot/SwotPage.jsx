@@ -33,33 +33,33 @@ const KATEGORI_CONFIG = {
   Kekuatan: {
     label: "Kekuatan (Strengths)",
     short: "S",
-    bgBadge: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    cardBg: "bg-gradient-to-br from-emerald-500/10 via-emerald-50 to-white border-emerald-200 text-emerald-900",
-    iconColor: "text-emerald-600",
+    bgBadge: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    cardBg: "bg-emerald-50/70 border-emerald-300 text-emerald-950",
+    iconColor: "text-emerald-700",
     icon: ShieldCheck,
   },
   Kelemahan: {
     label: "Kelemahan (Weaknesses)",
     short: "W",
-    bgBadge: "bg-rose-50 text-rose-700 border-rose-200",
-    cardBg: "bg-gradient-to-br from-rose-500/10 via-rose-50 to-white border-rose-200 text-rose-900",
-    iconColor: "text-rose-600",
+    bgBadge: "bg-rose-50 text-rose-800 border-rose-200",
+    cardBg: "bg-rose-50/70 border-rose-300 text-rose-950",
+    iconColor: "text-rose-700",
     icon: AlertCircle,
   },
   Peluang: {
     label: "Peluang (Opportunities)",
     short: "O",
-    bgBadge: "bg-blue-50 text-blue-700 border-blue-200",
-    cardBg: "bg-gradient-to-br from-blue-500/10 via-blue-50 to-white border-blue-200 text-blue-900",
-    iconColor: "text-blue-600",
+    bgBadge: "bg-sky-50 text-sky-800 border-sky-200",
+    cardBg: "bg-sky-50/70 border-sky-300 text-sky-950",
+    iconColor: "text-sky-700",
     icon: TrendingUp,
   },
   Ancaman: {
     label: "Ancaman (Threats)",
     short: "T",
-    bgBadge: "bg-amber-50 text-amber-700 border-amber-200",
-    cardBg: "bg-gradient-to-br from-amber-500/10 via-amber-50 to-white border-amber-200 text-amber-900",
-    iconColor: "text-amber-600",
+    bgBadge: "bg-amber-50 text-amber-800 border-amber-200",
+    cardBg: "bg-amber-50/70 border-amber-300 text-amber-950",
+    iconColor: "text-amber-700",
     icon: AlertTriangle,
   },
 };
@@ -632,16 +632,14 @@ const SwotPage = () => {
             }}
             renderAddAction={
               canManage ? (
-                <Tooltip content="Tambah Analisis SWOT">
-                  <button
-                    type="button"
-                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
-                    onClick={openNew}
-                    aria-label="Tambah Analisis SWOT"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </Tooltip>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
+                  onClick={openNew}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah SWOT</span>
+                </button>
               ) : null
             }
             listcolumns={listColumns}

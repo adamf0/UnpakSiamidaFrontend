@@ -1,5 +1,5 @@
 import React from "react";
-import { AiOutlineClear } from "react-icons/ai";
+import { Eraser } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 
 const RowClearAction = ({
@@ -11,8 +11,8 @@ const RowClearAction = ({
 }) => {
   if (status === "loading") {
     return (
-      <div className="w-[30px] h-[30px] flex items-center justify-center">
-        <div className="w-4 h-4 rounded-full border-2 border-gray-300 border-t-purple-500 animate-spin" />
+      <div className="w-7 h-7 flex items-center justify-center">
+        <div className="w-4 h-4 rounded-full border-2 border-gray-300 border-t-purple-600 animate-spin" />
       </div>
     );
   }
@@ -25,18 +25,17 @@ const RowClearAction = ({
           disabled={disabled}
           className={`
             flex justify-center items-center
-            w-[30px] h-[30px]
-            rounded transition-colors
+            w-7 h-7 rounded-lg transition
             ${
               disabled
-                ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed pointer-events-none"
-                : "bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white cursor-pointer shadow-xs"
+                ? "bg-gray-50 text-gray-300 border border-gray-200/60 cursor-not-allowed pointer-events-none"
+                : "bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 cursor-pointer shadow-2xs"
             }
           `}
           onClick={disabled ? undefined : onClear}
           aria-label={disabled ? (disabledTitle || title) : title}
         >
-          <AiOutlineClear size={16} />
+          <Eraser className="w-3.5 h-3.5" />
         </button>
       </span>
     </Tooltip>

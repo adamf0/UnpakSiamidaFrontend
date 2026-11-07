@@ -60,6 +60,8 @@ export const V2_FEATURE_PATHS = [
   "/pelaporan_pelaksanaan",
   "/pelaporan_dokumen",
   "/schedule_audit",
+  "/audit",
+  "/berita_acara",
 ];
 
 export const isV2FeaturePath = (path) => {

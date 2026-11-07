@@ -469,8 +469,10 @@ const KtsPage = ({
                 />
               ))
             ) : (
-              <div class="border rounded-lg p-4 h-screen flex justify-center items-center">
-                <div class="text-gray-400 text-sm">Tidak ada data kts</div>
+              <div className="border border-dashed border-gray-300 rounded-2xl p-12 flex flex-col items-center justify-center text-center bg-gray-50/50">
+                <FileText className="w-10 h-10 text-gray-400 mb-2 stroke-[1.5]" />
+                <p className="text-sm font-semibold text-gray-700">Tidak ada data KTS</p>
+                <p className="text-xs text-gray-500 mt-0.5">Seluruh instrumen audit berada dalam kesesuaian capaian.</p>
               </div>
             )}
           </div>

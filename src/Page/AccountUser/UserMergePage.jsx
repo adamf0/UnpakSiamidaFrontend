@@ -400,15 +400,15 @@ export default function UserMergePage() {
             {/* WORKSPACE AREA (Left) */}
             <div className="col-span-12 lg:col-span-7 xl:col-span-8 space-y-5">
               {/* Petunjuk Penggunaan Banner */}
-              <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-blue-50 border border-indigo-100/80 rounded-xl p-4 text-xs text-indigo-900 flex items-start gap-3">
-                <div className="p-2 bg-white/80 rounded-lg text-indigo-600 shadow-xs shrink-0 mt-0.5">
-                  <Sparkles className="w-4 h-4" />
+              <div className="bg-white border border-gray-200/90 rounded-2xl p-4 text-xs text-gray-700 flex items-start gap-3 shadow-2xs">
+                <div className="p-2 bg-purple-50 rounded-xl text-purple-700 border border-purple-200/80 shadow-2xs shrink-0 mt-0.5">
+                  <ShieldCheck className="w-4 h-4 stroke-[1.8]" />
                 </div>
                 <div className="space-y-1">
-                  <p className="font-semibold text-indigo-950">
+                  <p className="font-bold text-gray-900">
                     Cara Melakukan Penggabungan Akun:
                   </p>
-                  <p className="text-indigo-800 leading-relaxed">
+                  <p className="text-gray-600 leading-relaxed">
                     1. Tarik (drag) atau klik <strong>"+ Primary"</strong> pada akun utama yang akan menjadi akun induk.
                     <br />
                     2. Tarik atau klik <strong>"+ Secondary"</strong> pada satu atau lebih akun yang ingin digabungkan ke akun utama.
@@ -419,16 +419,16 @@ export default function UserMergePage() {
               </div>
 
               {/* 1. SECTION PRIMARY */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden transition-all">
-                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/50 to-white">
+              <div className="bg-white rounded-2xl border border-gray-200/90 shadow-2xs overflow-hidden transition-all">
+                <div className="px-5 py-4 border-b border-gray-150 flex items-center justify-between bg-gray-50/60">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                    <div className="w-8 h-8 rounded-xl bg-purple-700 text-white flex items-center justify-center shadow-2xs">
                       <Crown className="w-4 h-4" />
                     </div>
                     <div>
                       <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                         <span>1. Akun Primary (Akun Utama)</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
                           Maksimal 1 Data
                         </span>
                       </h2>

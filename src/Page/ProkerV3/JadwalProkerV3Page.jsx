@@ -251,27 +251,26 @@ export default function JadwalProkerV3Page() {
     try {
       if (modalMode === "create") {
         if (isCreateGlobal) {
-          const payload = {
-            tahun: formData.tahun.trim(),
-            tanggal_mulai: formData.tanggal_mulai,
-            tanggal_akhir: formData.tanggal_akhir,
-            id_fakultas_unit: null,
-          };
-          await apiClient.post("/proker_v3/jadwal", payload);
+          const fd = new FormData();
+          fd.append("tahun", formData.tahun.trim());
+          fd.append("tanggal_mulai", formData.tanggal_mulai);
+          fd.append("tanggal_akhir", formData.tanggal_akhir);
+          fd.append("id_fakultas_unit", "");
+          await apiClient.post("/proker_v3/jadwal", fd);
           addToast("success", "Jadwal program kerja (Global) berhasil ditambahkan");
         } else {
           // Multiple requests: request sebanyak target unit yang dipilih
           const targets = formData.target_units.filter(
             (id) => id && id !== "global"
           );
-          const requests = targets.map((unitId) =>
-            apiClient.post("/proker_v3/jadwal", {
-              tahun: formData.tahun.trim(),
-              tanggal_mulai: formData.tanggal_mulai,
-              tanggal_akhir: formData.tanggal_akhir,
-              id_fakultas_unit: Number(unitId),
-            })
-          );
+          const requests = targets.map((unitId) => {
+            const fd = new FormData();
+            fd.append("tahun", formData.tahun.trim());
+            fd.append("tanggal_mulai", formData.tanggal_mulai);
+            fd.append("tanggal_akhir", formData.tanggal_akhir);
+            fd.append("id_fakultas_unit", String(Number(unitId)));
+            return apiClient.post("/proker_v3/jadwal", fd);
+          });
 
           const results = await Promise.allSettled(requests);
           const successCount = results.filter(
@@ -295,16 +294,16 @@ export default function JadwalProkerV3Page() {
         }
       } else {
         // Edit mode: tetap single item
-        const payload = {
-          tahun: formData.tahun.trim(),
-          tanggal_mulai: formData.tanggal_mulai,
-          tanggal_akhir: formData.tanggal_akhir,
-          id_fakultas_unit: formData.id_fakultas_unit
-            ? Number(formData.id_fakultas_unit)
-            : null,
-        };
+        const fd = new FormData();
+        fd.append("tahun", formData.tahun.trim());
+        fd.append("tanggal_mulai", formData.tanggal_mulai);
+        fd.append("tanggal_akhir", formData.tanggal_akhir);
+        fd.append(
+          "id_fakultas_unit",
+          formData.id_fakultas_unit ? String(Number(formData.id_fakultas_unit)) : ""
+        );
         const itemUuid = selectedItem?.uuid ?? selectedItem?.UUID;
-        await apiClient.put(`/proker_v3/jadwal/${itemUuid}`, payload);
+        await apiClient.put(`/proker_v3/jadwal/${itemUuid}`, fd);
         addToast("success", "Jadwal program kerja berhasil diperbarui");
       }
       setIsModalOpen(false);

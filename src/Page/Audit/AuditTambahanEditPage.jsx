@@ -13,6 +13,7 @@ import { useForm } from "react-hook-form";
 import RadioButton from "@/Components/RadioButton";
 import InfoAuditCard from "@/Components/InfoAuditCard";
 import { apiClient, API_BASE_URL } from "@/Common/api";
+import { FileText } from "lucide-react";
 
 const AuditTambahanEditPage = ({
   uuidRenstra: propUuidRenstra,
@@ -440,8 +441,16 @@ const AuditTambahanEditPage = ({
             className="flex-1 min-h-0 p-4 sm:p-5 border border-gray-200 rounded-xl overflow-y-auto bg-white shadow-2xs"
           >
             {!activeQuestion ? (
-              <div className="h-full flex justify-center items-center">
-                <p className="text-gray-500">Pilih nomor audit nya dulu baru bisa isi pertanyaan</p>
+              <div className="h-full flex flex-col justify-center items-center p-8 text-center max-w-md mx-auto">
+                <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center mb-3">
+                  <FileText size={24} />
+                </div>
+                <h4 className="text-sm font-semibold text-gray-800 mb-1">
+                  Pilih Butir Instrumen Audit
+                </h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Silakan pilih nomor butir instrumen audit pada panel di samping untuk memeriksa capaian indikator, dokumen bukti dukung, dan memberikan penilaian.
+                </p>
               </div>
             ) : (() => {
               const currentTemplate = (dataTemplate ?? []).find(

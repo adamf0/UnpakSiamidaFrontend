@@ -11,6 +11,7 @@ import {
   formatFetchError,
 } from "@/Common/Utils";
 import { apiClient, API_BASE_URL } from "@/Common/api";
+import { Target, X } from "lucide-react";
 
 const TIPE_TARGET_OPTIONS = [
   { id: "numerik", value: "numerik", label: "Numerik" },
@@ -382,7 +383,7 @@ export default function IndikatorRenstraFormModal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/40" />
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] transition-opacity" />
         </Transition.Child>
 
         <div className="fixed inset-0 flex items-center justify-center p-4">
@@ -395,10 +396,29 @@ export default function IndikatorRenstraFormModal({
             leaveFrom="scale-100 opacity-100"
             leaveTo="scale-95 opacity-0"
           >
-            <Dialog.Panel className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg max-h-[90vh] overflow-y-auto">
-              <Dialog.Title className="text-lg font-semibold mb-4">
-                {mode === "edit" ? "Edit" : "Tambah"} Indikator Renstra
-              </Dialog.Title>
+            <Dialog.Panel className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-gray-150 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between gap-3 mb-5 pb-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
+                    <Target className="w-5 h-5 stroke-[1.8]" />
+                  </div>
+                  <div>
+                    <Dialog.Title className="text-base font-bold text-gray-900">
+                      {mode === "edit" ? "Edit" : "Tambah"} Indikator Renstra
+                    </Dialog.Title>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Kelola target capaian dan butir indikator mutu
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <SearchSelect
@@ -477,8 +497,9 @@ export default function IndikatorRenstraFormModal({
                   })}
                 />
 
-                <TextInput //[pr] ini seharusnya select option
+                <TextInput
                   label="Operator"
+                  placeholder=">=, <=, =, dll."
                   error={errors.operator?.message}
                   {...register("operator", { required: false })}
                 />
@@ -508,18 +529,18 @@ export default function IndikatorRenstraFormModal({
                   }
                 />
 
-                <div className="flex justify-end gap-3">
+                <div className="flex justify-end items-center gap-2.5 pt-3 border-t border-gray-100">
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-3 py-2 rounded text-red-600"
+                    className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer"
                   >
                     Batal
                   </button>
 
                   <button
                     type="submit"
-                    className="px-3 py-2 bg-purple-600 text-white rounded"
+                    className="px-4 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-2xs transition cursor-pointer"
                   >
                     Simpan
                   </button>

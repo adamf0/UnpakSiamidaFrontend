@@ -19,6 +19,7 @@ import {
   Activity,
   Layers,
   ArrowRight,
+  X,
 } from "lucide-react";
 
 export default function RiskAssessmentFormModal({
@@ -547,10 +548,10 @@ export default function RiskAssessmentFormModal({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition cursor-pointer"
+                    className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                     title="Tutup"
                   >
-                    ✕
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
 
@@ -831,19 +832,19 @@ export default function RiskAssessmentFormModal({
                 </div>
 
                 {/* PINNED FOOTER (Matching SwotFormModal) */}
-                  <div className="shrink-0 px-6 py-4 bg-gray-50/80 border-t border-gray-150 flex items-center justify-end gap-3">
+                  <div className="shrink-0 px-6 py-3.5 bg-gray-50 border-t border-gray-150 flex items-center justify-end gap-2.5">
                     <button
                       type="button"
                       onClick={onClose}
                       disabled={submitting}
-                      className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-100 border border-gray-300 transition cursor-pointer"
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 transition cursor-pointer disabled:opacity-50"
                     >
                       Batal
                     </button>
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="px-6 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-600/20 transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                      className="px-5 py-2 rounded-xl text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 shadow-2xs transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                     >
                       {submitting ? (
                         <>Menyimpan...</>

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { apiClient } from "@/Common/api";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
+import { Eye, EyeOff } from "lucide-react";
 import slide1 from "@/assets/slide1.jpeg";
 import slide2 from "@/assets/slide2.jpeg";
 import slide3 from "@/assets/slide3.jpeg";
@@ -15,7 +16,7 @@ const images = [
 
 const LoginPage = () => {
   return (
-    <div className="bottom-5 left-5">
+    <div>
       <LoginContent />
     </div>
   );
@@ -116,54 +117,62 @@ function LoginContent() {
 
   if (!isLoaded) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-700 border-t-transparent"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-row">
+    <div className="min-h-screen flex flex-row bg-gray-50">
       {/* Kolom 1 - Login */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-6 bg-gray-50">
-        <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl p-6">
-          <h1 className="text-3xl font-bold mb-6 text-gray-800 text-center">
-            Login
-          </h1>
+      <div className="w-full md:w-1/2 flex items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 p-8 sm:p-10">
+          <div className="text-center mb-8">
+            <div className="w-12 h-12 mx-auto rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xl mb-3 shadow-2xs">
+              S
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Masuk ke SIAMIDA
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1.5">
+              Sistem Penjaminan Mutu Internal & Program Kerja Universitas Pakuan
+            </p>
+          </div>
 
           <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
             <div>
               <label
                 htmlFor="username"
-                className="block text-sm font-medium text-gray-600 mb-2"
+                className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider"
               >
                 Username
               </label>
               <input
+                id="username"
                 type="text"
                 placeholder="Masukkan username"
-                className={
-                  `w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${errors.email
-                      ? "border-red-500 focus:ring-red-500"
-                      : "border-gray-300 focus:ring-blue-500"}`
-                }
-                // value="admin_rbac@yopmail.com"
+                className={`w-full border rounded-lg px-3.5 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 transition ${
+                  errors.username
+                    ? "border-rose-400 focus:ring-rose-500/20 focus:border-rose-600"
+                    : "border-gray-300 focus:ring-purple-500/20 focus:border-purple-700"
+                }`}
                 {...register("username", {
-                  required: "username harus diisi",
+                  required: "Username harus diisi",
                 })}
               />
               {errors.username && (
-                <p className="text-red-500 text-sm mt-1">
+                <p className="text-rose-500 text-xs mt-1 font-medium">
                   {errors.username.message}
                 </p>
               )}
             </div>
 
             <div>
-              <div className="flex justify-between mb-2">
+              <div className="flex justify-between mb-1.5">
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-gray-600"
+                  className="block text-xs font-semibold text-gray-700 uppercase tracking-wider"
                 >
                   Password
                 </label>
@@ -173,11 +182,11 @@ function LoginContent() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Masukkan password"
-                  className={
-                    `w-full border rounded-lg px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${errors.password
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-300 focus:ring-blue-500"}`
-                  }
+                  className={`w-full border rounded-lg px-3.5 py-2.5 pr-11 text-sm text-gray-800 focus:outline-none focus:ring-2 transition ${
+                    errors.password
+                      ? "border-rose-400 focus:ring-rose-500/20 focus:border-rose-600"
+                      : "border-gray-300 focus:ring-purple-500/20 focus:border-purple-700"
+                  }`}
                   {...register("password", {
                     required: "Password harus diisi",
                   })}
@@ -185,48 +194,18 @@ function LoginContent() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                  className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-700 transition-colors"
+                  title={showPassword ? "Sembunyikan password" : "Tampilkan password"}
                 >
                   {showPassword ? (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.5}
-                      stroke="currentColor"
-                      className="w-5 h-5"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.008 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.008-9.963-7.178z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
+                    <EyeOff size={18} />
                   ) : (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.5}
-                      stroke="currentColor"
-                      className="w-5 h-5"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M3.98 8.223A10.477 10.477 0 001.934 12C3.59 16.392 7.46 19.5 12 19.5c.993 0 1.953-.138 2.86-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.639 0 8.574 3.008 9.963 7.178a10.523 10.523 0 01-4.379 5.043M6.228 6.228L3 3m3.228 3.228l12.544 12.544"
-                      />
-                    </svg>
+                    <Eye size={18} />
                   )}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-red-500 text-sm mt-1">
+                <p className="text-rose-500 text-xs mt-1 font-medium">
                   {errors.password.message}
                 </p>
               )}
@@ -235,37 +214,37 @@ function LoginContent() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition"
+              className="w-full mt-2 bg-purple-700 hover:bg-purple-800 active:bg-purple-900 text-white font-semibold py-2.5 rounded-lg shadow-sm hover:shadow transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer flex items-center justify-center gap-2"
             >
-              {loading ? "Loading..." : "Login"}
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />
+                  <span>Memproses...</span>
+                </>
+              ) : (
+                "Masuk ke Sistem"
+              )}
             </button>
           </form>
 
-          {/* <div className="mt-4 text-sm text-center">
-            <p className="text-gray-500">
-              Don't have an account?{" "}
-              <button
-                type="button"
-                className="text-blue-600 hover:underline"
-                onClick={() => alert("Hubungi admin")}
-              >
-                Ask Admin
-              </button>
+          <div className="mt-8 pt-4 border-t border-gray-100 text-center">
+            <p className="text-xs text-gray-400">
+              © {new Date().getFullYear()} Universitas Pakuan. Hak Cipta Dilindungi.
             </p>
-          </div> */}
+          </div>
         </div>
       </div>
 
       {/* Kolom 2 - Image Slider */}
-      <div className="hidden md:block w-full md:w-1/2 relative overflow-hidden">
+      <div className="hidden md:block w-full md:w-1/2 relative overflow-hidden bg-purple-950">
         <div className="absolute inset-0">
           <AnimatePresence mode="wait">
             <motion.img
               key={images[currentIndex]}
               src={images[currentIndex]}
               alt={`Slide ${currentIndex}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, scale: 1.02 }}
+              animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.8 }}
               className="w-full h-full object-cover"
@@ -273,16 +252,38 @@ function LoginContent() {
           </AnimatePresence>
         </div>
 
+        {/* Gradient Vignette & Institutional Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-purple-950/90 via-purple-950/40 to-black/20" />
+
+        {/* Top badge */}
+        <div className="absolute top-10 left-10 right-10 text-white z-10">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs font-medium tracking-wide shadow-sm">
+            <span>Sistem Informasi Akreditasi & Mutu Internal</span>
+          </div>
+        </div>
+
+        {/* Bottom institutional text */}
+        <div className="absolute bottom-16 left-10 right-10 text-white z-10">
+          <h2 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">
+            Universitas Pakuan
+          </h2>
+          <p className="text-sm text-purple-100 mt-2 max-w-md leading-relaxed drop-shadow-xs">
+            Mewujudkan tata kelola mutu akademik dan keterpaduan rencana operasional proker yang unggul, mandiri, dan berkarakter.
+          </p>
+        </div>
+
         {/* Bullet Indicator */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex space-x-2">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex space-x-2 z-10">
           {images.map((_, idx) => (
             <button
               key={idx}
+              type="button"
               onClick={() => setCurrentIndex(idx)}
-              className={
-                `w-3 h-3 rounded-full transition ${currentIndex === idx ? "bg-white" : "bg-white/50"}`
-              }
-            ></button>
+              className={`h-2 rounded-full transition-all duration-300 ${
+                currentIndex === idx ? "w-8 bg-white" : "w-2 bg-white/50 hover:bg-white/70"
+              }`}
+              aria-label={`Slide ${idx + 1}`}
+            />
           ))}
         </div>
       </div>

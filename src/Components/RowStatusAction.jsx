@@ -22,8 +22,8 @@ const RowStatusAction = ({
         type="button"
         className="
           inline-flex justify-center items-center
-          w-7 h-7 rounded-md transition-colors
-          hover:bg-gray-100
+          w-7 h-7 rounded-lg transition
+          hover:bg-gray-100 cursor-pointer
         "
         onClick={() => {
           if (status === "error" && errorMessage) {
@@ -33,7 +33,7 @@ const RowStatusAction = ({
         aria-label={tooltipText}
       >
         {status === "loading" && (
-          <div className="w-3.5 h-3.5 border-2 border-gray-300 border-t-purple-500 rounded-full animate-spin" />
+          <div className="w-3.5 h-3.5 border-2 border-gray-300 border-t-purple-600 rounded-full animate-spin" />
         )}
         {status === "error" && <AlertCircle className="w-4 h-4 text-red-500" />}
         {status === "success" && <Check className="w-4 h-4 text-emerald-600" />}

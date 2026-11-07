@@ -60,26 +60,22 @@ const TemplateDokumenTambahanPage = () => {
             token={getValidToken()}
             renderAddAction={
               <div className="flex items-center gap-2">
-                <Tooltip content="Tambah Template">
-                  <button
-                    type="button"
-                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs"
-                    onClick={() => navigate("/template_dokumen_tambahan/new")}
-                    aria-label="Tambah Template"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </Tooltip>
-                <Tooltip content="Preview Template">
-                  <button
-                    type="button"
-                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs"
-                    onClick={() => navigate("/template_dokumen_tambahan/preview")}
-                    aria-label="Preview Template"
-                  >
-                    <Eye className="w-5 h-5" />
-                  </button>
-                </Tooltip>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition shadow-2xs cursor-pointer"
+                  onClick={() => navigate("/template_dokumen_tambahan/preview")}
+                >
+                  <Eye className="w-4 h-4 text-gray-500" />
+                  <span>Pratinjau</span>
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition shadow-2xs cursor-pointer"
+                  onClick={() => navigate("/template_dokumen_tambahan/new")}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Template</span>
+                </button>
               </div>
             }
             listcolumns={[

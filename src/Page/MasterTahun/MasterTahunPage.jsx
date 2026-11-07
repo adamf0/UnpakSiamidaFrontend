@@ -54,8 +54,10 @@ const MasterTahunPage = () => {
 
     return (
       <span
-        className={`px-2 py-0.5 text-xs text-white rounded-full ${
-          isAktif ? "bg-green-500" : "bg-red-500"
+        className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border shadow-2xs ${
+          isAktif
+            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+            : "bg-rose-50 text-rose-800 border-rose-200"
         }`}
       >
         {isAktif ? "Aktif" : row.Status || "Non-Aktif"}
@@ -99,16 +101,14 @@ const MasterTahunPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              <Tooltip content="Tambah Master Tahun">
-                <button
-                  type="button"
-                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
-                  onClick={() => openNew()}
-                  aria-label="Tambah Master Tahun"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </Tooltip>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
+                onClick={() => openNew()}
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Tahun</span>
+              </button>
             }
             listcolumns={[
               { key: "Tahun", label: "Tahun", searchable: true },

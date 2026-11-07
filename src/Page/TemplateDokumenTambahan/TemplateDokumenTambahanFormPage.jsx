@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import TextInput from "@/Components/TextInput";
 import RadioButton from "@/Components/RadioButton";
+import { ArrowLeft, FolderArchive } from "lucide-react";
 import SearchSelect from "@/Components/SearchSelect";
 import ErrorSection from "@/Components/ErrorSection";
 import Shimmer from "@/Components/Shimmer";
@@ -281,34 +282,44 @@ const TemplateDokumenTambahanFormPage = () => {
           />
         )}
       />
-      <div className="p-4 pb-16 bg-white w-full">
-        <div className="mb-4 flex flex-col gap-4">
-          <nav
-            className="flex-1 text-sm text-gray-500 mb-1"
-            aria-label="Breadcrumb"
-          >
-            <ol className="list-none p-0 inline-flex">
-              <li className="flex items-center">
-                <Link
-                  to="/template_dokumen_tambahan"
-                  className="hover:underline"
-                >
-                  Template Dokumen Tambahan
-                </Link>
-                <span className="mx-2">/</span>
-              </li>
-              <li className="flex items-center text-gray-700 font-medium">
-                Form {mode == "edit" ? "Edit" : "Add"}
-              </li>
-            </ol>
-          </nav>
+      <div className="min-h-screen bg-slate-50/50 p-4 md:p-6 pb-20">
+        <div className="max-w-6xl mx-auto space-y-5">
+          {/* Header Card */}
+          <div className="bg-white rounded-2xl border border-gray-150 p-5 md:p-6 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              <Link
+                to="/template_dokumen_tambahan"
+                className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-600 hover:text-gray-900 transition cursor-pointer"
+                title="Kembali ke Template Dokumen Tambahan"
+              >
+                <ArrowLeft className="w-5 h-5 stroke-[1.8]" />
+              </Link>
+              <div>
+                <nav className="text-xs text-gray-500 mb-0.5" aria-label="Breadcrumb">
+                  <ol className="list-none p-0 inline-flex items-center gap-1.5">
+                    <li>
+                      <Link to="/template_dokumen_tambahan" className="hover:text-purple-700 transition">
+                        Template Dokumen Tambahan
+                      </Link>
+                    </li>
+                    <li className="text-gray-400">/</li>
+                    <li className="text-gray-700 font-medium">
+                      {mode === "edit" ? "Edit Template" : "Tambah Template Baru"}
+                    </li>
+                  </ol>
+                </nav>
+                <h1 className="text-lg font-bold text-gray-900">
+                  {mode === "edit" ? "Edit Template Dokumen Tambahan" : "Tambah Template Dokumen Tambahan"}
+                </h1>
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
+              <FolderArchive className="w-5 h-5 stroke-[1.8]" />
+            </div>
+          </div>
 
-          <h2 className="flex-1 text-lg font-semibold">
-            Form {mode == "edit" ? "Edit" : "Add"}
-          </h2>
-        </div>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="mb-6 p-6 space-y-4 border rounded-lg">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <div className="bg-white rounded-2xl border border-gray-150 p-6 shadow-xs space-y-5">
             <TextInput
               type="number"
               label="Tahun"
@@ -343,15 +354,15 @@ const TemplateDokumenTambahanFormPage = () => {
           {loading.template ? (
             <ShimmerTable />
           ) : (
-            <div className="p-6 border rounded-lg w-full mt-2 overflow-x-auto">
+            <div className="bg-white rounded-2xl border border-gray-150 shadow-xs overflow-hidden">
               <div className="w-full overflow-x-auto">
                 <table className="w-full table-auto min-w-[900px]">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-purple-50/60 border-b border-gray-200">
                     <tr>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-left">Stakeholder</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Klasifikasi</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Tugas</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center w-[90px]">Aksi</th>
+                      <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase tracking-wider text-left">Stakeholder</th>
+                      <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase tracking-wider text-center">Klasifikasi</th>
+                      <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase tracking-wider text-center">Tugas</th>
+                      <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase tracking-wider text-center w-[90px]">Aksi</th>
                     </tr>
                   </thead>
 
@@ -487,29 +498,38 @@ const TemplateDokumenTambahanFormPage = () => {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isButtonLoading}
-            className={`
-              inline-flex items-center justify-center gap-2
-              px-4 py-2 mt-4 text-sm font-medium rounded text-white
-              transition-colors shadow-xs
-              ${
-                isButtonLoading
-                  ? "bg-purple-400 cursor-not-allowed opacity-90"
-                  : "bg-purple-500 hover:bg-purple-600 cursor-pointer"
-              }
-            `}
-          >
-            {isButtonLoading && (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-            )}
-            <span>{isSaving ? "Menyimpan..." : isDataLoading ? "Memuat..." : "Simpan"}</span>
-          </button>
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Link
+              to="/template_dokumen_tambahan"
+              className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer"
+            >
+              Batal
+            </Link>
+            <button
+              type="submit"
+              disabled={isButtonLoading}
+              className={`
+                inline-flex items-center justify-center gap-2
+                px-5 py-2 text-xs font-semibold rounded-xl text-white
+                transition shadow-xs cursor-pointer
+                ${
+                  isButtonLoading
+                    ? "bg-purple-400 cursor-not-allowed opacity-90"
+                    : "bg-purple-700 hover:bg-purple-800"
+                }
+              `}
+            >
+              {isButtonLoading && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+              )}
+              <span>{isSaving ? "Menyimpan..." : isDataLoading ? "Memuat..." : "Simpan Template"}</span>
+            </button>
+          </div>
 
           <ErrorModal modal={modal} onClose={closeModal} />
         </form>
       </div>
+    </div>
     </>
   );
 };

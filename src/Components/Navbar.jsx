@@ -63,14 +63,24 @@ const Navbar = ({ renderChangeLevelModal }) => {
 
   return (
     <>
-      <nav className="bg-purple-400 border-b p-4 flex justify-between items-center">
+      <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] px-4 py-3 flex justify-between items-center sticky top-0 z-30">
         {/* LEFT */}
         <div className="flex items-center gap-3">
-          <button onClick={() => toggleSidebar()} className="lg:hidden">
-            <Menu className="hover:text-white" size={20} />
+          <button
+            type="button"
+            onClick={() => toggleSidebar()}
+            className="lg:hidden p-1.5 rounded-lg text-gray-700 hover:text-purple-900 hover:bg-gray-100 transition-colors"
+            title="Buka / Tutup Sidebar"
+          >
+            <Menu size={20} />
           </button>
-          <button onClick={() => toggleSidebar()} className="hidden lg:flex">
-            <Menu className="hover:text-white" size={20} />
+          <button
+            type="button"
+            onClick={() => toggleSidebar()}
+            className="hidden lg:flex p-1.5 rounded-lg text-gray-700 hover:text-purple-900 hover:bg-gray-100 transition-colors"
+            title="Buka / Tutup Sidebar"
+          >
+            <Menu size={20} />
           </button>
 
           {/* Versioning selection for admin */}

@@ -21,6 +21,7 @@ import TextInput from "@/Components/TextInput";
 import DateRangeInput from "@/Components/DateRangeInput";
 import { useAuth } from "@/Providers/AuthProvider";
 import { apiClient, API_BASE_URL } from "@/Common/api";
+import { CalendarCheck, ArrowLeft } from "lucide-react";
 
 const ScheduleAuditFormPage = () => {
   const {getValidToken} = useAuth()
@@ -332,24 +333,10 @@ const ScheduleAuditFormPage = () => {
       fd.append("auditor1", data.auditor1?.UUID);
       fd.append("auditor2", data.auditor2?.UUID);
 
-      let json;
       if (mode === "edit") {
-        json = await apiClient.put(`/renstra/${uuidSchedule}`, fd);
+        await apiClient.put(`/renstra/${uuidSchedule}`, fd);
       } else {
-        json = await apiClient.post("/renstra", fd);
-      }
-
-      if (mode !== "edit" && json?.uuid) {
-        try {
-          const genFd = new FormData();
-          genFd.append("tahun", data.tahun);
-          genFd.append("renstra", json.uuid);
-          genFd.append("fakultas_unit", data.target_audit?.UUID);
-
-          await apiClient.post("/renstra/generate", genFd);
-        } catch (errGen) {
-          console.error("Auto generate renstra audit records failed:", errGen);
-        }
+        await apiClient.post("/renstra", fd);
       }
 
       addToast("success", "Berhasil disimpan");
@@ -379,34 +366,46 @@ const ScheduleAuditFormPage = () => {
         )}
       />
 
-      <div className="p-4 bg-white w-full">
-        <div className="mb-4 flex flex-col gap-4">
-          <nav
-            className="flex-1 text-sm text-gray-500 mb-1"
-            aria-label="Breadcrumb"
-          >
-            <ol className="list-none p-0 inline-flex">
-              <li className="flex items-center">
-                <Link to="/template_renstra" className="hover:underline">
-                  Schedule Renstra
-                </Link>
-                <span className="mx-2">/</span>
-              </li>
-              <li className="flex items-center text-gray-700 font-medium">
-                Form {mode == "edit" ? "Edit" : "Add"}
-              </li>
-            </ol>
-          </nav>
+      <div className="p-4 sm:p-6 bg-slate-50 min-h-screen w-full">
+        <div className="max-w-4xl mx-auto space-y-5">
+          <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              <Link
+                to="/schedule_audit"
+                className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-600 hover:text-gray-900 transition cursor-pointer"
+                title="Kembali ke Jadwal Audit"
+              >
+                <ArrowLeft className="w-5 h-5 stroke-[1.8]" />
+              </Link>
+              <div>
+                <nav className="text-xs text-gray-500 mb-0.5" aria-label="Breadcrumb">
+                  <ol className="list-none p-0 inline-flex items-center gap-1.5">
+                    <li>
+                      <Link to="/schedule_audit" className="hover:text-purple-700 transition">
+                        Jadwal Audit
+                      </Link>
+                    </li>
+                    <li className="text-gray-400">/</li>
+                    <li className="text-gray-700 font-medium">
+                      {mode === "edit" ? "Edit Jadwal" : "Tambah Jadwal Baru"}
+                    </li>
+                  </ol>
+                </nav>
+                <h1 className="text-lg font-bold text-gray-900">
+                  {mode === "edit" ? "Edit Jadwal Audit Mutu" : "Tambah Jadwal Audit Mutu"}
+                </h1>
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
+              <CalendarCheck className="w-5 h-5 stroke-[1.8]" />
+            </div>
+          </div>
 
-          <h2 className="flex-1 text-lg font-semibold">
-            Form {mode == "edit" ? "Edit" : "Add"}
-          </h2>
-        </div>
-        {mode == "edit" && error.detail ? (
-          <ErrorSection />
-        ) : (
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="mb-6 p-6 space-y-4 border rounded-lg w-full">
+          {mode == "edit" && error.detail ? (
+            <ErrorSection />
+          ) : (
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="bg-white rounded-2xl border border-gray-150 p-6 shadow-xs space-y-5">
               <TextInput
                 type="number"
                 label="Tahun Audit"
@@ -633,15 +632,24 @@ const ScheduleAuditFormPage = () => {
                 })}
               />
 
-              <button
-                className="bg-purple-500 hover:bg-purple-400 px-4 py-2 rounded text-sm text-white"
-                onClick={() => handleSubmit(onSubmit)}
-              >
-                Simpan
-              </button>
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-100">
+                <Link
+                  to="/schedule_audit"
+                  className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </Link>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-2xs transition cursor-pointer"
+                >
+                  {mode === "edit" ? "Perbarui Jadwal" : "Simpan Jadwal"}
+                </button>
+              </div>
             </div>
           </form>
         )}
+        </div>
       </div>
 
       <ErrorModal modal={modal} onClose={closeModal} />
