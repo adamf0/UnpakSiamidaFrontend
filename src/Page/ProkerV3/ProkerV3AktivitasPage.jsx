@@ -445,6 +445,7 @@ export default function ProkerV3AktivitasPage() {
     let totReal = 0;
     let anyReal = false;
     (activities || []).forEach((curr) => {
+      if (Boolean(curr.IsBatal)) return;
       const ang = Number(curr.Anggaran) || 0;
       totAng += ang;
       if (hasRealisasiAnggaran(curr)) {
@@ -737,8 +738,11 @@ export default function ProkerV3AktivitasPage() {
       0,
     );
 
-    // Validasi pembatasan pagu unit (Case 2: jika pagu ada > 0)
-    if (proker?.HasPagu && Number(proker?.PaguUnit) > 0) {
+    // Validasi pembatasan pagu unit (Case 2: jika pagu ada > 0 dan BUKAN beban yayasan)
+    const isBebanYayasan = Boolean(
+      proker?.BebanYayasan || proker?.beban_yayasan,
+    );
+    if (!isBebanYayasan && proker?.HasPagu && Number(proker?.PaguUnit) > 0) {
       const paguUnit = Number(proker.PaguUnit);
       const totalTerpakai = Number(proker.TotalAnggaranUnit) || 0;
       const oldActAnggaran =
@@ -1203,8 +1207,11 @@ export default function ProkerV3AktivitasPage() {
       0,
     );
 
-    // Validasi pembatasan pagu unit (Case 2: jika pagu ada > 0)
-    if (proker?.HasPagu && Number(proker?.PaguUnit) > 0) {
+    // Validasi pembatasan pagu unit (Case 2: jika pagu ada > 0 dan BUKAN beban yayasan)
+    const isBebanYayasan = Boolean(
+      proker?.BebanYayasan || proker?.beban_yayasan,
+    );
+    if (!isBebanYayasan && proker?.HasPagu && Number(proker?.PaguUnit) > 0) {
       const paguUnit = Number(proker.PaguUnit);
       const totalTerpakai = Number(proker.TotalAnggaranUnit) || 0;
       const oldActAnggaran = Number(rabDetailAct?.Anggaran) || 0;
@@ -3673,6 +3680,9 @@ export default function ProkerV3AktivitasPage() {
                     {/* Pagu Anggaran Banner (Case 1 vs Case 2) */}
                     {proker?.HasPagu && Number(proker?.PaguUnit) > 0 ? (
                       (() => {
+                        const isBebanYayasan = Boolean(
+                          proker?.BebanYayasan || proker?.beban_yayasan,
+                        );
                         const paguUnit = Number(proker.PaguUnit);
                         const totalTerpakai =
                           Number(proker.TotalAnggaranUnit) || 0;
@@ -3680,30 +3690,45 @@ export default function ProkerV3AktivitasPage() {
                           actModalMode === "edit"
                             ? Number(selectedAct?.Anggaran) || 0
                             : 0;
-                        const projectedTotal =
-                          totalTerpakai - oldActAnggaran + totalActRab;
-                        const isMelebihi = projectedTotal > paguUnit;
+                        const projectedTotal = isBebanYayasan
+                          ? totalTerpakai
+                          : totalTerpakai - oldActAnggaran + totalActRab;
+                        const isMelebihi =
+                          !isBebanYayasan && projectedTotal > paguUnit;
                         const sisaUnit = paguUnit - projectedTotal;
 
                         return (
                           <div
                             className={`rounded-2xl px-4 py-3 flex items-start gap-2.5 text-xs shadow-2xs border ${
-                              isMelebihi
+                              isBebanYayasan
+                                ? "bg-purple-50/70 border-purple-200 text-purple-900"
+                                : isMelebihi
                                 ? "bg-rose-50/80 border-rose-200 text-rose-900"
                                 : "bg-emerald-50/60 border-emerald-200 text-emerald-900"
                             }`}
                           >
-                            {isMelebihi ? (
+                            {isBebanYayasan ? (
+                              <CheckCircle2 className="w-4 h-4 text-purple-600 mt-0.5 shrink-0" />
+                            ) : isMelebihi ? (
                               <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
                             ) : (
                               <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
                             )}
                             <div className="space-y-0.5 text-xs w-full">
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="font-bold">
-                                  {isMelebihi
-                                    ? "Alokasi Melebihi Batas Pagu Anggaran Unit!"
-                                    : "Batas Pagu Anggaran Unit Terpenuhi"}
+                                <span className="font-bold flex items-center gap-2">
+                                  <span>
+                                    {isBebanYayasan
+                                      ? "Program Kerja Beban Yayasan"
+                                      : isMelebihi
+                                      ? "Alokasi Melebihi Batas Pagu Anggaran Unit!"
+                                      : "Batas Pagu Anggaran Unit Terpenuhi"}
+                                  </span>
+                                  {isBebanYayasan && (
+                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                                      Tidak Memotong Pagu Unit
+                                    </span>
+                                  )}
                                 </span>
                                 <span className="font-mono text-[11px] font-semibold">
                                   Pagu Unit ({proker.Tahun}):{" "}
@@ -4987,35 +5012,53 @@ export default function ProkerV3AktivitasPage() {
                   {/* Pagu Anggaran Banner (Case 1 vs Case 2) */}
                   {proker?.HasPagu && Number(proker?.PaguUnit) > 0 ? (
                     (() => {
+                      const isBebanYayasan = Boolean(
+                        proker?.BebanYayasan || proker?.beban_yayasan,
+                      );
                       const paguUnit = Number(proker.PaguUnit);
                       const totalTerpakai =
                         Number(proker.TotalAnggaranUnit) || 0;
                       const oldActAnggaran =
                         Number(rabDetailAct?.Anggaran) || 0;
-                      const projectedTotal =
-                        totalTerpakai - oldActAnggaran + totalRabDetail;
-                      const isMelebihi = projectedTotal > paguUnit;
+                      const projectedTotal = isBebanYayasan
+                        ? totalTerpakai
+                        : totalTerpakai - oldActAnggaran + totalRabDetail;
+                      const isMelebihi =
+                        !isBebanYayasan && projectedTotal > paguUnit;
                       const sisaUnit = paguUnit - projectedTotal;
 
                       return (
                         <div
                           className={`rounded-2xl px-4 py-3 flex items-start gap-2.5 text-xs shadow-2xs border ${
-                            isMelebihi
+                            isBebanYayasan
+                              ? "bg-purple-50/70 border-purple-200 text-purple-900"
+                              : isMelebihi
                               ? "bg-rose-50/80 border-rose-200 text-rose-900"
                               : "bg-emerald-50/60 border-emerald-200 text-emerald-900"
                           }`}
                         >
-                          {isMelebihi ? (
+                          {isBebanYayasan ? (
+                            <CheckCircle2 className="w-4 h-4 text-purple-600 mt-0.5 shrink-0" />
+                          ) : isMelebihi ? (
                             <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
                           ) : (
                             <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
                           )}
                           <div className="space-y-0.5 text-xs w-full">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="font-bold">
-                                {isMelebihi
-                                  ? "Alokasi Melebihi Batas Pagu Anggaran Unit!"
-                                  : "Batas Pagu Anggaran Unit Terpenuhi"}
+                              <span className="font-bold flex items-center gap-2">
+                                <span>
+                                  {isBebanYayasan
+                                    ? "Program Kerja Beban Yayasan"
+                                    : isMelebihi
+                                    ? "Alokasi Melebihi Batas Pagu Anggaran Unit!"
+                                    : "Batas Pagu Anggaran Unit Terpenuhi"}
+                                </span>
+                                {isBebanYayasan && (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                                    Tidak Memotong Pagu Unit
+                                  </span>
+                                )}
                               </span>
                               <span className="font-mono text-[11px] font-semibold">
                                 Pagu Unit ({proker.Tahun}):{" "}

@@ -33,7 +33,7 @@ export function getSlotsFromDateRange(startStr, endStr) {
   const e = new Date(endStr);
   if (isNaN(s.getTime()) || isNaN(e.getTime())) return [];
 
-  const year = s.getFullYear() || 2026;
+  const year = s.getFullYear() || new Date().getFullYear();
   const slotToMonthIndex = {
     JANUARI: 0,
     PEBRUARI: 1,

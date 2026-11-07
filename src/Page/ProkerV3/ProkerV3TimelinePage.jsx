@@ -560,14 +560,16 @@ export default function ProkerV3TimelinePage() {
   const [editingTimelineUuid, setEditingTimelineUuid] = useState(null);
   const [submittingTimeline, setSubmittingTimeline] = useState(false);
 
+  const currentYear = (new Date().getFullYear() + 1);
+
   const initialFormState = {
     no_aktivitas: 1,
     nama_aktivitas: "",
     pic: "",
     titik_kontrol: "",
     anggaran: 0,
-    tanggal_rk_awal: "2026-01-01",
-    tanggal_rk_akhir: "2026-12-31",
+    tanggal_rk_awal: `${currentYear}-01-01`,
+    tanggal_rk_akhir: `${currentYear}-12-31`,
     capaian: "",
     masalah: "",
     pemecahan_masalah: "",
@@ -855,7 +857,7 @@ export default function ProkerV3TimelinePage() {
     const e = new Date(endStr);
     if (isNaN(s.getTime()) || isNaN(e.getTime())) return false;
 
-    const year = s.getFullYear() || 2026;
+    const year = s.getFullYear() || currentYear;
     const mIdx = slotToMonthIndex[monthKey];
     if (mIdx === undefined) return false;
 
@@ -1425,12 +1427,15 @@ export default function ProkerV3TimelinePage() {
   // Reset form to create mode (nama_aktivitas tidak diset dari nama aktivitas induk)
   const resetForm = () => {
     setEditingTimelineUuid(null);
+    const yr = proker?.Tahun || aktivitas?.Tahun || currentYear;
     setFormTimeline({
       ...initialFormState,
       no_aktivitas: timelines.length + 1,
       nama_aktivitas: "",
       pic: aktivitas?.PIC || "",
       anggaran: 0,
+      tanggal_rk_awal: `${yr}-01-01`,
+      tanggal_rk_akhir: `${yr}-12-31`,
     });
     setAnggaranInputStr("");
   };
@@ -1462,6 +1467,7 @@ export default function ProkerV3TimelinePage() {
 
     setEditingTimelineUuid(tl.UUID);
     const tlAnggaran = Number(tl.Anggaran ?? tl.anggaran ?? 0);
+    const yr = proker?.Tahun || aktivitas?.Tahun || currentYear;
     setFormTimeline({
       no_aktivitas: tl.NoAktivitas || 1,
       nama_aktivitas: tl.NamaAktivitas || "",
@@ -1470,10 +1476,10 @@ export default function ProkerV3TimelinePage() {
       anggaran: tlAnggaran,
       tanggal_rk_awal: tl.TanggalRkAwal
         ? tl.TanggalRkAwal.slice(0, 10)
-        : "2026-01-01",
+        : `${yr}-01-01`,
       tanggal_rk_akhir: tl.TanggalRkAkhir
         ? tl.TanggalRkAkhir.slice(0, 10)
-        : "2026-12-31",
+        : `${yr}-12-31`,
       capaian: tl.Capaian || "",
       masalah: tl.Masalah || "",
       pemecahan_masalah: tl.PemecahanMasalah || "",
@@ -1522,6 +1528,18 @@ export default function ProkerV3TimelinePage() {
       return;
     }
 
+    if (
+      formTimeline.tanggal_rk_awal &&
+      formTimeline.tanggal_rk_akhir &&
+      formTimeline.tanggal_rk_akhir < formTimeline.tanggal_rk_awal
+    ) {
+      addToast(
+        "warning",
+        "Tanggal RK Akhir tidak boleh lebih awal dari Tanggal RK Awal",
+      );
+      return;
+    }
+
     setSubmittingTimeline(true);
     try {
       const token = getValidToken();
@@ -1529,9 +1547,10 @@ export default function ProkerV3TimelinePage() {
         ? formTimeline.no_aktivitas || 1
         : timelines.length + 1;
 
+      const yr = proker?.Tahun || aktivitas?.Tahun || currentYear;
       const rkSlotsGen = getSlotsFromDateRange(
-        formTimeline.tanggal_rk_awal || "2026-01-01",
-        formTimeline.tanggal_rk_akhir || "2026-12-31",
+        formTimeline.tanggal_rk_awal || `${yr}-01-01`,
+        formTimeline.tanggal_rk_akhir || `${yr}-12-31`,
       );
 
       const fd = new FormData();
@@ -1542,11 +1561,11 @@ export default function ProkerV3TimelinePage() {
       fd.append("anggaran", String(nominalAnggaran));
       fd.append(
         "tanggal_rk_awal",
-        formTimeline.tanggal_rk_awal || "2026-01-01",
+        formTimeline.tanggal_rk_awal || `${yr}-01-01`,
       );
       fd.append(
         "tanggal_rk_akhir",
-        formTimeline.tanggal_rk_akhir || "2026-12-31",
+        formTimeline.tanggal_rk_akhir || `${yr}-12-31`,
       );
       fd.append("jadwal_rk", JSON.stringify(rkSlotsGen));
       fd.append("capaian", formTimeline.capaian.trim());
@@ -2703,12 +2722,20 @@ export default function ProkerV3TimelinePage() {
                       type="date"
                       disabled={isScheduleLocked}
                       value={formTimeline.tanggal_rk_awal}
-                      onChange={(e) =>
-                        setFormTimeline({
-                          ...formTimeline,
-                          tanggal_rk_awal: e.target.value,
-                        })
-                      }
+                      onChange={(e) => {
+                        const newAwal = e.target.value;
+                        setFormTimeline((prev) => {
+                          let newAkhir = prev.tanggal_rk_akhir;
+                          if (newAwal && newAkhir && newAkhir < newAwal) {
+                            newAkhir = newAwal;
+                          }
+                          return {
+                            ...prev,
+                            tanggal_rk_awal: newAwal,
+                            tanggal_rk_akhir: newAkhir,
+                          };
+                        });
+                      }}
                       className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200"
                       required
                     />
@@ -2723,12 +2750,13 @@ export default function ProkerV3TimelinePage() {
                     <input
                       type="date"
                       disabled={isScheduleLocked}
+                      min={formTimeline.tanggal_rk_awal || undefined}
                       value={formTimeline.tanggal_rk_akhir}
                       onChange={(e) =>
-                        setFormTimeline({
-                          ...formTimeline,
+                        setFormTimeline((prev) => ({
+                          ...prev,
                           tanggal_rk_akhir: e.target.value,
-                        })
+                        }))
                       }
                       className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200"
                       required
@@ -4150,12 +4178,20 @@ export default function ProkerV3TimelinePage() {
                 <input
                   type="date"
                   value={realisasiForm.tanggal_r_awal}
-                  onChange={(e) =>
-                    setRealisasiForm({
-                      ...realisasiForm,
-                      tanggal_r_awal: e.target.value,
-                    })
-                  }
+                  onChange={(e) => {
+                    const newAwal = e.target.value;
+                    setRealisasiForm((prev) => {
+                      let newAkhir = prev.tanggal_r_akhir;
+                      if (newAwal && newAkhir && newAkhir < newAwal) {
+                        newAkhir = newAwal;
+                      }
+                      return {
+                        ...prev,
+                        tanggal_r_awal: newAwal,
+                        tanggal_r_akhir: newAkhir,
+                      };
+                    });
+                  }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>
@@ -4167,12 +4203,13 @@ export default function ProkerV3TimelinePage() {
                 </label>
                 <input
                   type="date"
+                  min={realisasiForm.tanggal_r_awal || undefined}
                   value={realisasiForm.tanggal_r_akhir}
                   onChange={(e) =>
-                    setRealisasiForm({
-                      ...realisasiForm,
+                    setRealisasiForm((prev) => ({
+                      ...prev,
                       tanggal_r_akhir: e.target.value,
-                    })
+                    }))
                   }
                   className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />

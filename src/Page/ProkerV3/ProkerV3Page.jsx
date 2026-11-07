@@ -170,7 +170,6 @@ export default function ProkerV3Page() {
   const isUpm = ["upml", "upmf", "upms"].includes(curRole);
   const isVerifier = ["fakultas", "evaluator"].includes(curRole);
   const isAnggaran = ["anggaran", "keuangan"].includes(curRole);
-  const isAuditee = curRole === "auditee";
   const isLevelUser = curRole === "user";
   const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
 
@@ -1323,6 +1322,7 @@ export default function ProkerV3Page() {
         `Beban Yayasan ${nextVal ? "diaktifkan" : "dinonaktifkan"} untuk ${row.NamaProgram || "program kerja"}`,
       );
       tableRef.current?.reload?.({ resetPage: false });
+      fetchUnitPaguSummary();
     } catch (err) {
       addToast(
         "error",
@@ -1370,6 +1370,7 @@ export default function ProkerV3Page() {
       setBatalTargetProker(null);
       setCatatanBatalInput("");
       tableRef.current?.reload?.({ resetPage: false });
+      fetchUnitPaguSummary();
     } catch (err) {
       addToast(
         "error",
@@ -1397,6 +1398,7 @@ export default function ProkerV3Page() {
       setConfirmUnbatalOpen(false);
       setBatalTargetProker(null);
       tableRef.current?.reload?.({ resetPage: false });
+      fetchUnitPaguSummary();
     } catch (err) {
       addToast(
         "error",
@@ -2735,13 +2737,7 @@ export default function ProkerV3Page() {
               MENUNGGU ANGGARAN
             </span>
           );
-        } else {
-          badgeAnggaran = (
-            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-gray-200 bg-gray-50 text-gray-500 uppercase tracking-wider">
-              MENUNGGU VERIFIKATOR
-            </span>
-          );
-        }
+        } 
 
         const isUpmRejected =
           sVerif === "ditolak" ||
@@ -2993,6 +2989,37 @@ export default function ProkerV3Page() {
         );
         const hasPagu = Boolean(r.HasPagu && r.PaguUnit > 0);
         const isMelebihi = Boolean(r.IsMelebihiPagu);
+        const isBatal = Boolean(r.IsBatal);
+
+        if (isBatal) {
+          return (
+            <div className="flex flex-col items-end gap-1 whitespace-nowrap">
+              <div className="text-xs font-mono bg-rose-50/50 px-2 py-1.5 rounded-lg border border-rose-100 text-right w-full">
+                {totalAng > 0 && (
+                  <span
+                    className="line-through text-gray-400 text-[11px] block font-normal decoration-rose-500 decoration-1"
+                    title="Nominal sebelum dibatalkan"
+                  >
+                    {formatRupiah(totalAng)}
+                  </span>
+                )}
+                <span
+                  className="font-bold text-rose-600 text-xs block"
+                  title="Anggaran dibatalkan (Rp 0)"
+                >
+                  Rp 0
+                </span>
+              </div>
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200"
+                title="Program kerja dibatalkan (tidak memotong pagu anggaran unit)"
+              >
+                <XCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                <span>Dibatalkan</span>
+              </span>
+            </div>
+          );
+        }
 
         return (
           <div className="flex flex-col items-end gap-1 whitespace-nowrap">
@@ -3026,7 +3053,15 @@ export default function ProkerV3Page() {
             </div>
 
             {/* Indikator Status Pagu Anggaran Unit */}
-            {!hasPagu ? (
+            {Boolean(r.BebanYayasan) ? (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200"
+                title="Program kerja ini dibebankan ke yayasan (tidak memotong pagu anggaran unit)"
+              >
+                <CheckCircle2 className="w-3 h-3 text-purple-600 shrink-0" />
+                <span>Beban Yayasan</span>
+              </span>
+            ) : !hasPagu ? (
               <span
                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"
                 title={`Pagu anggaran unit tahun ${r.Tahun || ""} belum ditentukan (tidak sesuai pagu)`}

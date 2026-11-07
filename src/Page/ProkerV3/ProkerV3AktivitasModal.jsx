@@ -252,8 +252,9 @@ export default function ProkerV3AktivitasModal({
       fd.append("nama_aktivitas", timelineNama.trim());
       fd.append("pic", timelinePic.trim());
       fd.append("titik_kontrol", timelineTitikKontrol);
-      fd.append("tanggal_rk_awal", `${data?.Tahun || "2026"}-01-01`);
-      fd.append("tanggal_rk_akhir", `${data?.Tahun || "2026"}-12-31`);
+      const currentYr = data?.Tahun || (new Date().getFullYear() + 1);
+      fd.append("tanggal_rk_awal", `${currentYr}-01-01`);
+      fd.append("tanggal_rk_akhir", `${currentYr}-12-31`);
       fd.append("jadwal_rk", JSON.stringify(timelineJadwalRkSlots));
       fd.append("jadwal_r", JSON.stringify(timelineJadwalRSlots));
       fd.append("capaian", timelineCapaian.trim());
