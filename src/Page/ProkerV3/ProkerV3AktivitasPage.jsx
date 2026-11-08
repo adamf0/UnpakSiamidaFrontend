@@ -74,6 +74,32 @@ import {
   Ban,
 } from "lucide-react";
 
+const parseIkuString = (rawIku) => {
+  if (!rawIku) return [];
+  if (Array.isArray(rawIku)) {
+    return rawIku.map((item) => {
+      if (typeof item === "object" && item !== null) return item;
+      return { iku: String(item), jenis: "" };
+    });
+  }
+  if (!String(rawIku).trim()) return [];
+  const itemsMap = new Map();
+  String(rawIku)
+    .split("||")
+    .forEach((str) => {
+      const parts = str.split("::");
+      const iku = (parts[1] || parts[0] || "").trim();
+      if (iku && !itemsMap.has(iku)) {
+        itemsMap.set(iku, {
+          id: parts[0] || "",
+          iku: iku,
+          jenis: (parts[2] || "").trim(),
+        });
+      }
+    });
+  return Array.from(itemsMap.values());
+};
+
 export default function ProkerV3AktivitasPage() {
   const { uuid: prokerUuid } = useParams();
   const navigate = useNavigate();
@@ -175,6 +201,28 @@ export default function ProkerV3AktivitasPage() {
   const [loading, setLoading] = useState(true);
   const [proker, setProker] = useState(null);
   const [activities, setActivities] = useState([]);
+
+  // Multi-scope support for Standar, Target, and Luaran
+  const scopesList = useMemo(() => {
+    const scs = proker?.Scopes || proker?.scopes || [];
+    if (Array.isArray(scs) && scs.length > 0) return scs;
+    if (!proker) return [];
+    return [
+      {
+        StandarSubStandar:
+          proker.StandarSubStandar || proker.standar_sub_standar || "-",
+        IndikatorKinerja:
+          proker.IndikatorKinerja || proker.indikator_kinerja || "",
+        TargetUnpak: proker.TargetUnpak || proker.target_unpak || "-",
+        TargetUnit: proker.TargetUnit || proker.target_unit || "-",
+        CapaianUnitLalu:
+          proker.CapaianUnitLalu || proker.capaian_unit_lalu || "-",
+        Output: proker.Output || proker.output || "-",
+        Outcome: proker.Outcome || proker.outcome || "-",
+        IkuList: proker.IkuList || proker.iku_list || "",
+      },
+    ];
+  }, [proker]);
 
   // Pastikan tahun aktif di navbar (positionYear) cocok dengan tahun proker
   const isYearMatch = useMemo(() => {
@@ -2279,53 +2327,196 @@ export default function ProkerV3AktivitasPage() {
               {/* Grid Metadata Matriks */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
                 {/* Standar & Indikator */}
-                <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 space-y-1">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>Standar & Sub Standar</span>
+                <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 space-y-2">
+                  <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                    <div className="flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Standar & Sub Standar</span>
+                    </div>
+                    {scopesList.length > 1 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[9px] font-mono font-bold">
+                        {scopesList.length} Standar
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs font-semibold text-gray-800 line-clamp-2">
-                    {proker.StandarSubStandar || "-"}
-                  </p>
-                  <p className="text-[11px] text-gray-500 italic line-clamp-1">
-                    Indikator: {proker.IndikatorKinerja || "-"}
-                  </p>
+                  <div
+                    className={`space-y-2.5 max-h-56 overflow-y-auto pr-1 ${
+                      scopesList.length > 1 ? "divide-y divide-gray-200/70" : ""
+                    }`}
+                  >
+                    {scopesList.map((sc, idx) => {
+                      const ikus = parseIkuString(sc.IkuList || sc.iku_list);
+                      return (
+                        <div
+                          key={idx}
+                          className={idx > 0 ? "pt-2 space-y-1" : "space-y-1"}
+                        >
+                          <div className="flex items-start gap-1.5">
+                            {scopesList.length > 1 && (
+                              <span className="shrink-0 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-purple-100/80 text-purple-800 border border-purple-200 mt-0.5">
+                                #{idx + 1}
+                              </span>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className="text-xs font-semibold text-gray-800 line-clamp-2"
+                                title={
+                                  sc.StandarSubStandar ||
+                                  sc.standar_sub_standar
+                                }
+                              >
+                                {sc.StandarSubStandar ||
+                                  sc.standar_sub_standar ||
+                                  "-"}
+                              </p>
+                              {(sc.IndikatorKinerja ||
+                                sc.indikator_kinerja) && (
+                                <p
+                                  className="text-[11px] text-gray-500 italic line-clamp-2 mt-0.5"
+                                  title={
+                                    sc.IndikatorKinerja || sc.indikator_kinerja
+                                  }
+                                >
+                                  Indikator:{" "}
+                                  {sc.IndikatorKinerja || sc.indikator_kinerja}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {ikus.length > 0 && (
+                            <div
+                              className={`flex flex-wrap items-center gap-1 ${
+                                scopesList.length > 1 ? "pl-6" : ""
+                              }`}
+                            >
+                              {ikus.map((it, iIdx) => (
+                                <span
+                                  key={iIdx}
+                                  className="px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-bold font-mono border border-purple-200"
+                                  title={
+                                    it.iku + (it.jenis ? ` (${it.jenis})` : "")
+                                  }
+                                >
+                                  {it.iku}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Target Unpak & Target Unit */}
-                <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-1">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
-                    <Target className="w-3.5 h-3.5" />
-                    <span>Target Capaian</span>
+                <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-2">
+                  <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                    <div className="flex items-center gap-1.5">
+                      <Target className="w-3.5 h-3.5" />
+                      <span>Target Capaian</span>
+                    </div>
+                    {scopesList.length > 1 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-mono font-bold">
+                        {scopesList.length} Target
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs text-gray-700">
-                    Target Unpak:{" "}
-                    <b className="text-emerald-700">
-                      {proker.TargetUnpak || "-"}
-                    </b>
+                  <div
+                    className={`space-y-2.5 max-h-56 overflow-y-auto pr-1 ${
+                      scopesList.length > 1
+                        ? "divide-y divide-emerald-200/70"
+                        : ""
+                    }`}
+                  >
+                    {scopesList.map((sc, idx) => (
+                      <div
+                        key={idx}
+                        className={idx > 0 ? "pt-2 space-y-1" : "space-y-1"}
+                      >
+                        {scopesList.length > 1 && (
+                          <div className="flex items-center gap-1 mb-1">
+                            <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-emerald-100/80 text-emerald-800 border border-emerald-200">
+                              #{idx + 1}
+                            </span>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-700 flex items-start justify-between gap-1">
+                          <span className="text-gray-500">Target Unpak:</span>
+                          <b className="text-emerald-700 text-right">
+                            {sc.TargetUnpak || sc.target_unpak || "-"}
+                          </b>
+                        </div>
+                        <div className="text-xs text-gray-700 flex items-start justify-between gap-1">
+                          <span className="text-purple-700 font-medium">
+                            Target Unit:
+                          </span>
+                          <b className="text-purple-800 text-right">
+                            {sc.TargetUnit || sc.target_unit || "-"}
+                          </b>
+                        </div>
+                        <div className="text-[11px] text-gray-500 flex items-start justify-between gap-1 pt-0.5 border-t border-emerald-100/60">
+                          <span className="italic">Capaian Lalu:</span>
+                          <span className="text-gray-600 text-right">
+                            {sc.CapaianUnitLalu || sc.capaian_unit_lalu || "-"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="text-xs text-gray-700">
-                    Target Unit:{" "}
-                    <b className="text-purple-700">
-                      {proker.TargetUnit || "-"}
-                    </b>
-                  </div>
-                  <p className="text-[10px] text-gray-500">
-                    Capaian Lalu: {proker.CapaianUnitLalu || "-"}
-                  </p>
                 </div>
 
                 {/* Output & Outcome */}
-                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-1">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Luaran & Dampak</span>
+                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-2">
+                  <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Luaran & Dampak</span>
+                    </div>
+                    {scopesList.length > 1 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[9px] font-mono font-bold">
+                        {scopesList.length} Luaran
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs text-gray-700 line-clamp-2">
-                    <b>Output:</b> {proker.Output || "-"}
-                  </div>
-                  <div className="text-xs text-gray-600 line-clamp-2">
-                    <b>Outcome:</b> {proker.Outcome || "-"}
+                  <div
+                    className={`space-y-2.5 max-h-56 overflow-y-auto pr-1 ${
+                      scopesList.length > 1
+                        ? "divide-y divide-indigo-200/70"
+                        : ""
+                    }`}
+                  >
+                    {scopesList.map((sc, idx) => (
+                      <div
+                        key={idx}
+                        className={idx > 0 ? "pt-2 space-y-1" : "space-y-1"}
+                      >
+                        {scopesList.length > 1 && (
+                          <div className="flex items-center gap-1 mb-1">
+                            <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-indigo-100/80 text-indigo-800 border border-indigo-200">
+                              #{idx + 1}
+                            </span>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-700">
+                          <b className="text-indigo-900">Output:</b>{" "}
+                          <span
+                            className="line-clamp-2"
+                            title={sc.Output || sc.output}
+                          >
+                            {sc.Output || sc.output || "-"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          <b className="text-indigo-900">Outcome:</b>{" "}
+                          <span
+                            className="line-clamp-2"
+                            title={sc.Outcome || sc.outcome}
+                          >
+                            {sc.Outcome || sc.outcome || "-"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
