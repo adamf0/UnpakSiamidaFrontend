@@ -54,7 +54,27 @@ import {
   ChevronDown,
   Coins,
   TrendingUp,
+  Copy,
 } from "lucide-react";
+
+const formatDateTimeId = (dateStr) => {
+  if (!dateStr) return "-";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return (
+      new Intl.DateTimeFormat("id-ID", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(d) + " WIB"
+    );
+  } catch {
+    return String(dateStr);
+  }
+};
 
 export default function ProkerV3Page() {
   const { getValidToken, user } = useAuth();
@@ -81,6 +101,14 @@ export default function ProkerV3Page() {
   const [selectedProkerUuid, setSelectedProkerUuid] = useState(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Soft Delete Modal State (for non-admin unit users)
+  const [softDeleteModalOpen, setSoftDeleteModalOpen] = useState(false);
+  const [softDeleteRow, setSoftDeleteRow] = useState(null);
+  const [alasanHapus, setAlasanHapus] = useState("");
+  const [softDeleteError, setSoftDeleteError] = useState("");
+  const [isSubmittingSoftDelete, setIsSubmittingSoftDelete] = useState(false);
+  const alasanHapusRef = useRef(null);
 
   // State History Drawer State
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -229,21 +257,24 @@ export default function ProkerV3Page() {
   const [selectedProdi, setSelectedProdi] = useState("all");
   const [selectedProdiObj, setSelectedProdiObj] = useState(null);
 
-  // Tab filter verifikasi & persetujuan ("semua" | "menunggu" | "terima" | "tolak")
-  const [activeTab, setActiveTab] = useState(isAdmin ? "semua" : "menunggu");
+  // Tab filter verifikasi & persetujuan ("semua" | "menunggu" | "revisi" | "terima" | "tolak" | "buang")
+  const [activeTab, setActiveTab] = useState(
+    isAdmin || (!isVerifier && !isAnggaran && !isUpm && !isEvaluator)
+      ? "semua"
+      : "menunggu",
+  );
 
   const handleTabChange = (newTab) => {
     setActiveTab(newTab);
     tableRef.current?.reload?.({ resetPage: true });
   };
 
-  useEffect(() => {
-    setActiveTab(isAdmin ? "semua" : "menunggu");
-  }, [level, isAdmin]);
-
   // Jadwal Proker V3 Status Check
   const [jadwalStatus, setJadwalStatus] = useState(null);
   const [loadingJadwalStatus, setLoadingJadwalStatus] = useState(false);
+
+  // Pengaturan tanggal aktif Proker Batal (global app setting)
+  const [prokerBatalStatus, setProkerBatalStatus] = useState(null);
 
   // Master Options
   const [unitOptions, setUnitOptions] = useState([]);
@@ -342,6 +373,22 @@ export default function ProkerV3Page() {
 
     fetchJadwalStatus();
   }, [selectedTahun, positionYear, selectedUnit, userUnitData]);
+
+  // Fetch pengaturan tanggal aktif Proker Batal
+  useEffect(() => {
+    let cancel = false;
+    apiClient
+      .get("/settings/proker-batal")
+      .then((res) => {
+        if (!cancel) setProkerBatalStatus(res?.data || null);
+      })
+      .catch(() => {
+        if (!cancel) setProkerBatalStatus(null);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   const userTargetName =
     userUnitData?.raw_nama ||
@@ -867,6 +914,15 @@ export default function ProkerV3Page() {
 
   const isUserWithFakultasUnit = Boolean(isUnitUser || isUnitLevelUser);
 
+  const defaultTabForRole =
+    !isAdmin && (isVerifier || isAnggaran || isUpm || isUpmUser)
+      ? "menunggu"
+      : "semua";
+
+  useEffect(() => {
+    setActiveTab(defaultTabForRole);
+  }, [level, defaultTabForRole]);
+
   const [unitPaguSummary, setUnitPaguSummary] = useState(null);
   const [loadingUnitPaguSummary, setLoadingUnitPaguSummary] = useState(false);
 
@@ -1163,7 +1219,7 @@ export default function ProkerV3Page() {
       if (isFakultasSelected && selectedProdi && selectedProdi !== "all") {
         params.append("filter_prodi", selectedProdi);
       }
-      if (isVerifier && activeTab) {
+      if (activeTab && activeTab !== "semua" && activeTab !== "all") {
         params.append("filter_tab", activeTab);
       }
     }
@@ -1521,6 +1577,57 @@ export default function ProkerV3Page() {
     }
   };
 
+  const openSoftDeleteModal = (row) => {
+    setSoftDeleteRow(row);
+    setAlasanHapus("");
+    setSoftDeleteError("");
+    setSoftDeleteModalOpen(true);
+  };
+
+  const closeSoftDeleteModal = () => {
+    if (isSubmittingSoftDelete) return;
+    setSoftDeleteModalOpen(false);
+    setSoftDeleteRow(null);
+    setAlasanHapus("");
+    setSoftDeleteError("");
+  };
+
+  const handleSubmitSoftDelete = async (e) => {
+    if (e) e.preventDefault();
+    if (!softDeleteRow?.UUID) return;
+    const trimmed = alasanHapus.trim();
+    if (!trimmed) {
+      setSoftDeleteError("Alasan penghapusan program kerja wajib diisi.");
+      alasanHapusRef.current?.focus();
+      return;
+    }
+    try {
+      setIsSubmittingSoftDelete(true);
+      setSoftDeleteError("");
+      await apiClient.delete(`/proker_v3/${softDeleteRow.UUID}`, {
+        data: { catatan: trimmed },
+      });
+      addToast(
+        "success",
+        `Program kerja "${softDeleteRow.NamaProgram}" dipindahkan ke tab Buang`,
+      );
+      setSoftDeleteModalOpen(false);
+      setSoftDeleteRow(null);
+      setAlasanHapus("");
+      tableRef.current?.reload?.({ resetPage: true });
+      fetchUnitPaguSummary();
+    } catch (err) {
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        "Gagal menghapus program kerja";
+      setSoftDeleteError(msg);
+      addToast("error", msg);
+    } finally {
+      setIsSubmittingSoftDelete(false);
+    }
+  };
+
   const deleteData = async () => {
     if (!selectedRow?.UUID) return;
     if (!canManageProker(selectedRow)) {
@@ -1539,6 +1646,7 @@ export default function ProkerV3Page() {
     } finally {
       setConfirmDelete(false);
       tableRef.current?.reload?.({ resetPage: true });
+      fetchUnitPaguSummary();
     }
   };
 
@@ -1552,6 +1660,7 @@ export default function ProkerV3Page() {
 
   const isRowSelectable = (row) => {
     if (!row?.UUID) return false;
+    if (activeTab === "buang" || Boolean(row.DeletedAt)) return false;
     const sMain = (row.Status || "").toLowerCase().trim();
     const sVerif = (row.StatusVerifikator || "").toLowerCase().trim();
     const sAngg = (row.StatusAnggaran || "").toLowerCase().trim();
@@ -2225,6 +2334,18 @@ export default function ProkerV3Page() {
                 </Tooltip>
               );
 
+              if (activeTab === "buang" || Boolean(r.DeletedAt)) {
+                return (
+                  <div className="flex items-center gap-1.5 flex-nowrap">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200 whitespace-nowrap">
+                      <Trash2 className="w-3 h-3 text-rose-700 shrink-0" />
+                      <span>Dihapus</span>
+                    </span>
+                    {historyBtn}
+                  </div>
+                );
+              }
+
               // 1. Role Anggaran / Keuangan:
               // TOMBOL "TERIMA ANGGARAN" DAN "TOLAK ANGGARAN" HANYA MUNCUL DI LEVEL ANGGARAN
               if (isAnggaran) {
@@ -2461,15 +2582,29 @@ export default function ProkerV3Page() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                         </Tooltip>
-                        <Tooltip title="Hapus Program Kerja">
+                        <Tooltip
+                          title={
+                            isAdmin
+                              ? "Hapus Permanen Program Kerja"
+                              : "Hapus Program Kerja"
+                          }
+                        >
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedRow(r);
-                              setConfirmDelete(true);
+                              if (isAdmin) {
+                                setSelectedRow(r);
+                                setConfirmDelete(true);
+                              } else {
+                                openSoftDeleteModal(r);
+                              }
                             }}
                             className="p-1.5 rounded-lg text-rose-600 bg-white hover:bg-rose-50 border border-rose-200 hover:border-rose-300 transition cursor-pointer shadow-2xs shrink-0 inline-flex items-center justify-center"
-                            title="Hapus Program Kerja"
+                            title={
+                              isAdmin
+                                ? "Hapus Permanen Program Kerja"
+                                : "Hapus Program Kerja"
+                            }
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2513,6 +2648,27 @@ export default function ProkerV3Page() {
       label: "Aktivitas & Dokumen",
       minWidth: "155px",
       renderKey: (r) => {
+        if (activeTab === "buang" || Boolean(r.DeletedAt)) {
+          return (
+            <div className="flex flex-col gap-1.5 w-full text-xs text-gray-600">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gray-100 border border-gray-200 font-medium whitespace-nowrap">
+                <Layers className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                <span>
+                  <b className="font-bold text-gray-800">{r.TotalAktivitas || 0}</b> Aktivitas
+                </span>
+              </span>
+              {(r.TotalDokumen || 0) > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gray-100 border border-gray-200 font-medium whitespace-nowrap">
+                  <FileText className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                  <span>
+                    <b className="font-bold text-gray-800">{r.TotalDokumen || 0}</b> Dokumen
+                  </span>
+                </span>
+              )}
+            </div>
+          );
+        }
+
         const sAngg = (r.StatusAnggaran || "").toLowerCase().trim();
         const sMain = (r.Status || "").toLowerCase().trim();
         const isDiterimaAnggaran =
@@ -2747,6 +2903,40 @@ export default function ProkerV3Page() {
           sAngg === "ditolak" ||
           (sMain.includes("ditolak") && Boolean(catatanAngg));
 
+        if (activeTab === "buang" || Boolean(r.DeletedAt)) {
+          return (
+            <div className="flex flex-col gap-2 items-start w-full">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-100 text-rose-800 uppercase tracking-wider">
+                  <Trash2 className="w-3 h-3 text-rose-700" />
+                  <span>DIHAPUS (BUANG)</span>
+                </span>
+                {historyBtnInline}
+              </div>
+              <div className="flex items-start gap-1.5 p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-[10px] leading-tight w-full max-w-[240px] shadow-2xs">
+                <Trash2 className="w-3.5 h-3.5 text-rose-700 shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="font-bold text-rose-800 text-[9px] uppercase tracking-wider">
+                    Alasan Penghapusan:
+                  </span>
+                  <span className="italic break-words whitespace-pre-wrap">
+                    "{r.CatatanHapus || "Tanpa catatan"}"
+                  </span>
+                  <span className="text-[9px] text-rose-800 font-medium pt-0.5">
+                    Oleh: {r.DeletedByName || "-"}
+                  </span>
+                  {r.DeletedAt && (
+                    <span className="text-[9px] text-rose-700">
+                      {formatDateTimeId(r.DeletedAt)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {badgeUpm}
+            </div>
+          );
+        }
+
         return (
           <div className="flex flex-col gap-2 items-start w-full">
             <div className="flex flex-col gap-1 items-start w-full">
@@ -2839,14 +3029,14 @@ export default function ProkerV3Page() {
                 sAngg === "terima anggaran" ||
                 sMain === "terima_anggaran" ||
                 sMain === "terima anggaran";
-              const isJadwalOpen = Boolean(jadwalStatus?.is_open);
+              const isProkerBatalActive = Boolean(prokerBatalStatus?.is_active);
               const canBatalSwitch =
                 !isAdmin &&
                 isLevelUser &&
                 !isUpmUser &&
                 canManageProker(r) &&
                 isTerimaAnggaran &&
-                isJadwalOpen;
+                isProkerBatalActive;
 
               if (!canBatalSwitch) return null;
 
@@ -3095,8 +3285,9 @@ export default function ProkerV3Page() {
       label: "Beban Yayasan",
       minWidth: "120px",
       renderKey: (r) => {
+        const isTrashed = activeTab === "buang" || Boolean(r.DeletedAt);
         const canEditBeban =
-          !isAdmin && isLevelUser && !isUpmUser && canManageProker(r);
+          !isTrashed && !isAdmin && isLevelUser && !isUpmUser && canManageProker(r);
         const isUpdating = Boolean(updatingBebanUuids[r.UUID]);
         const isBeban = Boolean(r.BebanYayasan);
 
@@ -3196,21 +3387,74 @@ export default function ProkerV3Page() {
       label: "Program Kerja",
       minWidth: "180px",
       searchable: true,
-      renderKey: (r) => (
-        <div className="space-y-1">
-          <button
-            type="button"
-            onClick={() => openAktivitas(r)}
-            className="text-xs font-bold text-gray-900 hover:text-purple-600 text-left line-clamp-2 transition cursor-pointer"
-          >
-            {r.NamaProgram}
-          </button>
-          <div className="text-[11px] text-gray-500 line-clamp-1">
-            PIC:{" "}
-            <span className="font-medium text-gray-700">{r.PIC || "-"}</span>
+      renderKey: (r) => {
+        const isTrashed = activeTab === "buang" || Boolean(r.DeletedAt);
+        const dupCount = Number(r.DuplicateDeletedCount) || 0;
+        const dupList = Array.isArray(r.DuplicateDeletedTitles)
+          ? r.DuplicateDeletedTitles
+          : [];
+
+        return (
+          <div className="space-y-1">
+            {isTrashed ? (
+              <div className="text-xs font-bold text-gray-900 text-left line-clamp-2">
+                {r.NamaProgram}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openAktivitas(r)}
+                className="text-xs font-bold text-gray-900 hover:text-purple-600 text-left line-clamp-2 transition cursor-pointer"
+              >
+                {r.NamaProgram}
+              </button>
+            )}
+            <div className="text-[11px] text-gray-500 line-clamp-1">
+              PIC:{" "}
+              <span className="font-medium text-gray-700">{r.PIC || "-"}</span>
+            </div>
+            {!isTrashed && dupCount > 0 && (
+              <Tooltip
+                content={
+                  <div className="whitespace-normal max-w-[280px] space-y-1.5 py-0.5 text-left">
+                    <div className="font-bold text-amber-300 text-[11px]">
+                      Terdeteksi {dupCount}x judul mirip di tab Buang ({r.Tahun || "2026"}):
+                    </div>
+                    {dupList.slice(0, 5).map((d, idx) => (
+                      <div
+                        key={d.UUID || idx}
+                        className="text-[10px] leading-snug border-t border-white/15 pt-1"
+                      >
+                        <div className="font-semibold text-white">
+                          {idx + 1}. {d.NamaProgram} ({d.Similarity || 100}% mirip)
+                        </div>
+                        {d.CatatanHapus && (
+                          <div className="text-gray-200">
+                            Alasan hapus: "{d.CatatanHapus}"
+                          </div>
+                        )}
+                        {d.DeletedByName && (
+                          <div className="text-gray-300">
+                            Oleh: {d.DeletedByName}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                }
+              >
+                <span
+                  tabIndex={0}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 cursor-help focus:outline-2 focus:outline-amber-600 focus:outline-offset-1"
+                >
+                  <Copy className="w-3 h-3 text-amber-800 shrink-0" />
+                  <span>{dupCount}x Duplikat Dihapus</span>
+                </span>
+              </Tooltip>
+            )}
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "standar_indikator_iku",
@@ -3639,12 +3883,18 @@ export default function ProkerV3Page() {
           </div>
         </div>
 
-        {/* Tab Verifikasi & Persetujuan (Khusus Role Anggaran, Verifikator, UPM, & Admin) */}
-        {(isVerifier || isAnggaran || isUpm || isAdmin || isUpmUser) && (
+        {/* Tab Verifikasi, Persetujuan & Buang */}
+        {(isVerifier ||
+          isAnggaran ||
+          isUpm ||
+          isAdmin ||
+          isUpmUser ||
+          isUserWithFakultasUnit) && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-3 sm:px-5 sm:py-3.5 rounded-2xl border border-gray-200 shadow-xs">
             {/* Segmented Tab Controls */}
-            <div className="inline-flex p-1 bg-gray-100/90 rounded-xl border border-gray-200/80 gap-1 shrink-0 self-start sm:self-auto">
-              {isAdmin && (
+            <div className="inline-flex flex-wrap p-1 bg-gray-100/90 rounded-xl border border-gray-200/80 gap-1 shrink-0 self-start sm:self-auto">
+              {(isAdmin ||
+                (!isVerifier && !isAnggaran && !isUpm && !isUpmUser)) && (
                 <button
                   type="button"
                   onClick={() => handleTabChange("semua")}
@@ -3660,69 +3910,87 @@ export default function ProkerV3Page() {
                   <span>Semua Data</span>
                 </button>
               )}
+              {(isAdmin || isVerifier || isAnggaran || isUpm || isUpmUser) && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("menunggu")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === "menunggu"
+                        ? isAdmin
+                          ? "bg-amber-500 text-white shadow-xs"
+                          : "bg-white text-purple-700 shadow-xs border border-gray-200/80"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
+                    }`}
+                  >
+                    <Clock
+                      className={`w-3.5 h-3.5 ${
+                        activeTab === "menunggu"
+                          ? isAdmin
+                            ? "text-white"
+                            : "text-purple-600"
+                          : "text-gray-400"
+                      }`}
+                    />
+                    <span>Menunggu</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("revisi")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === "revisi"
+                        ? "bg-amber-500 text-white shadow-xs"
+                        : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
+                    }`}
+                  >
+                    <RotateCcw
+                      className={`w-3.5 h-3.5 ${activeTab === "revisi" ? "text-white" : "text-amber-600"}`}
+                    />
+                    <span>Revisi</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("terima")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === "terima"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
+                    }`}
+                  >
+                    <CheckCircle2
+                      className={`w-3.5 h-3.5 ${activeTab === "terima" ? "text-white" : "text-emerald-600"}`}
+                    />
+                    <span>Terima</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("tolak")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === "tolak"
+                        ? "bg-rose-600 text-white shadow-xs"
+                        : "text-gray-600 hover:text-rose-700 hover:bg-rose-50"
+                    }`}
+                  >
+                    <XCircle
+                      className={`w-3.5 h-3.5 ${activeTab === "tolak" ? "text-white" : "text-rose-600"}`}
+                    />
+                    <span>Tolak</span>
+                  </button>
+                </>
+              )}
               <button
                 type="button"
-                onClick={() => handleTabChange("menunggu")}
+                onClick={() => handleTabChange("buang")}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === "menunggu"
-                    ? isAdmin
-                      ? "bg-amber-500 text-white shadow-xs"
-                      : "bg-white text-purple-700 shadow-xs border border-gray-200/80"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
+                  activeTab === "buang"
+                    ? "bg-rose-700 text-white shadow-xs"
+                    : "text-gray-600 hover:text-rose-800 hover:bg-rose-50"
                 }`}
               >
-                <Clock
-                  className={`w-3.5 h-3.5 ${
-                    activeTab === "menunggu"
-                      ? isAdmin
-                        ? "text-white"
-                        : "text-purple-600"
-                      : "text-gray-400"
-                  }`}
+                <Trash2
+                  className={`w-3.5 h-3.5 ${activeTab === "buang" ? "text-white" : "text-rose-700"}`}
                 />
-                <span>Menunggu</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTabChange("revisi")}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === "revisi"
-                    ? "bg-amber-500 text-white shadow-xs"
-                    : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
-                }`}
-              >
-                <RotateCcw
-                  className={`w-3.5 h-3.5 ${activeTab === "revisi" ? "text-white" : "text-amber-600"}`}
-                />
-                <span>Revisi</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTabChange("terima")}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === "terima"
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
-                }`}
-              >
-                <CheckCircle2
-                  className={`w-3.5 h-3.5 ${activeTab === "terima" ? "text-white" : "text-emerald-600"}`}
-                />
-                <span>Terima</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTabChange("tolak")}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === "tolak"
-                    ? "bg-rose-600 text-white shadow-xs"
-                    : "text-gray-600 hover:text-rose-700 hover:bg-rose-50"
-                }`}
-              >
-                <XCircle
-                  className={`w-3.5 h-3.5 ${activeTab === "tolak" ? "text-white" : "text-rose-600"}`}
-                />
-                <span>Tolak</span>
+                <span>Buang</span>
               </button>
             </div>
 
@@ -3733,38 +4001,42 @@ export default function ProkerV3Page() {
                 className={`px-2.5 py-1 rounded-lg font-bold text-xs ${
                   activeTab === "semua"
                     ? "bg-purple-50 text-purple-700 border border-purple-200"
-                    : activeTab === "menunggu"
-                      ? "bg-amber-50 text-amber-800 border border-amber-200"
-                      : activeTab === "revisi"
-                        ? "bg-amber-100 text-amber-900 border border-amber-300"
-                        : activeTab === "terima"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-rose-50 text-rose-700 border border-rose-200"
+                    : activeTab === "buang"
+                      ? "bg-rose-50 text-rose-800 border border-rose-200"
+                      : activeTab === "menunggu"
+                        ? "bg-amber-50 text-amber-800 border border-amber-200"
+                        : activeTab === "revisi"
+                          ? "bg-amber-100 text-amber-900 border border-amber-300"
+                          : activeTab === "terima"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-rose-50 text-rose-700 border border-rose-200"
                 }`}
               >
                 {activeTab === "semua"
-                  ? "Semua Program Kerja (Semua Status)"
-                  : activeTab === "menunggu"
-                    ? isAnggaran
-                      ? "Menunggu Persetujuan Anggaran"
-                      : isAdmin
-                        ? "Menunggu Verifikasi"
-                        : "Menunggu Verifikasi UPM"
-                    : activeTab === "revisi"
+                  ? "Semua Program Kerja Aktif"
+                  : activeTab === "buang"
+                    ? "Data Dihapus / Tab Buang (Soft Delete)"
+                    : activeTab === "menunggu"
                       ? isAnggaran
-                        ? "Perlu Revisi Anggaran"
-                        : "Perlu Revisi Pengusul"
-                      : activeTab === "terima"
+                        ? "Menunggu Persetujuan Anggaran"
+                        : isAdmin
+                          ? "Menunggu Verifikasi"
+                          : "Menunggu Verifikasi UPM"
+                      : activeTab === "revisi"
                         ? isAnggaran
-                          ? "Diterima Anggaran"
-                          : isAdmin
-                            ? "Diterima / Disetujui"
-                            : "Diterima Verifikator"
-                        : isAnggaran
-                          ? "Ditolak Anggaran"
-                          : isAdmin
-                            ? "Ditolak"
-                            : "Ditolak Verifikator"}
+                          ? "Perlu Revisi Anggaran"
+                          : "Perlu Revisi Pengusul"
+                        : activeTab === "terima"
+                          ? isAnggaran
+                            ? "Diterima Anggaran"
+                            : isAdmin
+                              ? "Diterima / Disetujui"
+                              : "Diterima Verifikator"
+                          : isAnggaran
+                            ? "Ditolak Anggaran"
+                            : isAdmin
+                              ? "Ditolak"
+                              : "Ditolak Verifikator"}
               </span>
             </div>
           </div>
@@ -4122,15 +4394,17 @@ export default function ProkerV3Page() {
             searchable={true}
             searchPlaceholder="Cari nama program kerja, PIC..."
             emptyMessage={
-              activeTab === "menunggu"
-                ? "Tidak ada program kerja yang sedang menunggu verifikasi."
-                : activeTab === "revisi"
-                  ? "Tidak ada program kerja yang sedang dalam status revisi."
-                  : activeTab === "terima"
-                    ? "Belum ada program kerja yang berstatus diterima."
-                    : activeTab === "tolak"
-                      ? "Tidak ada program kerja yang berstatus ditolak."
-                      : "Belum ada program kerja yang tercatat untuk filter ini."
+              activeTab === "buang"
+                ? "Belum ada program kerja yang dihapus pada tab Buang."
+                : activeTab === "menunggu"
+                  ? "Tidak ada program kerja yang sedang menunggu verifikasi."
+                  : activeTab === "revisi"
+                    ? "Tidak ada program kerja yang sedang dalam status revisi."
+                    : activeTab === "terima"
+                      ? "Belum ada program kerja yang berstatus diterima."
+                      : activeTab === "tolak"
+                        ? "Tidak ada program kerja yang berstatus ditolak."
+                        : "Belum ada program kerja yang tercatat untuk filter ini."
             }
           />
         </div>
@@ -4159,7 +4433,7 @@ export default function ProkerV3Page() {
         onRefreshParent={() => tableRef.current?.reload?.({ resetPage: false })}
       />
 
-      {/* Confirm Delete Dialog */}
+      {/* Confirm Delete Dialog (Khusus Admin) */}
       <ConfirmDeleteDialog
         open={confirmDelete}
         title="Hapus Program Kerja"
@@ -4167,6 +4441,118 @@ export default function ProkerV3Page() {
         onClose={() => setConfirmDelete(false)}
         onConfirm={deleteData}
       />
+
+      {/* Soft Delete Modal Input Alasan (User Fakultas / Unit) */}
+      <Transition appear show={softDeleteModalOpen} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          initialFocus={alasanHapusRef}
+          onClose={closeSoftDeleteModal}
+        >
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Dialog.Panel className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 text-rose-700 font-bold text-base">
+                  <Trash2 className="w-5 h-5 shrink-0" />
+                  <Dialog.Title as="h2">Hapus Program Kerja</Dialog.Title>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeSoftDeleteModal}
+                  disabled={isSubmittingSoftDelete}
+                  aria-label="Tutup modal"
+                  className="p-1 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitSoftDelete} className="space-y-4" noValidate>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-gray-700">
+                    Program kerja yang dihapus akan dipindahkan ke tab{" "}
+                    <span className="font-semibold text-gray-900">Buang</span> dan
+                    alasan penghapusannya dicatat di{" "}
+                    <span className="font-semibold text-gray-900">History</span>:
+                  </p>
+                  <div className="text-xs font-bold text-gray-900 bg-rose-50 border border-rose-200 p-2.5 rounded-lg line-clamp-2">
+                    {softDeleteRow?.NamaProgram}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="alasan-hapus-proker"
+                    className="block text-xs font-semibold text-gray-800"
+                  >
+                    Alasan Menghapus Program Kerja{" "}
+                    <span className="text-rose-700" aria-hidden="true">
+                      *
+                    </span>
+                  </label>
+                  <textarea
+                    id="alasan-hapus-proker"
+                    ref={alasanHapusRef}
+                    name="alasan_hapus"
+                    rows={4}
+                    required
+                    aria-required="true"
+                    aria-invalid={Boolean(softDeleteError)}
+                    aria-describedby="alasan-hapus-help alasan-hapus-error"
+                    value={alasanHapus}
+                    onChange={(e) => {
+                      setAlasanHapus(e.target.value);
+                      if (softDeleteError) setSoftDeleteError("");
+                    }}
+                    placeholder="Tuliskan alasan mengapa program kerja ini dihapus..."
+                    className={`w-full p-3 text-xs text-gray-900 border rounded-xl focus:outline-none focus:ring-2 transition ${
+                      softDeleteError
+                        ? "border-rose-500 focus:ring-rose-500 focus:border-rose-600"
+                        : "border-gray-300 focus:ring-rose-500 focus:border-rose-600"
+                    }`}
+                  />
+                  <p id="alasan-hapus-help" className="text-[11px] text-gray-600">
+                    Alasan wajib diisi sebelum memindahkan program kerja ke tab Buang.
+                  </p>
+                  {softDeleteError && (
+                    <div
+                      id="alasan-hapus-error"
+                      role="alert"
+                      className="flex items-center gap-1.5 text-xs font-medium text-rose-800 bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-lg"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-700 shrink-0" />
+                      <span>{softDeleteError}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={closeSoftDeleteModal}
+                    disabled={isSubmittingSoftDelete}
+                    className="px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer disabled:opacity-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingSoftDelete}
+                    className="px-4 py-2 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>
+                      {isSubmittingSoftDelete ? "Menghapus..." : "Hapus ke Tab Buang"}
+                    </span>
+                  </button>
+                </div>
+              </form>
+            </Dialog.Panel>
+          </div>
+        </Dialog>
+      </Transition>
 
       {/* State History Right Drawer */}
       <StateHistoryDrawer

@@ -14,6 +14,18 @@
 // - Kasus B: Pekerjaan tuntas (>=75%) namun uang belum cair (<30%)
 
 import { V_FAKULTAS_UNIT_ROWS, MOCK_ALIASES } from "./vFakultasUnitData.js";
+import {
+  STATIC_KODE_FAKULTAS_BY_ID,
+  filterUnitsForAccessScope,
+  getUnitUuid,
+  getUnitRawId,
+  getUnitType,
+  getUnitName,
+  getUnitJenjang,
+  getUnitKodeFakultas,
+  getUnitFakultasName,
+  getUnitMockAlias,
+} from "./ikuAnggaranScope.js";
 
 export const SANKEY_DATA = {
   // ==========================================
@@ -1857,8 +1869,160 @@ export const SANKEY_DATA = {
 // HELPER PERHITUNGAN DAN AGREGASI EKSEKUTIF
 // ==========================================
 
-export function calculateSankeySummary(year = "2026") {
-  const { danaUtama, kegiatans, rootIkus, boundaries } = SANKEY_DATA;
+export function buildScopedSankeyData(accessScope) {
+  if (!accessScope || accessScope.mode === "all") {
+    return SANKEY_DATA;
+  }
+
+  const targetBoundaryId = accessScope.boundaryId;
+  const facultyLabel = accessScope.facultyName || "Fakultas";
+
+  if (!targetBoundaryId) {
+    return {
+      ...SANKEY_DATA,
+      danaUtama: {
+        id: "node-dana-utama",
+        judul: `Total Dana ${facultyLabel}`,
+        subjudul: "Pagu Anggaran & Realisasi RAB",
+        totalDana: 0,
+        totalSerapan: 0,
+        totalSisa: 0,
+        persenSerapan: 0,
+        color: "#6366f1",
+      },
+      rootIkus: [],
+      childIkus: [],
+      indikators: [],
+      boundaries: [],
+      prokers: [],
+      aktivitas: [],
+      kegiatans: [],
+    };
+  }
+
+  const kegiatans = SANKEY_DATA.kegiatans.filter(
+    (k) => k.boundaryId === targetBoundaryId,
+  );
+  const totalDana = kegiatans.reduce(
+    (sum, k) => sum + (Number(k.anggaran) || 0),
+    0,
+  );
+  const totalSerapan = kegiatans.reduce(
+    (sum, k) => sum + (Number(k.realisasi) || 0),
+    0,
+  );
+  const totalSisa = totalDana - totalSerapan;
+  const persenSerapan =
+    totalDana > 0 ? Number(((totalSerapan / totalDana) * 100).toFixed(1)) : 0;
+
+  const prokers = SANKEY_DATA.prokers.filter(
+    (p) => p.boundaryId === targetBoundaryId,
+  );
+  const activeProkerIds = new Set(prokers.map((p) => p.id));
+  const activeAktIds = new Set(kegiatans.map((k) => k.aktivitasId));
+  const aktivitas = SANKEY_DATA.aktivitas.filter(
+    (a) => activeProkerIds.has(a.prokerId) || activeAktIds.has(a.id),
+  );
+
+  const boundaries = SANKEY_DATA.boundaries
+    .filter((b) => b.id === targetBoundaryId)
+    .map((b) => ({
+      ...b,
+      pagu: totalDana,
+      serapan: totalSerapan,
+      sisa: totalSisa,
+    }));
+
+  const activeIndIds = new Set(
+    kegiatans.map((k) => k.indikatorId).filter(Boolean),
+  );
+  const indikators = SANKEY_DATA.indikators
+    .filter((ind) => activeIndIds.has(ind.id))
+    .map((ind) => {
+      const rel = kegiatans.filter((k) => k.indikatorId === ind.id);
+      const pagu = rel.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
+      const serapan = rel.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
+      return {
+        ...ind,
+        pagu,
+        serapan,
+        sisa: pagu - serapan,
+        boundaryIds: [targetBoundaryId],
+      };
+    });
+
+  const activeChildIds = new Set(
+    kegiatans.map((k) => k.subIkuId).filter(Boolean),
+  );
+  const childIkus = SANKEY_DATA.childIkus
+    .filter((c) => activeChildIds.has(c.id))
+    .map((c) => {
+      const rel = kegiatans.filter((k) => k.subIkuId === c.id);
+      const pagu = rel.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
+      const serapan = rel.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
+      return {
+        ...c,
+        pagu,
+        serapan,
+        sisa: pagu - serapan,
+        indikatorIds: (c.indikatorIds || []).filter((id) =>
+          activeIndIds.has(id),
+        ),
+      };
+    });
+
+  const activeRootIds = new Set(
+    kegiatans.map((k) => k.ikuId).filter(Boolean),
+  );
+  const rootIkus = SANKEY_DATA.rootIkus
+    .filter((r) => activeRootIds.has(r.id))
+    .map((r) => {
+      const rel = kegiatans.filter((k) => k.ikuId === r.id);
+      const pagu = rel.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
+      const serapan = rel.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
+      return {
+        ...r,
+        pagu,
+        serapan,
+        sisa: pagu - serapan,
+        persenSerapan:
+          pagu > 0 ? Number(((serapan / pagu) * 100).toFixed(2)) : 0,
+        childIds: (r.childIds || []).filter((cid) => activeChildIds.has(cid)),
+        indikatorIds: (r.indikatorIds || []).filter((id) =>
+          activeIndIds.has(id),
+        ),
+      };
+    });
+
+  return {
+    danaUtama: {
+      id: "node-dana-utama",
+      judul: `Total Dana ${boundaries[0]?.nama || facultyLabel}`,
+      subjudul: "Pagu Anggaran & Realisasi RAB",
+      totalDana,
+      totalSerapan,
+      totalSisa,
+      persenSerapan,
+      color: boundaries[0]?.color || "#6366f1",
+    },
+    rootIkus,
+    childIkus,
+    indikators,
+    boundaries,
+    prokers,
+    aktivitas,
+    kegiatans,
+  };
+}
+
+export function calculateSankeySummary(year = "2026", dataset = SANKEY_DATA) {
+  const safeDataset = dataset || SANKEY_DATA;
+  const {
+    danaUtama,
+    kegiatans = [],
+    rootIkus = [],
+    boundaries = [],
+  } = safeDataset;
   const yNum = Number(year) || 2026;
   const factor =
     yNum === 2027
@@ -1871,10 +2035,13 @@ export function calculateSankeySummary(year = "2026") {
       ? 0.65
       : 1.0;
 
-  const totalDana = Math.round(danaUtama.totalDana * factor);
-  const totalSerapan = Math.round(danaUtama.totalSerapan * factor);
+  const baseDana = Number(danaUtama?.totalDana) || 0;
+  const baseSerapan = Number(danaUtama?.totalSerapan) || 0;
+  const totalDana = Math.round(baseDana * factor);
+  const totalSerapan = Math.round(baseSerapan * factor);
   const totalSisa = totalDana - totalSerapan;
-  const persenSerapan = Number(((totalSerapan / totalDana) * 100).toFixed(1));
+  const persenSerapan =
+    totalDana > 0 ? Number(((totalSerapan / totalDana) * 100).toFixed(1)) : 0;
 
   const totalKegiatan = kegiatans.length;
   const kegiatanTerlaksana = kegiatans.filter(
@@ -1884,9 +2051,10 @@ export function calculateSankeySummary(year = "2026") {
     (k) => k.status === "Belum Terlaksana",
   ).length;
   const kegiatanDraf = kegiatans.filter((k) => k.status === "Draf").length;
-  const persenKeterlaksanaan = Number(
-    ((kegiatanTerlaksana / totalKegiatan) * 100).toFixed(1),
-  );
+  const persenKeterlaksanaan =
+    totalKegiatan > 0
+      ? Number(((kegiatanTerlaksana / totalKegiatan) * 100).toFixed(1))
+      : 0;
 
   return {
     totalDana,
@@ -1908,8 +2076,9 @@ export function calculateSankeySummary(year = "2026") {
 // Mengakomodasi 2 kasus anomali:
 // 1. Uang banyak dicairkan (>=75%) tetapi pekerjaan belum tuntas (<75%)
 // 2. Pekerjaan tuntas (>=75%) namun uang belum cair (<30%)
-export function getCorrelationMatrix(level = "iku") {
-  const { kegiatans, rootIkus, boundaries } = SANKEY_DATA;
+export function getCorrelationMatrix(level = "iku", dataset = SANKEY_DATA) {
+  const safeDataset = dataset || SANKEY_DATA;
+  const { kegiatans = [], rootIkus = [], boundaries = [] } = safeDataset;
 
   const classifyQuadrant = (persenSerap, persenKerja) => {
     // KASUS RED FLAG:
@@ -2160,63 +2329,125 @@ export function getRootCauseAnalysis(
   type = "iku",
   statusFilter = "all",
   fakultasUnits = [],
+  dataset = SANKEY_DATA,
+  accessScope = null,
 ) {
-  const { kegiatans, rootIkus, childIkus, indikators, boundaries, prokers, aktivitas } =
-    SANKEY_DATA;
+  const safeDataset = dataset || SANKEY_DATA;
+  const {
+    kegiatans = [],
+    rootIkus = [],
+    childIkus = [],
+    indikators = [],
+    boundaries = [],
+    prokers = [],
+    aktivitas = [],
+  } = safeDataset;
 
   let targetEntity = null;
   let relevantKegiatans = [];
 
-  const fuList =
+  const rawFuList =
     Array.isArray(fakultasUnits) && fakultasUnits.length > 0
       ? fakultasUnits
       : V_FAKULTAS_UNIT_ROWS;
+  const fuList =
+    accessScope && accessScope.mode === "fakultas"
+      ? filterUnitsForAccessScope(rawFuList, accessScope)
+      : rawFuList;
 
   if (type === "iku") {
-    targetEntity = rootIkus.find((r) => r.id === targetId) || rootIkus[0];
-    relevantKegiatans = kegiatans.filter((k) => k.ikuId === targetEntity.id);
+    if (targetId === "all") {
+      targetEntity = {
+        id: "all",
+        kode: "SEMUA IKU",
+        nama:
+          accessScope?.mode === "fakultas"
+            ? `Semua Target IKU (${accessScope.facultyName})`
+            : "Semua Target IKU",
+      };
+      relevantKegiatans = kegiatans;
+    } else {
+      targetEntity = rootIkus.find((r) => r.id === targetId) || rootIkus[0] || null;
+      relevantKegiatans = targetEntity
+        ? kegiatans.filter((k) => k.ikuId === targetEntity.id)
+        : [];
+    }
   } else if (type === "boundary") {
-    targetEntity = boundaries.find((b) => b.id === targetId) || boundaries[0];
-    relevantKegiatans = kegiatans.filter((k) => k.boundaryId === targetEntity.id);
+    if (targetId === "all") {
+      targetEntity = {
+        id: "all",
+        kode: accessScope?.mode === "fakultas" ? "FAKULTAS" : "SEMUA",
+        nama:
+          accessScope?.mode === "fakultas"
+            ? accessScope.facultyName
+            : "Semua Fakultas & Unit",
+      };
+      relevantKegiatans = kegiatans;
+    } else {
+      targetEntity =
+        boundaries.find((b) => b.id === targetId) || boundaries[0] || null;
+      relevantKegiatans = targetEntity
+        ? kegiatans.filter((k) => k.boundaryId === targetEntity.id)
+        : [];
+    }
   } else if (type === "prodi") {
     if (targetId === "all") {
       targetEntity = {
         id: "all",
-        nama: "Semua Program Studi",
-        fakultasNama: "Universitas Pakuan",
+        nama:
+          accessScope?.mode === "fakultas"
+            ? `Semua Program Studi (${accessScope.facultyName})`
+            : "Semua Program Studi",
+        fakultasNama:
+          accessScope?.mode === "fakultas"
+            ? accessScope.facultyName
+            : "Universitas Pakuan",
         jenjangNama: "Semua Jenjang",
         type: "prodi",
       };
-      // Tampilkan seluruh kegiatan tingkat program studi
       relevantKegiatans = kegiatans.filter((k) => k.prodiId);
     } else {
-      const resolvedTargetId = MOCK_ALIASES[targetId] || targetId;
+      const targetNorm = String(targetId || "").toLowerCase();
+      const resolvedTargetId =
+        MOCK_ALIASES[targetId] || MOCK_ALIASES[targetNorm] || targetId;
 
-      // 1. Prioritaskan lookup dari fuList (v_fakultas_unit / API) agar nama & format 100% konsisten dengan dropdown
-      const fu = fuList.find(
-        (r) =>
-          r.uuid === targetId ||
-          r.uuid === resolvedTargetId ||
-          r.id === targetId ||
-          String(r.id) === String(targetId) ||
-          String(r.rawId) === String(targetId) ||
-          MOCK_ALIASES[r.uuid] === targetId ||
-          MOCK_ALIASES[r.uuid] === resolvedTargetId ||
-          MOCK_ALIASES[String(r.id)] === targetId ||
-          MOCK_ALIASES[String(r.id)] === resolvedTargetId ||
-          (r.nama_fak_prod_unit &&
-            r.nama_fak_prod_unit.toLowerCase() === targetId?.toLowerCase()),
-      );
+      // 1. Prioritaskan lookup dari fuList (v_fakultas_unit / API) agar nama & format konsisten dengan dropdown
+      const fu = fuList.find((r) => {
+        const rUuid = getUnitUuid(r).toLowerCase();
+        const rRawId = String(getUnitRawId(r) ?? "");
+        const rId = String(r.id ?? "");
+        const rAlias = getUnitMockAlias(r);
+        const rName = getUnitName(r).toLowerCase();
+        return (
+          (rUuid &&
+            (rUuid === targetNorm ||
+              rUuid === String(resolvedTargetId).toLowerCase())) ||
+          (rId &&
+            (rId === String(targetId) || rId === String(resolvedTargetId))) ||
+          (rRawId &&
+            (rRawId === String(targetId) ||
+              rRawId === String(resolvedTargetId))) ||
+          (rAlias && (rAlias === targetId || rAlias === resolvedTargetId)) ||
+          (rName && rName === targetNorm)
+        );
+      });
 
       if (fu) {
-        const jUpper = (fu.jenjang || "").toUpperCase();
-        const base = fu.nama_fak_prod_unit || fu.pureName || fu.nama || "";
+        const jUpper = getUnitJenjang(fu).toUpperCase();
+        const base = getUnitName(fu);
         const formattedNama =
           jUpper && !base.toUpperCase().includes(`(${jUpper})`)
             ? `${base} (${jUpper})`
             : base;
 
-        let fakNama = fu.fakultas || "Fakultas Terkait";
+        const fuAlias = getUnitMockAlias(fu);
+        const fuUuid = getUnitUuid(fu);
+        const fuRawId = getUnitRawId(fu);
+
+        let fakNama =
+          getUnitFakultasName(fu) ||
+          accessScope?.facultyName ||
+          "Fakultas Terkait";
         for (const b of boundaries) {
           if (b.jenjangList) {
             for (const j of b.jenjangList) {
@@ -2224,6 +2455,7 @@ export function getRootCauseAnalysis(
                 (p) =>
                   p.id === resolvedTargetId ||
                   p.id === targetId ||
+                  p.id === fuAlias ||
                   p.uuid === targetId ||
                   String(p.rawId) === String(targetId),
               );
@@ -2233,22 +2465,26 @@ export function getRootCauseAnalysis(
               }
             }
           }
-          if (fakNama !== (fu.fakultas || "Fakultas Terkait")) break;
+          if (fakNama !== (getUnitFakultasName(fu) || accessScope?.facultyName || "Fakultas Terkait")) {
+            break;
+          }
         }
 
         targetEntity = {
-          id: fu.uuid || String(fu.id),
+          id: fuUuid || String(fu.id ?? fuRawId ?? targetId),
           nama: formattedNama,
           fakultasNama: fakNama,
           jenjangNama: jUpper ? `Strata (${jUpper})` : "Prodi",
           type: "prodi",
         };
+
+        const candidateProdiIds = new Set(
+          [resolvedTargetId, targetId, fuAlias, fuUuid, fu.id, fuRawId]
+            .filter(Boolean)
+            .map(String),
+        );
         relevantKegiatans = kegiatans.filter(
-          (k) =>
-            k.prodiId === resolvedTargetId ||
-            k.prodiId === targetId ||
-            k.prodiId === fu.uuid ||
-            String(k.prodiId) === String(fu.id),
+          (k) => k.prodiId && candidateProdiIds.has(String(k.prodiId)),
         );
       } else {
         for (const b of boundaries) {
@@ -2289,8 +2525,14 @@ export function getRootCauseAnalysis(
         if (!targetEntity) {
           targetEntity = {
             id: "all",
-            nama: "Semua Program Studi",
-            fakultasNama: "Universitas Pakuan",
+            nama:
+              accessScope?.mode === "fakultas"
+                ? `Semua Program Studi (${accessScope.facultyName})`
+                : "Semua Program Studi",
+            fakultasNama:
+              accessScope?.mode === "fakultas"
+                ? accessScope.facultyName
+                : "Universitas Pakuan",
             jenjangNama: "Semua Jenjang",
             type: "prodi",
           };
@@ -2306,8 +2548,20 @@ export function getRootCauseAnalysis(
       }
     }
   } else {
-    targetEntity = rootIkus.find((r) => r.id === "root-iku-5") || rootIkus[0];
-    relevantKegiatans = kegiatans.filter((k) => k.ikuId === targetEntity.id);
+    targetEntity = rootIkus[0] || null;
+    relevantKegiatans = targetEntity
+      ? kegiatans.filter((k) => k.ikuId === targetEntity.id)
+      : [];
+  }
+
+  if (!targetEntity) {
+    targetEntity = {
+      id: "empty",
+      kode: accessScope?.facultyName || "KOSONG",
+      nama: accessScope?.facultyName
+        ? `Belum ada data kegiatan untuk ${accessScope.facultyName}`
+        : "Belum ada data kegiatan",
+    };
   }
 
   // Filter status jika dipilih
@@ -2339,19 +2593,21 @@ export function getRootCauseAnalysis(
     let prodiNama = null;
     if (keg.prodiId) {
       // Prioritaskan format resmi dari fuList agar seragam dengan dropdown
-      const fu = fuList.find(
-        (r) =>
-          r.uuid === keg.prodiId ||
-          r.id === keg.prodiId ||
-          String(r.id) === String(keg.prodiId) ||
-          String(r.rawId) === String(keg.prodiId) ||
-          MOCK_ALIASES[r.uuid] === keg.prodiId ||
-          MOCK_ALIASES[String(r.id)] === keg.prodiId ||
-          MOCK_ALIASES[String(r.rawId)] === keg.prodiId,
-      );
+      const fu = fuList.find((r) => {
+        const rUuid = getUnitUuid(r);
+        const rRawId = String(getUnitRawId(r) ?? "");
+        const rId = String(r.id ?? "");
+        const rAlias = getUnitMockAlias(r);
+        return (
+          rUuid === keg.prodiId ||
+          rId === String(keg.prodiId) ||
+          rRawId === String(keg.prodiId) ||
+          rAlias === keg.prodiId
+        );
+      });
       if (fu) {
-        const jUpper = (fu.jenjang || "").toUpperCase();
-        const base = fu.nama_fak_prod_unit || fu.pureName || fu.nama || "";
+        const jUpper = getUnitJenjang(fu).toUpperCase();
+        const base = getUnitName(fu);
         prodiNama =
           jUpper && !base.toUpperCase().includes(`(${jUpper})`)
             ? `${base} (${jUpper})`
@@ -2425,43 +2681,379 @@ export function getRootCauseAnalysis(
   };
 }
 
-// Menghasilkan daftar seluruh entitas fakultas_unit_prodi untuk dropdown search
-// Diambil langsung dari view v_fakultas_unit (87 entitas lengkap)
-// Format: badge = type (fakultas, unit, prodi), name = nama_fakultas_prodi_unit (jenjang)
-export function getAllFakultasProdiUnitOptions() {
+// Menghasilkan daftar entitas fakultas_unit_prodi untuk dropdown search
+export function getAllFakultasProdiUnitOptions(fakultasUnits = null) {
   const typeWeight = { fakultas: 1, prodi: 2, unit: 3 };
+  const source =
+    Array.isArray(fakultasUnits) && fakultasUnits.length > 0
+      ? fakultasUnits
+      : V_FAKULTAS_UNIT_ROWS;
 
-  return V_FAKULTAS_UNIT_ROWS.map((r) => {
-    const typeUpper = (r.type || "UNIT").toUpperCase();
-    const jenjangUpper = r.jenjang ? String(r.jenjang).toUpperCase() : "";
-    const cleanName = r.nama_fak_prod_unit || "";
-    const hasJenjang = jenjangUpper && cleanName.toUpperCase().includes(`(${jenjangUpper})`);
-    const label = jenjangUpper && !hasJenjang ? `${cleanName} (${jenjangUpper})` : cleanName;
-    const legacyId = MOCK_ALIASES[r.uuid] || MOCK_ALIASES[String(r.id)] || r.uuid;
-    return {
-      id: r.uuid || String(r.id),
-      legacyId,
-      rawId: r.id,
-      uuid: r.uuid,
-      type: r.type,
-      badgeText: typeUpper,
-      badge: typeUpper,
-      nama: cleanName,
-      jenjang: r.jenjang,
-      label: label,
-      boundaryId: r.uuid || String(r.id),
-      prodiId: r.type === "prodi" ? (r.uuid || String(r.id)) : null,
-    };
-  }).sort((a, b) => {
-    const wA = typeWeight[(a.type || "").toLowerCase()] || 99;
-    const wB = typeWeight[(b.type || "").toLowerCase()] || 99;
-    if (wA !== wB) return wA - wB;
-    const nameCmp = (a.nama || "").localeCompare(b.nama || "", "id", {
-      sensitivity: "base",
+  return source
+    .map((r) => {
+      const type = getUnitType(r) || "unit";
+      const typeUpper = type.toUpperCase();
+      const jenjang = getUnitJenjang(r);
+      const jenjangUpper = jenjang ? jenjang.toUpperCase() : "";
+      const cleanName = getUnitName(r);
+      const hasJenjang =
+        jenjangUpper && cleanName.toUpperCase().includes(`(${jenjangUpper})`);
+      const label =
+        jenjangUpper && !hasJenjang ? `${cleanName} (${jenjangUpper})` : cleanName;
+      const uuid = getUnitUuid(r);
+      const rawId = getUnitRawId(r) ?? r.id;
+      const legacyId = getUnitMockAlias(r) || uuid || String(rawId);
+      const kodeFakultas =
+        getUnitKodeFakultas(r) ||
+        (rawId ? STATIC_KODE_FAKULTAS_BY_ID[String(rawId)] || "" : "");
+
+      return {
+        id: uuid || String(rawId),
+        legacyId,
+        rawId,
+        uuid,
+        type,
+        badgeText: typeUpper,
+        badge: typeUpper,
+        nama: cleanName,
+        jenjang,
+        kodeFakultas,
+        fakultasNama: getUnitFakultasName(r),
+        label,
+        boundaryId: uuid || String(rawId),
+        prodiId: type === "prodi" ? uuid || String(rawId) : null,
+      };
+    })
+    .sort((a, b) => {
+      const wA = typeWeight[(a.type || "").toLowerCase()] || 99;
+      const wB = typeWeight[(b.type || "").toLowerCase()] || 99;
+      if (wA !== wB) return wA - wB;
+      const nameCmp = (a.nama || "").localeCompare(b.nama || "", "id", {
+        sensitivity: "base",
+      });
+      if (nameCmp !== 0) return nameCmp;
+      return (a.jenjang || "").localeCompare(b.jenjang || "");
     });
-    if (nameCmp !== 0) return nameCmp;
-    return (a.jenjang || "").localeCompare(b.jenjang || "");
+}
+
+export function buildSankeyEdges(filteredData, { isFiltered = false } = {}) {
+  const {
+    rootIkus = [],
+    childIkus = [],
+    indikators = [],
+    boundaries = [],
+    prokers = [],
+    aktivitas = [],
+    kegiatans = [],
+  } = filteredData || {};
+
+  const rootMap = new Map(rootIkus.map((r) => [r.id, r]));
+  const childMap = new Map(childIkus.map((c) => [c.id, c]));
+  const indMap = new Map(indikators.map((i) => [i.id, i]));
+  const boundaryMap = new Map(boundaries.map((b) => [b.id, b]));
+  const prokerMap = new Map(prokers.map((p) => [p.id, p]));
+  const aktMap = new Map(aktivitas.map((a) => [a.id, a]));
+  const kegMap = new Map(kegiatans.map((k) => [k.id, k]));
+
+  const edges = [];
+  const seen = new Set();
+  const addEdge = (id, fromId, toId, color) => {
+    if (!fromId || !toId) return;
+    const key = `${fromId}->${toId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    edges.push({ id, fromId, toId, color: color || "#6366f1" });
+  };
+
+  // 1. Dana Utama -> Root IKUs
+  rootIkus.forEach((r) => {
+    addEdge(`path-dana-${r.id}`, "node-dana-utama", r.id, r.color);
   });
+
+  // 2. Root IKU -> Sub-IKUs (fallback ke k.ikuId saat root-iku-1 tidak tampil karena scope/filter)
+  if (rootMap.has("root-iku-1")) {
+    childIkus.forEach((c) => {
+      const parentRootId = c.rootId && rootMap.has(c.rootId) ? c.rootId : "root-iku-1";
+      addEdge(`path-${parentRootId}-${c.id}`, parentRootId, c.id, c.color);
+    });
+  } else {
+    kegiatans.forEach((k) => {
+      if (k.ikuId && k.subIkuId && rootMap.has(k.ikuId) && childMap.has(k.subIkuId)) {
+        const childObj = childMap.get(k.subIkuId);
+        const rootObj = rootMap.get(k.ikuId);
+        addEdge(
+          `path-${k.ikuId}-${k.subIkuId}`,
+          k.ikuId,
+          k.subIkuId,
+          childObj?.color || rootObj?.color,
+        );
+      }
+    });
+  }
+
+  // 3. Sub-IKUs -> Indikators
+  if (!isFiltered) {
+    childIkus.forEach((c) => {
+      (c.indikatorIds || []).forEach((indId) => {
+        if (indMap.has(indId)) {
+          addEdge(`path-${c.id}-${indId}`, c.id, indId, c.color);
+        }
+      });
+    });
+  }
+  kegiatans.forEach((k) => {
+    if (k.subIkuId && k.indikatorId && childMap.has(k.subIkuId) && indMap.has(k.indikatorId)) {
+      const childObj = childMap.get(k.subIkuId);
+      addEdge(`path-${k.subIkuId}-${k.indikatorId}`, k.subIkuId, k.indikatorId, childObj?.color);
+    }
+  });
+
+  // 4. Direct Root IKUs (non-IKU 1, atau IKU 1 tanpa subIkuId) -> Indikators
+  if (!isFiltered) {
+    rootIkus.forEach((r) => {
+      if (r.id === "root-iku-1") return;
+      (r.indikatorIds || []).forEach((indId) => {
+        if (indMap.has(indId)) {
+          addEdge(`path-direct-${r.id}-${indId}`, r.id, indId, r.color);
+        }
+      });
+    });
+  }
+  kegiatans.forEach((k) => {
+    if (
+      k.ikuId &&
+      k.indikatorId &&
+      (k.ikuId !== "root-iku-1" || !k.subIkuId) &&
+      rootMap.has(k.ikuId) &&
+      indMap.has(k.indikatorId)
+    ) {
+      const rootObj = rootMap.get(k.ikuId);
+      addEdge(`path-direct-${k.ikuId}-${k.indikatorId}`, k.ikuId, k.indikatorId, rootObj?.color);
+    }
+  });
+
+  // 5. Indikators -> Boundaries
+  if (!isFiltered) {
+    indikators.forEach((ind) => {
+      (ind.boundaryIds || []).forEach((bId) => {
+        if (boundaryMap.has(bId)) {
+          addEdge(`path-${ind.id}-${bId}`, ind.id, bId, ind.color);
+        }
+      });
+    });
+  }
+  kegiatans.forEach((k) => {
+    if (k.indikatorId && k.boundaryId && indMap.has(k.indikatorId) && boundaryMap.has(k.boundaryId)) {
+      const indObj = indMap.get(k.indikatorId);
+      addEdge(`path-${k.indikatorId}-${k.boundaryId}`, k.indikatorId, k.boundaryId, indObj?.color);
+    }
+  });
+
+  // 6. Boundaries -> Prokers
+  prokers.forEach((p) => {
+    if (p.boundaryId && boundaryMap.has(p.boundaryId)) {
+      const b = boundaryMap.get(p.boundaryId);
+      addEdge(`path-${b.id}-${p.id}`, b.id, p.id, b.color || "#6366f1");
+    }
+  });
+
+  // 7. Prokers -> Aktivitas
+  aktivitas.forEach((a) => {
+    if (a.prokerId && prokerMap.has(a.prokerId)) {
+      const p = prokerMap.get(a.prokerId);
+      const bParent = boundaryMap.get(p.boundaryId);
+      addEdge(`path-${p.id}-${a.id}`, p.id, a.id, bParent?.color || "#8b5cf6");
+    }
+  });
+
+  // 8. Aktivitas -> Kegiatan
+  kegiatans.forEach((k) => {
+    if (k.aktivitasId && aktMap.has(k.aktivitasId) && kegMap.has(k.id)) {
+      const a = aktMap.get(k.aktivitasId);
+      const pParent = prokerMap.get(a.prokerId);
+      const bParent = pParent ? boundaryMap.get(pParent.boundaryId) : null;
+      addEdge(`path-${a.id}-${k.id}`, a.id, k.id, bParent?.color || "#a855f7");
+    }
+  });
+
+  return edges;
+}
+
+export function getSankeyConnectedNodeIds(targetId, filteredData, edges = []) {
+  if (!targetId) return null;
+
+  const {
+    rootIkus = [],
+    childIkus = [],
+    indikators = [],
+    boundaries = [],
+    prokers = [],
+    aktivitas = [],
+    kegiatans = [],
+  } = filteredData || {};
+
+  const rootSet = new Set(rootIkus.map((r) => r.id));
+  const childMap = new Map(childIkus.map((c) => [c.id, c]));
+  const indSet = new Set(indikators.map((i) => i.id));
+  const boundarySet = new Set(boundaries.map((b) => b.id));
+  const prokerMap = new Map(prokers.map((p) => [p.id, p]));
+  const aktMap = new Map(aktivitas.map((a) => [a.id, a]));
+  const kegMap = new Map(kegiatans.map((k) => [k.id, k]));
+
+  const edgePairs = new Set(edges.map((e) => `${e.fromId}->${e.toId}`));
+  const hasEdge = (fromId, toId) =>
+    Boolean(fromId && toId && edgePairs.has(`${fromId}->${toId}`));
+
+  const incomingParentsByNode = new Map();
+  edges.forEach((e) => {
+    if (!incomingParentsByNode.has(e.toId)) {
+      incomingParentsByNode.set(e.toId, []);
+    }
+    incomingParentsByNode.get(e.toId).push(e.fromId);
+  });
+
+  const set = new Set([targetId]);
+
+  const addDownstreamFromKegiatan = (k) => {
+    if (!k) return;
+    set.add(k.id);
+    if (k.indikatorId && indSet.has(k.indikatorId)) set.add(k.indikatorId);
+    if (k.boundaryId && boundarySet.has(k.boundaryId)) set.add(k.boundaryId);
+    if (k.aktivitasId && aktMap.has(k.aktivitasId)) {
+      set.add(k.aktivitasId);
+      const akt = aktMap.get(k.aktivitasId);
+      if (akt?.prokerId && prokerMap.has(akt.prokerId)) {
+        set.add(akt.prokerId);
+        const p = prokerMap.get(akt.prokerId);
+        if (p?.boundaryId && boundarySet.has(p.boundaryId)) set.add(p.boundaryId);
+      }
+    }
+  };
+
+  const addUpstreamFromKegiatan = (k) => {
+    if (!k) return;
+    if (hasEdge(k.ikuId, k.indikatorId) || (!k.subIkuId && rootSet.has(k.ikuId))) {
+      set.add(k.ikuId);
+    }
+    if (k.subIkuId && hasEdge(k.subIkuId, k.indikatorId)) {
+      set.add(k.subIkuId);
+      if (hasEdge(k.ikuId, k.subIkuId)) {
+        set.add(k.ikuId);
+      } else {
+        (incomingParentsByNode.get(k.subIkuId) || []).forEach((pId) => set.add(pId));
+      }
+    } else if (k.subIkuId && hasEdge(k.ikuId, k.subIkuId)) {
+      set.add(k.subIkuId);
+      set.add(k.ikuId);
+    }
+  };
+
+  if (targetId === "node-dana-utama") {
+    kegiatans.forEach((k) => {
+      addDownstreamFromKegiatan(k);
+      addUpstreamFromKegiatan(k);
+    });
+    edges.forEach((e) => {
+      set.add(e.fromId);
+      set.add(e.toId);
+    });
+    return set;
+  }
+
+  if (rootSet.has(targetId)) {
+    const outgoingChildIds = new Set(
+      edges
+        .filter((e) => e.fromId === targetId && childMap.has(e.toId))
+        .map((e) => e.toId),
+    );
+    const matchKegs = kegiatans.filter(
+      (k) => k.ikuId === targetId || (k.subIkuId && outgoingChildIds.has(k.subIkuId)),
+    );
+    outgoingChildIds.forEach((cid) => set.add(cid));
+    matchKegs.forEach((k) => {
+      addDownstreamFromKegiatan(k);
+      if (k.subIkuId && outgoingChildIds.has(k.subIkuId)) {
+        set.add(k.subIkuId);
+      }
+    });
+    set.add("node-dana-utama");
+    return set;
+  }
+
+  if (childMap.has(targetId)) {
+    const matchKegs = kegiatans.filter((k) => k.subIkuId === targetId);
+    (incomingParentsByNode.get(targetId) || []).forEach((pId) => set.add(pId));
+    matchKegs.forEach((k) => {
+      addDownstreamFromKegiatan(k);
+    });
+    set.add("node-dana-utama");
+    return set;
+  }
+
+  if (indSet.has(targetId)) {
+    const matchKegs = kegiatans.filter((k) => k.indikatorId === targetId);
+    matchKegs.forEach((k) => {
+      addDownstreamFromKegiatan(k);
+      addUpstreamFromKegiatan(k);
+    });
+    set.add("node-dana-utama");
+    return set;
+  }
+
+  if (boundarySet.has(targetId)) {
+    const matchKegs = kegiatans.filter((k) => k.boundaryId === targetId);
+    prokers.forEach((p) => {
+      if (p.boundaryId === targetId) set.add(p.id);
+    });
+    matchKegs.forEach((k) => {
+      addDownstreamFromKegiatan(k);
+      addUpstreamFromKegiatan(k);
+    });
+    set.add("node-dana-utama");
+    return set;
+  }
+
+  if (prokerMap.has(targetId)) {
+    const p = prokerMap.get(targetId);
+    if (p?.boundaryId && boundarySet.has(p.boundaryId)) set.add(p.boundaryId);
+    const akts = aktivitas.filter((a) => a.prokerId === targetId);
+    const aktIds = new Set(akts.map((a) => a.id));
+    akts.forEach((a) => set.add(a.id));
+    const matchKegs = kegiatans.filter((k) => aktIds.has(k.aktivitasId));
+    matchKegs.forEach((k) => {
+      addDownstreamFromKegiatan(k);
+      addUpstreamFromKegiatan(k);
+    });
+    set.add("node-dana-utama");
+    return set;
+  }
+
+  if (aktMap.has(targetId)) {
+    const akt = aktMap.get(targetId);
+    if (akt?.prokerId && prokerMap.has(akt.prokerId)) {
+      set.add(akt.prokerId);
+      const p = prokerMap.get(akt.prokerId);
+      if (p?.boundaryId && boundarySet.has(p.boundaryId)) set.add(p.boundaryId);
+    }
+    const matchKegs = kegiatans.filter((k) => k.aktivitasId === targetId);
+    matchKegs.forEach((k) => {
+      addDownstreamFromKegiatan(k);
+      addUpstreamFromKegiatan(k);
+    });
+    set.add("node-dana-utama");
+    return set;
+  }
+
+  if (kegMap.has(targetId)) {
+    const k = kegMap.get(targetId);
+    addDownstreamFromKegiatan(k);
+    addUpstreamFromKegiatan(k);
+    set.add("node-dana-utama");
+    return set;
+  }
+
+  set.add("node-dana-utama");
+  return set;
 }
 
 export { V_FAKULTAS_UNIT_ROWS, MOCK_ALIASES };

@@ -637,17 +637,47 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                                       </div>
                                     </div>
                                   )}
+                                  {(akt.catatan_revisi_anggaran || "").trim() !== "" && (
+                                    <div className="mt-2 flex items-start gap-1.5 p-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs shadow-2xs max-w-lg">
+                                      <FileText className="w-3.5 h-3.5 text-amber-800 shrink-0 mt-0.5" />
+                                      <div className="flex flex-col gap-0.5 min-w-0">
+                                        <span className="font-bold text-amber-900 text-[10px] uppercase tracking-wider">
+                                          Catatan Revisi Anggaran:
+                                        </span>
+                                        <p className="break-words whitespace-pre-wrap text-amber-950 font-medium leading-snug">
+                                          {akt.catatan_revisi_anggaran}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="text-left sm:text-right shrink-0">
-                                  <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
+                                  <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
                                     Subtotal RAB Aktivitas
                                   </p>
-                                  <p className="text-sm font-extrabold text-emerald-700 font-mono">
-                                    {formatRupiah(akt.total_rab || 0)}
-                                  </p>
+                                  {akt.realisasi !== null &&
+                                  akt.realisasi !== undefined &&
+                                  Number(akt.realisasi) !== Number(akt.total_rab || 0) ? (
+                                    <div>
+                                      <p className="text-xs text-gray-500 line-through decoration-rose-500 font-mono">
+                                        {formatRupiah(akt.total_rab || 0)}
+                                      </p>
+                                      <p className="text-sm font-extrabold text-emerald-700 font-mono">
+                                        {formatRupiah(akt.realisasi)}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm font-extrabold text-emerald-700 font-mono">
+                                      {formatRupiah(
+                                        akt.realisasi !== null && akt.realisasi !== undefined
+                                          ? akt.realisasi
+                                          : akt.total_rab || 0,
+                                      )}
+                                    </p>
+                                  )}
                                   {akt.pencairan !== null && akt.pencairan !== undefined && (
-                                    <p className="text-[11px] text-blue-600 font-medium">
+                                    <p className="text-[11px] text-blue-700 font-medium">
                                       Dicairkan: {formatRupiah(akt.pencairan)}
                                     </p>
                                   )}

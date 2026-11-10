@@ -958,6 +958,27 @@ export default function ProkerV3DokumenPage() {
                     )}
                   </div>
                 )}
+
+                {!isEvaluator &&
+                  !(
+                    !isAdmin &&
+                    ["upml", "upmf", "upms", "fakultas", "verifikator"].includes(
+                      curRole,
+                    )
+                  ) &&
+                  (currentAktivitas?.CatatanRevisiAnggaran ||
+                    currentAktivitas?.catatan_revisi_anggaran) && (
+                    <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px]">
+                      <div className="flex items-center gap-1 font-bold text-amber-900">
+                        <FileText className="w-3 h-3 text-amber-800 shrink-0" />
+                        <span>Catatan Revisi Anggaran:</span>
+                      </div>
+                      <p className="mt-0.5 text-amber-950 leading-snug whitespace-pre-wrap break-words">
+                        {currentAktivitas.CatatanRevisiAnggaran ||
+                          currentAktivitas.catatan_revisi_anggaran}
+                      </p>
+                    </div>
+                  )}
               </div>
 
               <div className="pt-2 flex items-center justify-between border-t border-emerald-100/70 text-[10px]">

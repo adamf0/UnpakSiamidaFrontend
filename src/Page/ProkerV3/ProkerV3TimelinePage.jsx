@@ -30,6 +30,13 @@ import {
   hasRealisasiAnggaran,
   getRealisasiAnggaran,
   isAnggaranRevised,
+  TIMELINE_MAX_FILE_SIZE_MB,
+  TIMELINE_FILE_ACCEPT,
+  TIMELINE_ALLOWED_FILE_TYPES_LABEL,
+  validateTimelineUploadFile,
+  validateTimelineLinkUrl,
+  isTimelineLinkRecord,
+  resolveProkerFileUrl,
 } from "./prokerConstants";
 import { formatTanggalBulanTahun } from "@/Common/Utils";
 import {
@@ -47,7 +54,6 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertCircle,
-  AlertTriangle,
   FolderOpen,
   Info,
   Check,
@@ -66,6 +72,7 @@ import {
   Pause,
   Coins,
   Lock,
+  Link2,
 } from "lucide-react";
 import RubberStamp from "../Dashboard/MonitoringProker3D/RubberStamp";
 
@@ -334,14 +341,6 @@ export default function ProkerV3TimelinePage() {
     [positionYear],
   );
 
-  // Cek apakah jadwal proker sedang ditutup / berada di luar jadwal
-  const isScheduleLocked = useMemo(() => {
-    if (!jadwalProkerStatus) return false;
-    return Boolean(
-      jadwalProkerStatus.has_schedule && !jadwalProkerStatus.is_open,
-    );
-  }, [jadwalProkerStatus]);
-
   // Cek apakah status proker dan aktivitas masih draf atau diajukan
   const isStatusDraftOrDiajukan = useMemo(() => {
     const normalize = (val) =>
@@ -360,9 +359,8 @@ export default function ProkerV3TimelinePage() {
   // Tombol Edit dan Hapus tahapan timeline HANYA muncul ketika status masih draf dan diajukan
   const canEditOrDeleteTimeline = useMemo(() => {
     if (!canManageTimeline) return false;
-    if (isScheduleLocked) return false;
     return isStatusDraftOrDiajukan;
-  }, [canManageTimeline, isScheduleLocked, isStatusDraftOrDiajukan]);
+  }, [canManageTimeline, isStatusDraftOrDiajukan]);
 
   const isDiterimaAnggaran = useMemo(() => {
     const sAnggAct = String(
@@ -393,6 +391,11 @@ export default function ProkerV3TimelinePage() {
       sMainProker === "terima anggaran"
     );
   }, [aktivitas, proker]);
+
+  const isTimelineRabDisabled = isAdmin || !isDiterimaAnggaran;
+  const timelineRabDisabledTitle = isAdmin
+    ? "Level Admin tidak diizinkan mengelola atau mengedit rincian RAB tahapan"
+    : "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'";
 
   const isUnitProdi = useMemo(() => {
     const t = String(
@@ -682,8 +685,9 @@ export default function ProkerV3TimelinePage() {
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
-  // Per-Row Dynamic File & Keterangan Form State: Map of timelineUuid -> Array of { id, file, keterangan }
+  // Per-Row Dynamic File / Link & Keterangan Form State: Map of timelineUuid -> Array of evidence rows
   const [rowFormRows, setRowFormRows] = useState({});
+  const [rowSubmittingLinks, setRowSubmittingLinks] = useState({});
 
   // Per-Row Chunk Upload Queues & Progress: Map of timelineUuid -> Array of queue items
   const [rowUploadQueues, setRowUploadQueues] = useState({});
@@ -1185,11 +1189,8 @@ export default function ProkerV3TimelinePage() {
 
   // Open modal RAB
   const openRabModal = (tl) => {
-    if (!isDiterimaAnggaran) {
-      addToast(
-        "warning",
-        "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'",
-      );
+    if (isTimelineRabDisabled) {
+      addToast("warning", timelineRabDisabledTitle);
       return;
     }
     setSelectedTimelineForRab(tl);
@@ -1298,6 +1299,10 @@ export default function ProkerV3TimelinePage() {
 
   const handleSaveRab = async (e) => {
     if (e) e.preventDefault();
+    if (isTimelineRabDisabled) {
+      addToast("warning", timelineRabDisabledTitle);
+      return;
+    }
     if (!selectedTimelineForRab) return;
 
     const maxPagu = maxAnggaran;
@@ -1490,14 +1495,6 @@ export default function ProkerV3TimelinePage() {
 
   // Start editing a timeline row
   const startEditTimeline = (tl) => {
-    if (isScheduleLocked) {
-      addToast(
-        "warning",
-        jadwalProkerStatus?.message ||
-          "Pengeditan tahapan timeline dinonaktifkan di luar jadwal program kerja.",
-      );
-      return;
-    }
     if (!isStatusDraftOrDiajukan) {
       addToast(
         "warning",
@@ -1543,14 +1540,6 @@ export default function ProkerV3TimelinePage() {
   // Submit Timeline Form (POST or PUT)
   const handleSubmitTimeline = async (e) => {
     e.preventDefault();
-    if (isScheduleLocked) {
-      addToast(
-        "warning",
-        jadwalProkerStatus?.message ||
-          "Pengisian tahapan timeline dinonaktifkan di luar jadwal program kerja.",
-      );
-      return;
-    }
     if (!canManageTimeline) {
       addToast(
         "warning",
@@ -1647,15 +1636,6 @@ export default function ProkerV3TimelinePage() {
 
   // Delete Timeline Handler
   const handleDeleteTimeline = async () => {
-    if (isScheduleLocked) {
-      addToast(
-        "warning",
-        jadwalProkerStatus?.message ||
-          "Penghapusan tahapan timeline dinonaktifkan di luar jadwal program kerja.",
-      );
-      setDeleteTimelineDialog(false);
-      return;
-    }
     if (!isStatusDraftOrDiajukan) {
       addToast(
         "warning",
@@ -1699,23 +1679,40 @@ export default function ProkerV3TimelinePage() {
   // Slice binary 512 KB per chunk, speed monitor, pause/resume/cancel
   // ========================================================
   // Dynamic Form Rows Management per baris tahapan timeline
+  const createEmptyEvidenceRow = (prefix = "row") => ({
+    id: `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    mode: "file",
+    file: null,
+    url: "",
+    nama_file: "",
+    keterangan: "",
+    error: "",
+    touched: false,
+  });
+
   const getRowFormRows = (timelineUuid) => {
     if (!rowFormRows[timelineUuid] || rowFormRows[timelineUuid].length === 0) {
-      return [{ id: `init-${timelineUuid}`, file: null, keterangan: "" }];
+      return [
+        {
+          id: `init-${timelineUuid}`,
+          mode: "file",
+          file: null,
+          url: "",
+          nama_file: "",
+          keterangan: "",
+          error: "",
+          touched: false,
+        },
+      ];
     }
     return rowFormRows[timelineUuid];
   };
 
   const addRowFormRow = (timelineUuid) => {
     const current = getRowFormRows(timelineUuid);
-    const newRow = {
-      id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      file: null,
-      keterangan: "",
-    };
     setRowFormRows((prev) => ({
       ...prev,
-      [timelineUuid]: [...current, newRow],
+      [timelineUuid]: [...current, createEmptyEvidenceRow("row")],
     }));
   };
 
@@ -1724,9 +1721,7 @@ export default function ProkerV3TimelinePage() {
     if (current.length <= 1) {
       setRowFormRows((prev) => ({
         ...prev,
-        [timelineUuid]: [
-          { id: `init-${Date.now()}`, file: null, keterangan: "" },
-        ],
+        [timelineUuid]: [createEmptyEvidenceRow("init")],
       }));
       return;
     }
@@ -1741,10 +1736,98 @@ export default function ProkerV3TimelinePage() {
     setRowFormRows((prev) => ({
       ...prev,
       [timelineUuid]: current.map((r) =>
-        r.id === rowId ? { ...r, [field]: value } : r,
+        r.id === rowId
+          ? {
+              ...r,
+              [field]: value,
+              ...(field === "url" || field === "file" ? { error: "" } : {}),
+            }
+          : r,
       ),
     }));
   };
+
+  const switchRowFormMode = (timelineUuid, rowId, nextMode) => {
+    const current = getRowFormRows(timelineUuid);
+    setRowFormRows((prev) => ({
+      ...prev,
+      [timelineUuid]: current.map((r) => {
+        if (r.id !== rowId || (r.mode || "file") === nextMode) return r;
+        return {
+          ...r,
+          mode: nextMode,
+          file: nextMode === "link" ? null : r.file,
+          url: nextMode === "file" ? "" : r.url,
+          nama_file: nextMode === "file" ? "" : r.nama_file,
+          error: "",
+          touched: false,
+        };
+      }),
+    }));
+  };
+
+  const handleRowFileSelect = (timelineUuid, rowId, event) => {
+    const selected = event.target.files?.[0] || null;
+    const current = getRowFormRows(timelineUuid);
+    if (!selected) {
+      setRowFormRows((prev) => ({
+        ...prev,
+        [timelineUuid]: current.map((r) =>
+          r.id === rowId ? { ...r, file: null, error: "", touched: true } : r,
+        ),
+      }));
+      return;
+    }
+
+    const check = validateTimelineUploadFile(selected);
+    if (!check.valid) {
+      event.target.value = "";
+      addToast("warning", check.error);
+      setRowFormRows((prev) => ({
+        ...prev,
+        [timelineUuid]: current.map((r) =>
+          r.id === rowId
+            ? { ...r, file: null, error: check.error, touched: true }
+            : r,
+        ),
+      }));
+      return;
+    }
+
+    setRowFormRows((prev) => ({
+      ...prev,
+      [timelineUuid]: current.map((r) =>
+        r.id === rowId
+          ? { ...r, file: selected, error: "", touched: true }
+          : r,
+      ),
+    }));
+  };
+
+  const handleRowUrlBlur = (timelineUuid, rowId) => {
+    const current = getRowFormRows(timelineUuid);
+    setRowFormRows((prev) => ({
+      ...prev,
+      [timelineUuid]: current.map((r) => {
+        if (r.id !== rowId) return r;
+        const trimmed = (r.url || "").trim();
+        if (!trimmed) {
+          return { ...r, touched: true, error: "" };
+        }
+        const check = validateTimelineLinkUrl(trimmed);
+        return {
+          ...r,
+          touched: true,
+          error: check.valid ? "" : check.error,
+        };
+      }),
+    }));
+  };
+
+  const isRowFilled = (r) =>
+    (r?.mode || "file") === "link"
+      ? Boolean((r?.url || "").trim())
+      : Boolean(r?.file);
 
   // Loop upload chunk binary untuk satu file
   const uploadRowFileChunkLoop = async (
@@ -1963,7 +2046,7 @@ export default function ProkerV3TimelinePage() {
     }
   };
 
-  // Mulai upload file-file dari baris dinamis per-chunk
+  // Mulai upload file-file (per-chunk) & simpan tautan link dari baris dinamis
   const handleUploadRowFiles = async (timeline) => {
     if (!isDiterimaAnggaran) {
       addToast(
@@ -1972,53 +2055,142 @@ export default function ProkerV3TimelinePage() {
       );
       return;
     }
+    if (rowSubmittingLinks[timeline.UUID]) {
+      return;
+    }
+
     const rows = getRowFormRows(timeline.UUID);
-    const filledRows = rows.filter((r) => Boolean(r.file));
+    const filledRows = rows.filter(isRowFilled);
     if (filledRows.length === 0) {
       addToast(
         "warning",
-        "Pilih minimal 1 berkas file untuk diunggah pada form ini",
+        "Pilih minimal 1 berkas file atau masukkan 1 tautan link bukti terlebih dahulu",
       );
       return;
     }
 
-    // Reset pilihan form baris dinamis kembali ke 1 baris kosong awal
-    setRowFormRows((prev) => ({
-      ...prev,
-      [timeline.UUID]: [
-        { id: `init-${Date.now()}`, file: null, keterangan: "" },
-      ],
-    }));
+    let hasValidationError = false;
+    const validatedEntries = [];
+    const updatedRows = rows.map((r) => {
+      if (!isRowFilled(r)) return r;
+      const mode = r.mode || "file";
+      if (mode === "file") {
+        const check = validateTimelineUploadFile(r.file);
+        if (!check.valid) {
+          hasValidationError = true;
+          return { ...r, file: null, touched: true, error: check.error };
+        }
+        validatedEntries.push({ mode: "file", row: r });
+        return { ...r, error: "", touched: true };
+      }
 
-    // Buat queue items untuk masing-masing baris file dengan keterangan dinamisnya
-    const newItems = filledRows.map((r, idx) => {
-      const qId = `${timeline.UUID}-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+      const check = validateTimelineLinkUrl(r.url);
+      if (!check.valid) {
+        hasValidationError = true;
+        return { ...r, touched: true, error: check.error };
+      }
+      validatedEntries.push({ mode: "link", row: r, linkCheck: check });
       return {
-        id: qId,
-        uploadId: generateUUID(),
-        file: r.file,
-        fileName: r.file.name,
-        totalBytes: r.file.size,
-        loadedBytes: 0,
-        progress: 0,
-        speed: "Menyiapkan...",
-        eta: "",
-        currentChunk: 0,
-        totalChunks: Math.ceil(r.file.size / CHUNK_SIZE) || 1,
-        status: "uploading",
-        keterangan: r.keterangan?.trim() || "",
-        error: null,
+        ...r,
+        url: check.normalizedUrl,
+        error: "",
+        touched: true,
       };
     });
 
-    setRowUploadQueues((prev) => ({
-      ...prev,
-      [timeline.UUID]: [...(prev[timeline.UUID] || []), ...newItems],
-    }));
+    if (hasValidationError) {
+      setRowFormRows((prev) => ({
+        ...prev,
+        [timeline.UUID]: updatedRows,
+      }));
+      addToast(
+        "warning",
+        "Periksa kembali baris bukti yang masih memiliki kesalahan.",
+      );
+      return;
+    }
 
-    // Jalankan chunk loop untuk semua file yang dipilih secara bersamaan (multiple progress)
-    newItems.forEach((item) => {
-      uploadRowFileChunkLoop(timeline, item, 0);
+    const fileEntries = validatedEntries.filter((e) => e.mode === "file");
+    const linkEntries = validatedEntries.filter((e) => e.mode === "link");
+    const submittedRowIds = new Set();
+
+    // 1. Jalankan chunk loop untuk semua file valid yang dipilih
+    if (fileEntries.length > 0) {
+      const newItems = fileEntries.map(({ row }, idx) => {
+        submittedRowIds.add(row.id);
+        const qId = `${timeline.UUID}-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+        return {
+          id: qId,
+          uploadId: generateUUID(),
+          file: row.file,
+          fileName: row.file.name,
+          totalBytes: row.file.size,
+          loadedBytes: 0,
+          progress: 0,
+          speed: "Menyiapkan...",
+          eta: "",
+          currentChunk: 0,
+          totalChunks: Math.ceil(row.file.size / CHUNK_SIZE) || 1,
+          status: "uploading",
+          keterangan: row.keterangan?.trim() || "",
+          error: null,
+        };
+      });
+
+      setRowUploadQueues((prev) => ({
+        ...prev,
+        [timeline.UUID]: [...(prev[timeline.UUID] || []), ...newItems],
+      }));
+
+      newItems.forEach((item) => {
+        uploadRowFileChunkLoop(timeline, item, 0);
+      });
+    }
+
+    // 2. Simpan seluruh baris tautan link bukti
+    let failedLinkError = "";
+    const failedLinkIds = new Set();
+    if (linkEntries.length > 0) {
+      setRowSubmittingLinks((prev) => ({ ...prev, [timeline.UUID]: true }));
+      try {
+        const linksPayload = linkEntries.map(({ row, linkCheck }) => ({
+          url: linkCheck.normalizedUrl,
+          nama_file: (row.nama_file || "").trim() || linkCheck.fallbackName,
+          keterangan:
+            (row.keterangan || "").trim() ||
+            `Bukti Kegiatan - ${timeline.NamaAktivitas || "Tahapan"}`,
+        }));
+
+        await apiClient.post(`/proker_v3/timeline/${timeline.UUID}/files`, {
+          links: linksPayload,
+        });
+        linkEntries.forEach(({ row }) => submittedRowIds.add(row.id));
+        await fetchData();
+        addToast(
+          "success",
+          `${linkEntries.length} tautan bukti berhasil disimpan.`,
+        );
+      } catch (err) {
+        failedLinkError = err?.message || "Gagal menyimpan tautan bukti";
+        linkEntries.forEach(({ row }) => failedLinkIds.add(row.id));
+        addToast("error", failedLinkError);
+      } finally {
+        setRowSubmittingLinks((prev) => ({ ...prev, [timeline.UUID]: false }));
+      }
+    }
+
+    setRowFormRows((prev) => {
+      const baseRows = prev[timeline.UUID] || updatedRows;
+      const nextRows = baseRows
+        .filter((r) => !submittedRowIds.has(r.id))
+        .map((r) =>
+          failedLinkIds.has(r.id) ? { ...r, error: failedLinkError } : r,
+        );
+      return {
+        ...prev,
+        [timeline.UUID]:
+          nextRows.length > 0 ? nextRows : [createEmptyEvidenceRow("init")],
+      };
     });
   };
 
@@ -2087,7 +2259,12 @@ export default function ProkerV3TimelinePage() {
       );
       const json = res.data;
 
-      addToast("success", "Berkas bukti berhasil dihapus");
+      addToast(
+        "success",
+        isTimelineLinkRecord(fileToDelete)
+          ? "Tautan bukti berhasil dihapus"
+          : "Berkas bukti berhasil dihapus",
+      );
       setDeleteFileDialog(false);
       setFileToDelete(null);
       fetchData();
@@ -2278,6 +2455,23 @@ export default function ProkerV3TimelinePage() {
               </div>
             </div>
           </div>
+
+          {!isVerifierRoleOrLevel &&
+            (aktivitas?.CatatanRevisiAnggaran ||
+              aktivitas?.catatan_revisi_anggaran) && (
+              <div className="flex items-start gap-2.5 px-3.5 py-2.5 bg-amber-50 rounded-xl border border-amber-300 text-xs">
+                <Coins className="w-4 h-4 text-amber-800 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-amber-900 block">
+                    Catatan Revisi Anggaran:
+                  </span>
+                  <p className="text-xs text-amber-950 leading-snug whitespace-pre-wrap break-words mt-0.5">
+                    {aktivitas.CatatanRevisiAnggaran ||
+                      aktivitas.catatan_revisi_anggaran}
+                  </p>
+                </div>
+              </div>
+            )}
 
           {/* Grid Metadata Matriks (Standar & Sub Standar, Target Capaian, Luaran & Dampak) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2873,27 +3067,6 @@ export default function ProkerV3TimelinePage() {
               )}
             </div>
 
-            {/* Alert jika jadwal pengajuan proker ditutup */}
-            {isScheduleLocked && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs shadow-2xs">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-bold text-amber-950">
-                    Jadwal Pengisian Program Kerja Telah Ditutup (
-                    {jadwalProkerStatus?.tahun ||
-                      proker?.Tahun ||
-                      positionYear ||
-                      "2027"}
-                    )
-                  </p>
-                  <p className="text-[11px] text-amber-800 leading-relaxed">
-                    {formatTanggalBulanTahun(jadwalProkerStatus?.message) ||
-                      "Pengisian dan penambahan tahapan timeline dinonaktifkan karena saat ini berada di luar rentang jadwal yang ditentukan."}
-                  </p>
-                </div>
-              </div>
-            )}
-
             <form onSubmit={handleSubmitTimeline} className="space-y-4">
               {/* Nama Tahapan / Aktivitas */}
               <div>
@@ -2903,12 +3076,7 @@ export default function ProkerV3TimelinePage() {
                 </label>
                 <input
                   type="text"
-                  disabled={isScheduleLocked}
-                  placeholder={
-                    isScheduleLocked
-                      ? "Pengisian dinonaktifkan di luar jadwal proker"
-                      : "Nama tahapan / kegiatan baru..."
-                  }
+                  placeholder="Nama tahapan / kegiatan baru..."
                   value={formTimeline.nama_aktivitas}
                   onChange={(e) =>
                     setFormTimeline({
@@ -2916,7 +3084,7 @@ export default function ProkerV3TimelinePage() {
                       nama_aktivitas: e.target.value,
                     })
                   }
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold"
                   required
                 />
               </div>
@@ -2943,7 +3111,6 @@ export default function ProkerV3TimelinePage() {
                     </label>
                     <input
                       type="date"
-                      disabled={isScheduleLocked}
                       value={formTimeline.tanggal_rk_awal}
                       onChange={(e) => {
                         const newAwal = e.target.value;
@@ -2959,7 +3126,7 @@ export default function ProkerV3TimelinePage() {
                           };
                         });
                       }}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                       required
                     />
                   </div>
@@ -2972,7 +3139,6 @@ export default function ProkerV3TimelinePage() {
                     </label>
                     <input
                       type="date"
-                      disabled={isScheduleLocked}
                       min={formTimeline.tanggal_rk_awal || undefined}
                       value={formTimeline.tanggal_rk_akhir}
                       onChange={(e) =>
@@ -2981,7 +3147,7 @@ export default function ProkerV3TimelinePage() {
                           tanggal_rk_akhir: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                       required
                     />
                   </div>
@@ -2996,12 +3162,7 @@ export default function ProkerV3TimelinePage() {
                   </label>
                   <textarea
                     rows="2"
-                    disabled={isScheduleLocked}
-                    placeholder={
-                      isScheduleLocked
-                        ? "Dinonaktifkan di luar jadwal"
-                        : "Deskripsi capaian hasil tahapan..."
-                    }
+                    placeholder="Deskripsi capaian hasil tahapan..."
                     value={formTimeline.capaian}
                     onChange={(e) =>
                       setFormTimeline({
@@ -3009,7 +3170,7 @@ export default function ProkerV3TimelinePage() {
                         capaian: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
@@ -3019,12 +3180,7 @@ export default function ProkerV3TimelinePage() {
                   </label>
                   <textarea
                     rows="2"
-                    disabled={isScheduleLocked}
-                    placeholder={
-                      isScheduleLocked
-                        ? "Dinonaktifkan di luar jadwal"
-                        : "Deskripsi kendala atau hambatan..."
-                    }
+                    placeholder="Deskripsi kendala atau hambatan..."
                     value={formTimeline.masalah}
                     onChange={(e) =>
                       setFormTimeline({
@@ -3032,7 +3188,7 @@ export default function ProkerV3TimelinePage() {
                         masalah: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
@@ -3042,12 +3198,7 @@ export default function ProkerV3TimelinePage() {
                   </label>
                   <textarea
                     rows="2"
-                    disabled={isScheduleLocked}
-                    placeholder={
-                      isScheduleLocked
-                        ? "Dinonaktifkan di luar jadwal"
-                        : "Upaya tindak lanjut atau solusi masalah..."
-                    }
+                    placeholder="Upaya tindak lanjut atau solusi masalah..."
                     value={formTimeline.pemecahan_masalah}
                     onChange={(e) =>
                       setFormTimeline({
@@ -3055,7 +3206,7 @@ export default function ProkerV3TimelinePage() {
                         pemecahan_masalah: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
               </div>
@@ -3075,34 +3226,20 @@ export default function ProkerV3TimelinePage() {
                 <button
                   type="submit"
                   disabled={
-                    isScheduleLocked ||
                     submittingTimeline ||
                     isAnggaranOverLimit ||
                     formTimeline.anggaran < 0
                   }
-                  className={`px-5 py-2 text-xs font-bold rounded-xl transition flex items-center gap-2 ${
-                    isScheduleLocked
-                      ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
-                      : "bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  }`}
+                  className="px-5 py-2 text-xs font-bold rounded-xl transition flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isScheduleLocked ? (
-                    <>
-                      <Lock className="w-4 h-4 text-gray-400" />
-                      <span>Jadwal Pengisian Ditutup</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      <span>
-                        {submittingTimeline
-                          ? "Menyimpan Data..."
-                          : editingTimelineUuid
-                            ? "Perbarui Tahapan Timeline"
-                            : "+ Simpan Tahapan Timeline Baru"}
-                      </span>
-                    </>
-                  )}
+                  <Save className="w-4 h-4" />
+                  <span>
+                    {submittingTimeline
+                      ? "Menyimpan Data..."
+                      : editingTimelineUuid
+                        ? "Perbarui Tahapan Timeline"
+                        : "+ Simpan Tahapan Timeline Baru"}
+                  </span>
                 </button>
               </div>
             </form>
@@ -3543,20 +3680,20 @@ export default function ProkerV3TimelinePage() {
                           <button
                             type="button"
                             onClick={() => openRabModal(tl)}
-                            disabled={!isDiterimaAnggaran}
+                            disabled={isTimelineRabDisabled}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs ${
-                              !isDiterimaAnggaran
-                                ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed shadow-none"
+                              isTimelineRabDisabled
+                                ? "bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed shadow-none"
                                 : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer"
                             }`}
                             title={
-                              !isDiterimaAnggaran
-                                ? "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'"
+                              isTimelineRabDisabled
+                                ? timelineRabDisabledTitle
                                 : "Kelola Rencana Anggaran Biaya (RAB) tahapan ini"
                             }
                           >
                             <Calculator
-                              className={`w-3.5 h-3.5 ${!isDiterimaAnggaran ? "text-gray-400" : "text-amber-700"}`}
+                              className={`w-3.5 h-3.5 ${isTimelineRabDisabled ? "text-gray-500" : "text-amber-700"}`}
                             />
                             <span>RAB</span>
                           </button>
@@ -3704,7 +3841,7 @@ export default function ProkerV3TimelinePage() {
                             <div className="flex items-center gap-2">
                               <Calculator className="w-4 h-4 text-amber-700" />
                               <span className="text-xs font-bold text-amber-950 uppercase tracking-wider">
-                                Rincian Rencana Anggaran Biaya (RAB)
+                                Realisasi Anggaran
                               </span>
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
                                 {formatRupiah(
@@ -3720,15 +3857,15 @@ export default function ProkerV3TimelinePage() {
                               <button
                                 type="button"
                                 onClick={() => openRabModal(tl)}
-                                disabled={!isDiterimaAnggaran}
+                                disabled={isTimelineRabDisabled}
                                 className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition shadow-2xs ${
-                                  !isDiterimaAnggaran
-                                    ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
+                                  isTimelineRabDisabled
+                                    ? "bg-gray-200 text-gray-500 cursor-not-allowed shadow-none"
                                     : "bg-amber-500 hover:bg-amber-600 text-white cursor-pointer"
                                 }`}
                                 title={
-                                  !isDiterimaAnggaran
-                                    ? "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'"
+                                  isTimelineRabDisabled
+                                    ? timelineRabDisabledTitle
                                     : "Edit kembali data RAB tahapan ini"
                                 }
                               >
@@ -3758,15 +3895,15 @@ export default function ProkerV3TimelinePage() {
                                 <button
                                   type="button"
                                   onClick={() => openRabModal(tl)}
-                                  disabled={!isDiterimaAnggaran}
+                                  disabled={isTimelineRabDisabled}
                                   className={`font-bold text-xs ${
-                                    !isDiterimaAnggaran
-                                      ? "text-gray-400 cursor-not-allowed no-underline"
+                                    isTimelineRabDisabled
+                                      ? "text-gray-500 cursor-not-allowed no-underline"
                                       : "text-amber-800 hover:text-amber-950 underline cursor-pointer"
                                   }`}
                                   title={
-                                    !isDiterimaAnggaran
-                                      ? "RAB hanya dapat dikelola ketika status anggaran sudah 'Diterima Anggaran'"
+                                    isTimelineRabDisabled
+                                      ? timelineRabDisabledTitle
                                       : undefined
                                   }
                                 >
@@ -3895,51 +4032,71 @@ export default function ProkerV3TimelinePage() {
 
                     {/* ======================================================== */}
                     {/* SEKSI BERKAS BUKTI KEGIATAN TAHAPAN                      */}
-                    {/* Menampilkan file tersimpan & Form upload multiple inline */}
+                    {/* Menampilkan file & link tersimpan + Form multi-baris     */}
                     {/* ======================================================== */}
                     <div className="p-4 bg-purple-50/30 rounded-xl border border-purple-100/80 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Paperclip className="w-4 h-4 text-purple-600" />
+                          <Paperclip className="w-4 h-4 text-purple-700" />
                           <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                             Berkas Bukti Dukung Tahapan ({files.length})
                           </span>
                         </div>
                       </div>
 
-                      {/* List Berkas Tersimpan */}
+                      {/* List Berkas & Tautan Tersimpan */}
                       {files.length === 0 ? (
-                        <div className="p-3 text-center text-xs text-gray-400 bg-white/70 rounded-xl border border-dashed border-gray-200">
-                          Belum ada berkas bukti dukung yang tersimpan untuk
+                        <div className="p-3 text-center text-xs text-gray-600 bg-white/80 rounded-xl border border-dashed border-gray-300">
+                          Belum ada berkas atau tautan bukti dukung yang tersimpan untuk
                           tahapan ini. Gunakan form di bawah untuk mengunggah.
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                           {files.map((file) => {
-                            const fileUrl = file.FileURL
-                              ? `${API_BASE_URL}${file.FileURL.startsWith("/") ? "" : "/"}${file.FileURL}`
-                              : null;
+                            const isLink = isTimelineLinkRecord(file);
+                            const fileUrl = resolveProkerFileUrl(
+                              file,
+                              API_BASE_URL,
+                            );
 
                             return (
                               <div
-                                key={file.UUID || file.ID}
+                                key={file.UUID || file.ID || file.Id}
                                 className="flex items-center justify-between p-2.5 rounded-xl border border-gray-200 bg-white shadow-2xs hover:border-purple-300 transition text-xs"
                               >
-                                <div className="truncate pr-2 space-y-0.5">
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                <div className="min-w-0 pr-2 space-y-1">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    {isLink ? (
+                                      <Link2 className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                                    ) : (
+                                      <FileText className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                                    )}
                                     <span
                                       className="font-bold text-gray-900 truncate"
-                                      title={file.NamaFile || file.File}
+                                      title={
+                                        file.NamaFile ||
+                                        file.FileURL ||
+                                        file.File
+                                      }
                                     >
-                                      {file.NamaFile || file.File}
+                                      {file.NamaFile ||
+                                        file.FileURL ||
+                                        file.File}
                                     </span>
                                   </div>
-                                  <div className="text-[10px] text-gray-500 flex items-center gap-1.5">
-                                    <span>{formatBytes(file.FileSize)}</span>
+                                  <div className="text-[11px] text-gray-600 flex items-center gap-1.5 min-w-0">
+                                    {isLink ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 font-semibold text-[10px] shrink-0">
+                                        Tautan Link
+                                      </span>
+                                    ) : (
+                                      <span className="shrink-0 font-medium">
+                                        {formatBytes(file.FileSize)}
+                                      </span>
+                                    )}
                                     {file.Keterangan && (
                                       <span
-                                        className="italic truncate max-w-xs"
+                                        className="italic truncate"
                                         title={file.Keterangan}
                                       >
                                         • {file.Keterangan}
@@ -3950,26 +4107,48 @@ export default function ProkerV3TimelinePage() {
 
                                 <div className="flex items-center gap-1 shrink-0">
                                   {fileUrl && (
-                                    <Tooltip title="Buka / Unduh Berkas Bukti">
+                                    <Tooltip
+                                      title={
+                                        isLink
+                                          ? "Buka Tautan Bukti"
+                                          : "Buka / Unduh Berkas Bukti"
+                                      }
+                                    >
                                       <a
                                         href={fileUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition"
+                                        aria-label={
+                                          isLink
+                                            ? `Buka tautan ${file.NamaFile || file.FileURL}`
+                                            : `Buka berkas ${file.NamaFile || file.File}`
+                                        }
+                                        className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                                       >
                                         <ExternalLink className="w-3.5 h-3.5" />
                                       </a>
                                     </Tooltip>
                                   )}
 
-                                  <Tooltip title="Hapus Berkas Ini">
+                                  <Tooltip
+                                    title={
+                                      isLink
+                                        ? "Hapus Tautan Ini"
+                                        : "Hapus Berkas Ini"
+                                    }
+                                  >
                                     <button
                                       type="button"
+                                      aria-label={
+                                        isLink
+                                          ? `Hapus tautan ${file.NamaFile || file.FileURL}`
+                                          : `Hapus berkas ${file.NamaFile || file.File}`
+                                      }
                                       onClick={() => {
                                         setFileToDelete(file);
                                         setDeleteFileDialog(true);
                                       }}
-                                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                                      className="p-1.5 rounded-lg text-rose-700 hover:bg-rose-50 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -3981,194 +4160,436 @@ export default function ProkerV3TimelinePage() {
                         </div>
                       )}
 
-                      {/* Inline Upload Form (Dynamic Multi-Row Form Berkas & Keterangan) */}
+                      {/* Inline Upload Form (Dynamic Multi-Row Form File, Link & Keterangan) */}
                       <div className="p-3.5 bg-white rounded-xl border border-purple-200 shadow-2xs space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
-                              <Upload className="w-4 h-4 text-purple-600" />
-                              <span>
-                                Unggah Berkas Bukti Baru (Multi File &
-                                Keterangan Dinamis):
-                              </span>
-                            </div>
-                            {!isDiterimaAnggaran && (
-                              <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md font-semibold">
-                                Terkunci (Menunggu Diterima Anggaran)
-                              </span>
-                            )}
-                          </div>
+                        {(() => {
+                          const dynamicRows = getRowFormRows(tl.UUID);
+                          const filledRows = dynamicRows.filter(isRowFilled);
+                          const fileReadyCount = filledRows.filter(
+                            (r) => (r.mode || "file") === "file",
+                          ).length;
+                          const linkReadyCount = filledRows.filter(
+                            (r) => (r.mode || "file") === "link",
+                          ).length;
+                          const isSubmittingLinks = Boolean(
+                            rowSubmittingLinks[tl.UUID],
+                          );
 
-                          <button
-                            type="button"
-                            onClick={() => addRowFormRow(tl.UUID)}
-                            disabled={!isDiterimaAnggaran}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition ${
-                              !isDiterimaAnggaran
-                                ? "text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed"
-                                : "text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 cursor-pointer"
-                            }`}
-                            title={
-                              !isDiterimaAnggaran
-                                ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
-                                : undefined
-                            }
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Tambah Baris</span>
-                          </button>
-                        </div>
+                          return (
+                            <>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
+                                    <Upload className="w-4 h-4 text-purple-700" />
+                                    <span>
+                                      Unggah Berkas Bukti Baru (Multi File, Tautan Link &
+                                      Keterangan Dinamis):
+                                    </span>
+                                  </div>
+                                  {!isDiterimaAnggaran && (
+                                    <span className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md font-semibold">
+                                      Terkunci (Menunggu Diterima Anggaran)
+                                    </span>
+                                  )}
+                                </div>
 
-                        {/* Daftar Baris Input Dinamis */}
-                        <div className="space-y-2.5">
-                          {getRowFormRows(tl.UUID).map((rowItem, rIdx) => (
-                            <div
-                              key={rowItem.id}
-                              className="p-2.5 bg-purple-50/20 rounded-xl border border-purple-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
-                            >
-                              {/* Nomor Baris */}
-                              <span className="w-5 h-5 rounded-md bg-purple-100 text-purple-800 text-[10px] font-bold flex items-center justify-center shrink-0">
-                                {rIdx + 1}
-                              </span>
-
-                              {/* Input File */}
-                              <div className="flex-1 min-w-0">
-                                <input
-                                  type="file"
+                                <button
+                                  type="button"
+                                  onClick={() => addRowFormRow(tl.UUID)}
                                   disabled={!isDiterimaAnggaran}
-                                  onChange={(e) =>
-                                    updateRowFormField(
-                                      tl.UUID,
-                                      rowItem.id,
-                                      "file",
-                                      e.target.files?.[0] || null,
-                                    )
-                                  }
-                                  className={`w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold border border-gray-200 rounded-xl bg-white ${
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 ${
                                     !isDiterimaAnggaran
-                                      ? "file:bg-gray-300 file:text-gray-500 cursor-not-allowed opacity-60"
-                                      : "file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
+                                      ? "text-gray-500 bg-gray-100 border border-gray-200 cursor-not-allowed"
+                                      : "text-purple-800 bg-purple-50 hover:bg-purple-100 border border-purple-200 cursor-pointer"
                                   }`}
+                                  title={
+                                    !isDiterimaAnggaran
+                                      ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
+                                      : undefined
+                                  }
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Tambah Baris</span>
+                                </button>
+                              </div>
+
+                              {/* Keterangan Ketentuan Upload File & Link */}
+                              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-gray-700 flex items-start gap-2">
+                                <Info
+                                  className="w-4 h-4 text-purple-700 shrink-0 mt-0.5"
+                                  aria-hidden="true"
                                 />
-                                {rowItem.file && (
-                                  <span
-                                    className="text-[10px] text-purple-700 font-medium pl-1 truncate block mt-0.5"
-                                    title={rowItem.file.name}
+                                <div className="space-y-0.5 leading-relaxed">
+                                  <p>
+                                    <span className="font-semibold text-gray-900">
+                                      Ketentuan Upload File:
+                                    </span>{" "}
+                                    Maksimal{" "}
+                                    <span className="font-semibold text-purple-900">
+                                      {TIMELINE_MAX_FILE_SIZE_MB} MB
+                                    </span>{" "}
+                                    per file. Tipe file yang didukung:{" "}
+                                    <span className="font-medium text-gray-800">
+                                      {TIMELINE_ALLOWED_FILE_TYPES_LABEL}
+                                    </span>
+                                    .
+                                  </p>
+                                  <p className="text-[11px] text-gray-600">
+                                    Untuk melampirkan tautan Google Drive, video, atau dokumen online,
+                                    ubah jenis baris ke{" "}
+                                    <span className="font-semibold text-gray-800">
+                                      Tautan Link
+                                    </span>{" "}
+                                    dan masukkan URL berawalan http:// atau https://.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Daftar Baris Input Dinamis */}
+                              <div className="space-y-2.5">
+                                {dynamicRows.map((rowItem, rIdx) => {
+                                  const rowMode = rowItem.mode || "file";
+
+                                  return (
+                                    <div
+                                      key={rowItem.id}
+                                      className={`p-3 rounded-xl border space-y-2 ${
+                                        rowItem.error
+                                          ? "bg-rose-50/40 border-rose-300"
+                                          : "bg-purple-50/25 border-purple-100"
+                                      }`}
+                                    >
+                                      {/* Baris Header: Nomor, Switch File/Link, Hapus */}
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="w-6 h-6 rounded-md bg-purple-100 text-purple-900 text-xs font-bold flex items-center justify-center shrink-0">
+                                            {rIdx + 1}
+                                          </span>
+
+                                          <div
+                                            role="radiogroup"
+                                            aria-label={`Jenis bukti baris ${rIdx + 1}`}
+                                            className="inline-flex p-0.5 rounded-lg bg-gray-100 border border-gray-200"
+                                          >
+                                            <button
+                                              type="button"
+                                              role="radio"
+                                              aria-checked={rowMode === "file"}
+                                              disabled={!isDiterimaAnggaran}
+                                              onClick={() =>
+                                                switchRowFormMode(
+                                                  tl.UUID,
+                                                  rowItem.id,
+                                                  "file",
+                                                )
+                                              }
+                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 ${
+                                                rowMode === "file"
+                                                  ? "bg-purple-700 text-white shadow-2xs"
+                                                  : "text-gray-700 hover:text-gray-900 hover:bg-white/70"
+                                              } ${
+                                                !isDiterimaAnggaran
+                                                  ? "opacity-60 cursor-not-allowed"
+                                                  : "cursor-pointer"
+                                              }`}
+                                            >
+                                              <Upload className="w-3.5 h-3.5" />
+                                              <span>File</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              role="radio"
+                                              aria-checked={rowMode === "link"}
+                                              disabled={!isDiterimaAnggaran}
+                                              onClick={() =>
+                                                switchRowFormMode(
+                                                  tl.UUID,
+                                                  rowItem.id,
+                                                  "link",
+                                                )
+                                              }
+                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 ${
+                                                rowMode === "link"
+                                                  ? "bg-purple-700 text-white shadow-2xs"
+                                                  : "text-gray-700 hover:text-gray-900 hover:bg-white/70"
+                                              } ${
+                                                !isDiterimaAnggaran
+                                                  ? "opacity-60 cursor-not-allowed"
+                                                  : "cursor-pointer"
+                                              }`}
+                                            >
+                                              <Link2 className="w-3.5 h-3.5" />
+                                              <span>Tautan Link</span>
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          disabled={!isDiterimaAnggaran}
+                                          onClick={() =>
+                                            removeRowFormRow(
+                                              tl.UUID,
+                                              rowItem.id,
+                                            )
+                                          }
+                                          className={`p-2 rounded-lg transition shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 ${
+                                            !isDiterimaAnggaran
+                                              ? "text-gray-400 cursor-not-allowed"
+                                              : "text-gray-600 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
+                                          }`}
+                                          title="Hapus baris ini"
+                                          aria-label={`Hapus baris ${rIdx + 1}`}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </div>
+
+                                      {/* Input Utama & Keterangan */}
+                                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 items-start">
+                                        <div className="lg:col-span-7 min-w-0">
+                                          {rowMode === "file" ? (
+                                            <div>
+                                              <label
+                                                htmlFor={`evidence-file-${tl.UUID}-${rowItem.id}`}
+                                                className="sr-only"
+                                              >
+                                                Pilih berkas bukti baris{" "}
+                                                {rIdx + 1}
+                                              </label>
+                                              <input
+                                                id={`evidence-file-${tl.UUID}-${rowItem.id}`}
+                                                type="file"
+                                                accept={TIMELINE_FILE_ACCEPT}
+                                                disabled={!isDiterimaAnggaran}
+                                                onChange={(e) =>
+                                                  handleRowFileSelect(
+                                                    tl.UUID,
+                                                    rowItem.id,
+                                                    e,
+                                                  )
+                                                }
+                                                aria-invalid={Boolean(
+                                                  rowItem.error,
+                                                )}
+                                                className={`w-full text-xs text-gray-700 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold border rounded-xl bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 ${
+                                                  rowItem.error
+                                                    ? "border-rose-400"
+                                                    : "border-gray-300"
+                                                } ${
+                                                  !isDiterimaAnggaran
+                                                    ? "file:bg-gray-300 file:text-gray-600 cursor-not-allowed opacity-70"
+                                                    : "file:bg-purple-700 file:text-white hover:file:bg-purple-800 cursor-pointer"
+                                                }`}
+                                              />
+                                              {rowItem.file && (
+                                                <span
+                                                  className="text-[11px] text-purple-800 font-medium pl-1 truncate block mt-1"
+                                                  title={rowItem.file.name}
+                                                >
+                                                  Terpilih: {rowItem.file.name}{" "}
+                                                  (
+                                                  {formatBytes(
+                                                    rowItem.file.size,
+                                                  )}
+                                                  )
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <div className="space-y-1.5">
+                                              <label
+                                                htmlFor={`evidence-url-${tl.UUID}-${rowItem.id}`}
+                                                className="sr-only"
+                                              >
+                                                URL tautan bukti baris{" "}
+                                                {rIdx + 1}
+                                              </label>
+                                              <div className="relative">
+                                                <Link2
+                                                  className="w-3.5 h-3.5 text-sky-700 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                                                  aria-hidden="true"
+                                                />
+                                                <input
+                                                  id={`evidence-url-${tl.UUID}-${rowItem.id}`}
+                                                  type="url"
+                                                  inputMode="url"
+                                                  autoCorrect="off"
+                                                  autoCapitalize="off"
+                                                  spellCheck={false}
+                                                  disabled={!isDiterimaAnggaran}
+                                                  placeholder="https://drive.google.com/... (awalan http:// atau https://)"
+                                                  value={rowItem.url || ""}
+                                                  onChange={(e) =>
+                                                    updateRowFormField(
+                                                      tl.UUID,
+                                                      rowItem.id,
+                                                      "url",
+                                                      e.target.value,
+                                                    )
+                                                  }
+                                                  onBlur={() =>
+                                                    handleRowUrlBlur(
+                                                      tl.UUID,
+                                                      rowItem.id,
+                                                    )
+                                                  }
+                                                  aria-invalid={Boolean(
+                                                    rowItem.error,
+                                                  )}
+                                                  className={`w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border bg-white focus:outline-none ${
+                                                    rowItem.error
+                                                      ? "border-rose-400"
+                                                      : "border-gray-300"
+                                                  } ${
+                                                    !isDiterimaAnggaran
+                                                      ? "cursor-not-allowed bg-gray-50 text-gray-500"
+                                                      : "text-gray-800 focus:ring-2 focus:ring-purple-600"
+                                                  }`}
+                                                />
+                                              </div>
+                                              <label
+                                                htmlFor={`evidence-link-title-${tl.UUID}-${rowItem.id}`}
+                                                className="sr-only"
+                                              >
+                                                Judul tautan baris {rIdx + 1}{" "}
+                                                (opsional)
+                                              </label>
+                                              <input
+                                                id={`evidence-link-title-${tl.UUID}-${rowItem.id}`}
+                                                type="text"
+                                                maxLength={200}
+                                                disabled={!isDiterimaAnggaran}
+                                                placeholder="Judul tautan (opsional, mis. Folder Foto Kegiatan)"
+                                                value={rowItem.nama_file || ""}
+                                                onChange={(e) =>
+                                                  updateRowFormField(
+                                                    tl.UUID,
+                                                    rowItem.id,
+                                                    "nama_file",
+                                                    e.target.value,
+                                                  )
+                                                }
+                                                className={`w-full px-3 py-1.5 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none ${
+                                                  !isDiterimaAnggaran
+                                                    ? "cursor-not-allowed bg-gray-50 text-gray-500"
+                                                    : "text-gray-800 focus:ring-2 focus:ring-purple-600"
+                                                }`}
+                                              />
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Input Keterangan Spesifik */}
+                                        <div className="lg:col-span-5 min-w-0">
+                                          <label
+                                            htmlFor={`evidence-ket-${tl.UUID}-${rowItem.id}`}
+                                            className="sr-only"
+                                          >
+                                            Keterangan bukti baris {rIdx + 1}{" "}
+                                            (opsional)
+                                          </label>
+                                          <input
+                                            id={`evidence-ket-${tl.UUID}-${rowItem.id}`}
+                                            type="text"
+                                            disabled={!isDiterimaAnggaran}
+                                            placeholder="Keterangan berkas / tautan (opsional)..."
+                                            value={rowItem.keterangan || ""}
+                                            onChange={(e) =>
+                                              updateRowFormField(
+                                                tl.UUID,
+                                                rowItem.id,
+                                                "keterangan",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className={`w-full px-3 py-1.5 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none ${
+                                              !isDiterimaAnggaran
+                                                ? "cursor-not-allowed bg-gray-50 text-gray-500"
+                                                : "text-gray-800 focus:ring-2 focus:ring-purple-600"
+                                            }`}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {rowItem.error && (
+                                        <div
+                                          role="alert"
+                                          className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium"
+                                        >
+                                          <AlertCircle
+                                            className="w-4 h-4 shrink-0 mt-0.5"
+                                            aria-hidden="true"
+                                          />
+                                          <span>{rowItem.error}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Footer Form & Tombol Submit */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-purple-100">
+                                <span className="text-xs text-gray-600">
+                                  {filledRows.length} dari {dynamicRows.length}{" "}
+                                  baris siap disimpan
+                                  {filledRows.length > 0 &&
+                                    ` (${fileReadyCount} file, ${linkReadyCount} tautan)`}
+                                  .
+                                </span>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => addRowFormRow(tl.UUID)}
+                                    disabled={!isDiterimaAnggaran}
+                                    className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 ${
+                                      !isDiterimaAnggaran
+                                        ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                                        : "bg-gray-100 hover:bg-gray-200 text-gray-800 cursor-pointer"
+                                    }`}
+                                    title={
+                                      !isDiterimaAnggaran
+                                        ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
+                                        : undefined
+                                    }
                                   >
-                                    Terpilih: {rowItem.file.name} (
-                                    {formatBytes(rowItem.file.size)})
-                                  </span>
-                                )}
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Tambah Baris</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUploadRowFiles(tl)}
+                                    disabled={
+                                      !isDiterimaAnggaran ||
+                                      isSubmittingLinks ||
+                                      filledRows.length === 0
+                                    }
+                                    className={`px-4 py-1.5 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-1 ${
+                                      !isDiterimaAnggaran
+                                        ? "bg-gray-200 text-gray-500 border border-gray-300 cursor-not-allowed shadow-none"
+                                        : "bg-purple-700 hover:bg-purple-800 text-white cursor-pointer disabled:opacity-50"
+                                    }`}
+                                    title={
+                                      !isDiterimaAnggaran
+                                        ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
+                                        : undefined
+                                    }
+                                  >
+                                    <Upload className="w-3.5 h-3.5" />
+                                    <span>
+                                      {isSubmittingLinks
+                                        ? "Menyimpan..."
+                                        : `Unggah / Simpan Bukti (${filledRows.length})`}
+                                    </span>
+                                  </button>
+                                </div>
                               </div>
-
-                              {/* Input Keterangan Spesifik */}
-                              <div className="flex-1 min-w-0">
-                                <input
-                                  type="text"
-                                  disabled={!isDiterimaAnggaran}
-                                  placeholder="Keterangan berkas bukti (opsional)..."
-                                  value={rowItem.keterangan || ""}
-                                  onChange={(e) =>
-                                    updateRowFormField(
-                                      tl.UUID,
-                                      rowItem.id,
-                                      "keterangan",
-                                      e.target.value,
-                                    )
-                                  }
-                                  className={`w-full px-3 py-1.5 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none ${
-                                    !isDiterimaAnggaran
-                                      ? "cursor-not-allowed bg-gray-50 text-gray-400"
-                                      : "focus:ring-2 focus:ring-purple-500"
-                                  }`}
-                                />
-                              </div>
-
-                              {/* Tombol Hapus Baris */}
-                              <button
-                                type="button"
-                                disabled={!isDiterimaAnggaran}
-                                onClick={() =>
-                                  removeRowFormRow(tl.UUID, rowItem.id)
-                                }
-                                className={`p-1.5 rounded-lg transition shrink-0 ${
-                                  !isDiterimaAnggaran
-                                    ? "text-gray-300 cursor-not-allowed"
-                                    : "text-gray-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                                } self-end sm:self-center`}
-                                title="Hapus baris ini"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Footer Form & Tombol Submit */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-purple-100">
-                          <span className="text-[11px] text-gray-500">
-                            {
-                              getRowFormRows(tl.UUID).filter((r) =>
-                                Boolean(r.file),
-                              ).length
-                            }{" "}
-                            dari {getRowFormRows(tl.UUID).length} baris telah
-                            memilih berkas.
-                          </span>
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => addRowFormRow(tl.UUID)}
-                              disabled={!isDiterimaAnggaran}
-                              className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition flex items-center gap-1 ${
-                                !isDiterimaAnggaran
-                                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                  : "bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer"
-                              }`}
-                              title={
-                                !isDiterimaAnggaran
-                                  ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
-                                  : undefined
-                              }
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Tambah Berkas</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleUploadRowFiles(tl)}
-                              disabled={
-                                !isDiterimaAnggaran ||
-                                getRowFormRows(tl.UUID).filter((r) =>
-                                  Boolean(r.file),
-                                ).length === 0
-                              }
-                              className={`px-4 py-1.5 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs ${
-                                !isDiterimaAnggaran
-                                  ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
-                                  : "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer disabled:opacity-50"
-                              }`}
-                              title={
-                                !isDiterimaAnggaran
-                                  ? "Unggah berkas bukti hanya dapat dilakukan ketika status anggaran sudah 'Diterima Anggaran'"
-                                  : undefined
-                              }
-                            >
-                              <Upload className="w-3.5 h-3.5" />
-                              <span>
-                                Unggah Berkas (
-                                {
-                                  getRowFormRows(tl.UUID).filter((r) =>
-                                    Boolean(r.file),
-                                  ).length
-                                }
-                                )
-                              </span>
-                            </button>
-                          </div>
-                        </div>
+                            </>
+                          );
+                        })()}
 
                         {/* List Antrean Progres Upload Per Chunk (Multiple Progress) */}
                         {(() => {
@@ -4738,7 +5159,10 @@ export default function ProkerV3TimelinePage() {
                           {row.bukti_url ? (
                             <div className="flex items-center justify-between text-[11px] bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
                               <a
-                                href={`${API_BASE_URL}${row.bukti_url.startsWith("/") ? "" : "/"}${row.bukti_url}`}
+                                href={resolveProkerFileUrl(
+                                  { FileURL: row.bukti_url },
+                                  API_BASE_URL,
+                                )}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="text-purple-600 hover:underline truncate max-w-[100px] font-semibold"
@@ -4868,10 +5292,11 @@ export default function ProkerV3TimelinePage() {
                   type="button"
                   onClick={handleSaveRab}
                   disabled={
+                    isTimelineRabDisabled ||
                     savingRab ||
                     (maxAnggaran > 0 && totalAlokasiRabAktivitas > maxAnggaran)
                   }
-                  className="px-5 py-2 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200 transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save className="w-4 h-4" />
                   <span>{savingRab ? "Menyimpan..." : "Simpan RAB"}</span>
@@ -4896,8 +5321,16 @@ export default function ProkerV3TimelinePage() {
         open={deleteFileDialog}
         onClose={() => setDeleteFileDialog(false)}
         onConfirm={handleDeleteFile}
-        title="Hapus Berkas Bukti?"
-        message={`Apakah Anda yakin ingin menghapus berkas "${fileToDelete?.NamaFile || fileToDelete?.File}"? File akan dihapus permanen dari server.`}
+        title={
+          isTimelineLinkRecord(fileToDelete)
+            ? "Hapus Tautan Bukti?"
+            : "Hapus Berkas Bukti?"
+        }
+        message={
+          isTimelineLinkRecord(fileToDelete)
+            ? `Apakah Anda yakin ingin menghapus tautan "${fileToDelete?.NamaFile || fileToDelete?.FileURL || fileToDelete?.File}"?`
+            : `Apakah Anda yakin ingin menghapus berkas "${fileToDelete?.NamaFile || fileToDelete?.File}"? File akan dihapus permanen dari server.`
+        }
       />
     </>
   );

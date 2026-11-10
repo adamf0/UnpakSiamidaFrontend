@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Calendar,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 
 const parseFormattedDate = (dateStr) => {
@@ -89,6 +90,16 @@ const getStateConfig = (stateStr) => {
       iconBg: "bg-rose-600 text-white ring-rose-100",
       icon: <XCircle className="w-4 h-4" />,
       isReject: true,
+    };
+  }
+
+  if (s.includes("hapus") || s.includes("buang") || s.includes("delete")) {
+    return {
+      label: "Dihapus",
+      badgeColor: "bg-rose-100 text-rose-800 border-rose-300",
+      iconBg: "bg-rose-600 text-white ring-rose-100",
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      isDelete: true,
     };
   }
 
@@ -464,7 +475,7 @@ export default function StateHistoryDrawer({
                                   {catatan && (
                                     <div
                                       className={`p-2.5 rounded-lg text-xs border ${
-                                        config.isReject
+                                        config.isReject || config.isDelete
                                           ? "bg-rose-50/70 border-rose-200 text-rose-800"
                                           : config.isRevisi
                                           ? "bg-amber-50/70 border-amber-200 text-amber-900"
@@ -476,6 +487,11 @@ export default function StateHistoryDrawer({
                                           <>
                                             <AlertCircle className="w-3 h-3 text-rose-600" />
                                             <span>Alasan Penolakan:</span>
+                                          </>
+                                        ) : config.isDelete ? (
+                                          <>
+                                            <Trash2 className="w-3 h-3 text-rose-700" />
+                                            <span>Alasan Penghapusan:</span>
                                           </>
                                         ) : config.isRevisi ? (
                                           <>

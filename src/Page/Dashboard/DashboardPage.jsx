@@ -1,13 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useContent } from "@/Providers/ContentProvider";
 import { useAuth } from "@/Providers/AuthProvider";
+import { fetchFakultasUnits } from "@/Common/Utils";
 import ProkerAnnouncementCard from "./ProkerAnnouncementCard";
 import MonitoringTableCard from "./MonitoringTableCard";
 import PemetaanChartCard from "./PemetaanChartCard";
 import DashboardIkuAnggaranChartCard from "./DashboardIkuAnggaranChartCard";
 import DashboardProkerAktivitasRabCard from "./DashboardProkerAktivitasRabCard";
+import { resolveIkuAnggaranAccess } from "./ikuAnggaranScope";
 import {
   isDashboardProkerVisibleForVersion,
   isDashboardProkerAnnouncementVisible,
@@ -34,6 +36,38 @@ const DashboardContent = () => {
   const isAdmin = currentLevel === "admin";
   const isAdminOrAnggaran = currentLevel === "admin" || currentLevel === "anggaran";
   const activeYear = String(positionYear || localStorage.getItem("positionYear") || "2027");
+  const [realFakultasUnits, setRealFakultasUnits] = useState([]);
+
+  useEffect(() => {
+    if (!user || (!isAdminOrAnggaran && currentLevel !== "user")) return;
+    if (realFakultasUnits.length > 0) return;
+
+    let active = true;
+    fetchFakultasUnits()
+      .then((data) => {
+        if (active && Array.isArray(data) && data.length > 0) {
+          setRealFakultasUnits(data);
+        }
+      })
+      .catch((err) => {
+        console.warn("Gagal memuat master fakultas/unit untuk IKU Anggaran:", err);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user, isAdminOrAnggaran, currentLevel, realFakultasUnits.length]);
+
+  const ikuAnggaranAccess = useMemo(
+    () =>
+      resolveIkuAnggaranAccess({
+        level: currentLevel,
+        user,
+        fakultasUnits: realFakultasUnits,
+        positionYear: activeYear,
+      }),
+    [currentLevel, user, realFakultasUnits, activeYear],
+  );
 
   const showProkerMonitoring = isDashboardProkerVisibleForVersion(appVersion || "v2");
   const showPemetaanChart = (appVersion || "v2") === "v2" || (appVersion || "v2") === "v3";
@@ -70,8 +104,13 @@ const DashboardContent = () => {
               />
             )}
 
-            {/* CHART REALTIME ANGGARAN & REALISASI IKU (RAB TAHAPAN) - Level Admin & Anggaran */}
-            {isAdminOrAnggaran && <DashboardIkuAnggaranChartCard />}
+            {/* CHART REALTIME ANGGARAN & REALISASI IKU - Admin, Anggaran, Wakil Rektor *, & User Fakultas */}
+            {ikuAnggaranAccess.allowed && (
+              <DashboardIkuAnggaranChartCard
+                accessScope={ikuAnggaranAccess}
+                realFakultasUnitsProp={realFakultasUnits}
+              />
+            )}
 
             {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN (Hanya muncul untuk Admin) */}
             {isAdmin && showPemetaanChart && <PemetaanChartCard />}
@@ -148,8 +187,13 @@ const DashboardContent = () => {
               </div>
             </div>
 
-            {/* CHART REALTIME ANGGARAN & REALISASI IKU (RAB TAHAPAN) - Level Admin & Anggaran */}
-            {isAdminOrAnggaran && <DashboardIkuAnggaranChartCard />}
+            {/* CHART REALTIME ANGGARAN & REALISASI IKU - Admin, Anggaran, Wakil Rektor *, & User Fakultas */}
+            {ikuAnggaranAccess.allowed && (
+              <DashboardIkuAnggaranChartCard
+                accessScope={ikuAnggaranAccess}
+                realFakultasUnitsProp={realFakultasUnits}
+              />
+            )}
 
             {/* SECTION CHART PEMETAAN RENSTRA & DOKUMEN TAMBAHAN (Hanya muncul untuk Admin) */}
             {isAdmin && <PemetaanChartCard />}

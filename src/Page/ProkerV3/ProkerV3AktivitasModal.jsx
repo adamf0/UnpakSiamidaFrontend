@@ -9,6 +9,8 @@ import {
   parseSlotArray,
   formatBytes,
   formatRupiah,
+  isTimelineLinkRecord,
+  resolveProkerFileUrl,
 } from "./prokerConstants";
 import {
   X,
@@ -34,6 +36,7 @@ import {
   FolderOpen,
   Send,
   Eye,
+  Link2,
 } from "lucide-react";
 
 export default function ProkerV3AktivitasModal({
@@ -1102,45 +1105,66 @@ export default function ProkerV3AktivitasModal({
                                       {/* List File Bukti */}
                                       {tl.Files && tl.Files.length > 0 && (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                                          {tl.Files.map((file) => (
-                                            <div
-                                              key={file.Id}
-                                              className="flex items-center justify-between p-2 rounded-lg border border-gray-200 bg-white text-xs"
-                                            >
-                                              <div className="flex items-center gap-2 min-w-0 pr-2">
-                                                <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
-                                                  <FileIcon className="w-3.5 h-3.5" />
+                                          {tl.Files.map((file) => {
+                                            const isLink = isTimelineLinkRecord(file);
+                                            const fileUrl = resolveProkerFileUrl(file, API_BASE_URL);
+                                            return (
+                                              <div
+                                                key={file.UUID || file.Id}
+                                                className="flex items-center justify-between p-2 rounded-lg border border-gray-200 bg-white text-xs"
+                                              >
+                                                <div className="flex items-center gap-2 min-w-0 pr-2">
+                                                  <div
+                                                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                                      isLink
+                                                        ? "bg-sky-100 text-sky-800"
+                                                        : "bg-indigo-100 text-indigo-700"
+                                                    }`}
+                                                  >
+                                                    {isLink ? (
+                                                      <Link2 className="w-3.5 h-3.5" />
+                                                    ) : (
+                                                      <FileIcon className="w-3.5 h-3.5" />
+                                                    )}
+                                                  </div>
+                                                  <div className="min-w-0">
+                                                    <p
+                                                      className="font-semibold text-gray-800 truncate"
+                                                      title={file.NamaFile || file.File}
+                                                    >
+                                                      {file.NamaFile || file.File}
+                                                    </p>
+                                                    <span className="text-[11px] text-gray-600 block truncate">
+                                                      {isLink ? "Tautan Link" : formatBytes(file.FileSize)} • {file.Keterangan || "Bukti kegiatan"}
+                                                    </span>
+                                                  </div>
                                                 </div>
-                                                <div className="min-w-0">
-                                                  <p className="font-semibold text-gray-800 truncate" title={file.NamaFile || file.File}>
-                                                    {file.NamaFile || file.File}
-                                                  </p>
-                                                  <span className="text-[10px] text-gray-400 block">
-                                                    {formatBytes(file.FileSize)} • {file.Keterangan || "Bukti kegiatan"}
-                                                  </span>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                  {fileUrl && (
+                                                    <a
+                                                      href={fileUrl}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      className="p-1.5 text-indigo-700 hover:bg-indigo-50 rounded transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                                                      title={isLink ? "Buka tautan bukti" : "Lihat berkas"}
+                                                      aria-label={isLink ? "Buka tautan bukti" : "Lihat berkas"}
+                                                    >
+                                                      <ExternalLink className="w-3.5 h-3.5" />
+                                                    </a>
+                                                  )}
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteFile(file.UUID)}
+                                                    className="p-1.5 text-rose-700 hover:bg-rose-50 rounded transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+                                                    title={isLink ? "Hapus tautan" : "Hapus berkas"}
+                                                    aria-label={isLink ? "Hapus tautan" : "Hapus berkas"}
+                                                  >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                  </button>
                                                 </div>
                                               </div>
-                                              <div className="flex items-center gap-1 shrink-0">
-                                                <a
-                                                  href={`${API_BASE_URL}/upload/proker_v3/${file.File}`}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition"
-                                                  title="Lihat berkas"
-                                                >
-                                                  <ExternalLink className="w-3.5 h-3.5" />
-                                                </a>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleDeleteFile(file.UUID)}
-                                                  className="p-1 text-rose-500 hover:bg-rose-50 rounded transition"
-                                                  title="Hapus berkas"
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                              </div>
-                                            </div>
-                                          ))}
+                                            );
+                                          })}
                                         </div>
                                       )}
                                     </div>

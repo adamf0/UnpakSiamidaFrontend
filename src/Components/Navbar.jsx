@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Popover } from "@headlessui/react";
-import { Bell, User, Menu, Calendar, Layers, ChevronDown, Check } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Bell, User, Menu, Calendar, Layers, ChevronDown, Check, Settings as SettingsIcon } from "lucide-react";
 import { mappedText } from "@/Common/Utils";
 import { useSidebar } from "@/Providers/SidebarProvider";
 import { useAuth } from "@/Providers/AuthProvider";
@@ -10,6 +11,7 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { apiClient } from "@/Common/api";
 
 const Navbar = ({ renderChangeLevelModal }) => {
+  const navigate = useNavigate();
   const { toggleSidebar } = useSidebar();
   const { user, logout } = useAuth();
   const {
@@ -268,84 +270,100 @@ const Navbar = ({ renderChangeLevelModal }) => {
 
           {/* User menu */}
           <Popover className="relative">
-            <Popover.Button className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100">
-              <User size={18} />
-              <span className="hidden lg:inline text-sm">{user?.name ?? "-"}</span>
-            </Popover.Button>
+            {({ close }) => (
+              <>
+                <Popover.Button className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 cursor-pointer">
+                  <User size={18} />
+                  <span className="hidden lg:inline text-sm">{user?.name ?? "-"}</span>
+                </Popover.Button>
 
-            <Popover.Panel className="z-50 absolute right-0 mt-2 w-64 bg-[#f6f6f6] border rounded-md shadow-lg p-4 text-sm">
-              <div className="border-b pb-2 mb-2">
-                <div className="text-sm font-medium">{user?.name ?? "-"}</div>
-                <div className="flex justify-between items-center gap-2 text-xs text-gray-500 mt-0.5">
-                  <span
-                    className="font-semibold text-purple-900 truncate"
-                    title={mappedText(level, user, positionYear, unitOptions)}
-                  >
-                    {mappedText(level, user, positionYear, unitOptions)}
-                  </span>
-                  {listLevel.length > 0 && (
+                <Popover.Panel className="z-50 absolute right-0 mt-2 w-64 bg-[#f6f6f6] border rounded-md shadow-lg p-4 text-sm">
+                  <div className="border-b pb-2 mb-2">
+                    <div className="text-sm font-medium text-gray-900">{user?.name ?? "-"}</div>
+                    <div className="flex justify-between items-center gap-2 text-xs text-gray-600 mt-0.5">
+                      <span
+                        className="font-semibold text-purple-900 truncate"
+                        title={mappedText(level, user, positionYear, unitOptions)}
+                      >
+                        {mappedText(level, user, positionYear, unitOptions)}
+                      </span>
+                      {listLevel.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            close();
+                            setOpenChangeLevel(true);
+                          }}
+                          className="text-blue-700 hover:underline shrink-0 text-xs cursor-pointer"
+                        >
+                          Change Level
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* MENU */}
+                  <div className="py-1 text-sm space-y-1">
+                    {!isAdmin && (
+                      <button
+                        type="button"
+                        className="sm:hidden w-full rounded text-left px-3 py-1.5 hover:bg-gray-100 flex justify-between items-center cursor-pointer"
+                        onClick={() => {
+                          close();
+                          setYearModalOpen(true);
+                        }}
+                      >
+                        <span>Pilih Tahun</span>
+                        <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                          {positionYear}
+                        </span>
+                      </button>
+                    )}
+
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="sm:hidden w-full rounded text-left px-3 py-1.5 hover:bg-gray-100 flex justify-between items-center cursor-pointer"
+                        onClick={() => {
+                          close();
+                          setVersionModalOpen(true);
+                        }}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Layers size={14} className="text-purple-600" />
+                          Versi Aplikasi
+                        </span>
+                        <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                          {currentVersionConfig?.code?.toUpperCase() || "V2"}
+                        </span>
+                      </button>
+                    )}
+
                     <button
-                      onClick={() => setOpenChangeLevel(true)}
-                      className="text-blue-500 hover:underline shrink-0 text-xs"
+                      type="button"
+                      onClick={() => {
+                        close();
+                        navigate("/settings");
+                      }}
+                      className="w-full rounded text-left px-3 py-1.5 hover:bg-gray-200/70 text-gray-800 flex items-center gap-2 cursor-pointer transition-colors"
                     >
-                      Change Level
+                      <SettingsIcon size={15} className="text-gray-600" />
+                      <span>Settings</span>
                     </button>
-                  )}
-                </div>
-              </div>
-
-              {/* MENU */}
-              <div className="py-1 text-sm space-y-2">
-                {/* <button
-                  className="sm:hidden w-full rounded text-left px-4 hover:bg-gray-100 flex justify-between items-center"
-                  onClick={() => setNotifModalOpen(true)}
-                >
-                  <span>Notifications</span>
-                  {notifications.length > 0 && (
-                    <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                      {notifications.length}
-                    </span>
-                  )}
-                </button> */}
-
-                {!isAdmin && (
-                  <button
-                    className="sm:hidden w-full rounded text-left px-4 hover:bg-gray-100 flex justify-between items-center"
-                    onClick={() => setYearModalOpen(true)}
-                  >
-                    <span>Pilih Tahun</span>
-                    <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                      {positionYear}
-                    </span>
-                  </button>
-                )}
-
-                {isAdmin && (
-                  <button
-                    className="sm:hidden w-full rounded text-left px-4 hover:bg-gray-100 flex justify-between items-center"
-                    onClick={() => setVersionModalOpen(true)}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Layers size={14} className="text-purple-600" />
-                      Versi Aplikasi
-                    </span>
-                    <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
-                      {currentVersionConfig?.code?.toUpperCase() || "V2"}
-                    </span>
-                  </button>
-                )}
-
-                <button className="w-full rounded text-left px-4 hover:bg-gray-100">
-                  Settings
-                </button>
-                <button
-                  className="w-full rounded text-left px-4 hover:bg-red-50 text-red-600"
-                  onClick={() => logout()}
-                >
-                  Logout
-                </button>
-              </div>
-            </Popover.Panel>
+                    <button
+                      type="button"
+                      className="w-full rounded text-left px-3 py-1.5 hover:bg-red-50 text-red-700 cursor-pointer transition-colors"
+                      onClick={() => {
+                        close();
+                        logout();
+                      }}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </Popover.Panel>
+              </>
+            )}
           </Popover>
         </div>
       </nav>

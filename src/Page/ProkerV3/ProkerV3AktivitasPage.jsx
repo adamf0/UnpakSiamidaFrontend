@@ -330,12 +330,9 @@ export default function ProkerV3AktivitasPage() {
     return false;
   }, [user, proker, positionYear, isUpmUser]);
 
-  // Tombol tambah/edit/hapus aktivitas HANYA muncul di level user dengan target yang ditugaskan (bukan akun UPM dan tahun aktif harus cocok) atau Admin
+  // Tombol tambah/edit/hapus aktivitas HANYA muncul di level user dengan target yang ditugaskan (bukan akun UPM dan tahun aktif harus cocok)
   const canAddAktivitas =
-    (isLevelUser || isAdmin) &&
-    !isUpmUser &&
-    isYearMatch &&
-    (hasAssignedTarget || isAdmin);
+    isLevelUser && !isUpmUser && isYearMatch && hasAssignedTarget;
 
   // State History Drawer State
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -389,6 +386,7 @@ export default function ProkerV3AktivitasPage() {
   const [actToRevisi, setActToRevisi] = useState(null);
   const [revisiAnggaran, setRevisiAnggaran] = useState(0);
   const [revisiAnggaranStr, setRevisiAnggaranStr] = useState("0");
+  const [revisiCatatan, setRevisiCatatan] = useState("");
   const [isSubmittingRevisi, setIsSubmittingRevisi] = useState(false);
 
   // Standalone RAB Detail Modal State (Triggered by clicking budget/SBU badge - Gambar 2 -> Gambar 1)
@@ -407,6 +405,7 @@ export default function ProkerV3AktivitasPage() {
   const [jadwalProkerStatus, setJadwalProkerStatus] = useState(null);
   const [loadingJadwalProkerStatus, setLoadingJadwalProkerStatus] =
     useState(false);
+  const [prokerBatalStatus, setProkerBatalStatus] = useState(null);
 
   // Batal Aktivitas State
   const [batalActModalOpen, setBatalActModalOpen] = useState(false);
@@ -442,8 +441,8 @@ export default function ProkerV3AktivitasPage() {
     [positionYear],
   );
 
-  // Jadwal proker terbuka jika status jadwal proker open
-  const isJadwalProkerOpen = Boolean(jadwalProkerStatus?.is_open);
+  // Pengaturan tanggal aktif Proker / Aktivitas Batal (global app setting)
+  const isProkerBatalActive = Boolean(prokerBatalStatus?.is_active);
 
   // Tombol tambah aktivitas HANYA muncul dan open jika jadwal proker ada dan sedang dibuka
   const isAktivitasScheduleOpen = Boolean(
@@ -480,6 +479,21 @@ export default function ProkerV3AktivitasPage() {
   useEffect(() => {
     fetchData();
   }, [prokerUuid]);
+
+  useEffect(() => {
+    let cancel = false;
+    apiClient
+      .get("/settings/proker-batal")
+      .then((res) => {
+        if (!cancel) setProkerBatalStatus(res?.data || null);
+      })
+      .catch(() => {
+        if (!cancel) setProkerBatalStatus(null);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!proker) {
@@ -934,6 +948,9 @@ export default function ProkerV3AktivitasPage() {
     setRevisiAnggaranStr(
       initialVal > 0 ? new Intl.NumberFormat("id-ID").format(initialVal) : "0",
     );
+    setRevisiCatatan(
+      act?.CatatanRevisiAnggaran || act?.catatan_revisi_anggaran || "",
+    );
     setRevisiModalOpen(true);
   };
 
@@ -958,6 +975,7 @@ export default function ProkerV3AktivitasPage() {
     try {
       const fd = new FormData();
       fd.append("realisasi", String(revisiAnggaran));
+      fd.append("catatan_revisi_anggaran", revisiCatatan.trim());
 
       await apiClient.put(`/proker_v3/aktivitas/${actToRevisi.UUID}`, fd);
       addToast(
@@ -966,6 +984,7 @@ export default function ProkerV3AktivitasPage() {
       );
       setRevisiModalOpen(false);
       setActToRevisi(null);
+      setRevisiCatatan("");
       fetchData();
     } catch (err) {
       addToast(
@@ -1609,8 +1628,9 @@ export default function ProkerV3AktivitasPage() {
     return isAdmin;
   }, [curRole, isAdmin, isAnggaran]);
 
-  // Verifikator (upml, upmf, upms, evaluator) dan admin yang memverifikasi aktivitas
-  const canVerify = isVerifier || isAdmin;
+  // Verifikator (upml, upmf, upms, fakultas, evaluator, lpm) yang memverifikasi aktivitas (bukan Admin)
+  const canVerify = (isVerifier || curRole === "lpm") && !isAdmin;
+  const showBatchCheckbox = canVerify || canRevisiActDraft;
 
   // Next verification status label and value
   let nextVerifyStatus = "disetujui";
@@ -1624,7 +1644,7 @@ export default function ProkerV3AktivitasPage() {
   } else if (curRole === "upmf") {
     nextVerifyStatus = "diverifikasi_upmf";
     nextVerifyStatusLabel = "Verifikasi UPMF";
-  } else if (curRole === "upms" || isAdmin) {
+  } else if (curRole === "upms") {
     nextVerifyStatus = "disetujui";
     nextVerifyStatusLabel = "Disetujui";
   }
@@ -1695,7 +1715,7 @@ export default function ProkerV3AktivitasPage() {
 
   // Parallel Batch Accept (Terima Semua Proker)
   const handleBatchTerima = async () => {
-    if (selectedActUuids.length === 0) return;
+    if (!canVerify || selectedActUuids.length === 0) return;
     setIsBatchProcessing(true);
 
     // Clear previous errors for selected items
@@ -1707,26 +1727,9 @@ export default function ProkerV3AktivitasPage() {
 
     const promises = selectedActUuids.map(async (uuid) => {
       try {
-        let roleToUse = curRole;
-        if (isAdmin) {
-          const act = activities.find((a) => a.UUID === uuid);
-          if (act) {
-            if (isProdi) {
-              const stUpms = (act.StatusUpms || "").toLowerCase().trim();
-              const stUpmf = (act.StatusUpmf || "").toLowerCase().trim();
-              if (stUpms !== "disetujui") roleToUse = "upms";
-              else if (stUpmf !== "disetujui") roleToUse = "upmf";
-              else roleToUse = "lpm";
-            } else {
-              const stUpml = (act.StatusUpml || "").toLowerCase().trim();
-              if (stUpml !== "disetujui") roleToUse = "upml";
-              else roleToUse = "lpm";
-            }
-          }
-        }
         const fd = new FormData();
         fd.append("status", "disetujui");
-        fd.append("role", roleToUse);
+        fd.append("role", curRole);
         await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, fd);
         return { uuid, success: true };
       } catch (err) {
@@ -1784,6 +1787,7 @@ export default function ProkerV3AktivitasPage() {
 
   // Parallel Batch Reject Submit (Tolak Semua Proker)
   const handleSubmitBatchReject = async () => {
+    if (!canVerify || selectedActUuids.length === 0) return;
     if (!batchRejectReason.trim()) {
       addToast("error", "Alasan penolakan wajib diisi");
       return;
@@ -1802,26 +1806,9 @@ export default function ProkerV3AktivitasPage() {
     const reason = batchRejectReason.trim();
     const promises = selectedActUuids.map(async (uuid) => {
       try {
-        let roleToUse = curRole;
-        if (isAdmin) {
-          const act = activities.find((a) => a.UUID === uuid);
-          if (act) {
-            if (isProdi) {
-              const stUpms = (act.StatusUpms || "").toLowerCase().trim();
-              const stUpmf = (act.StatusUpmf || "").toLowerCase().trim();
-              if (stUpms !== "disetujui") roleToUse = "upms";
-              else if (stUpmf !== "disetujui") roleToUse = "upmf";
-              else roleToUse = "lpm";
-            } else {
-              const stUpml = (act.StatusUpml || "").toLowerCase().trim();
-              if (stUpml !== "disetujui") roleToUse = "upml";
-              else roleToUse = "lpm";
-            }
-          }
-        }
         const fd = new FormData();
         fd.append("status", "ditolak");
-        fd.append("role", roleToUse);
+        fd.append("role", curRole);
         fd.append("catatan_penolakan", reason);
         await apiClient.put(`/proker_v3/aktivitas/${uuid}/status`, fd);
         return { uuid, success: true };
@@ -1950,7 +1937,7 @@ export default function ProkerV3AktivitasPage() {
 
   // Single Row Accept
   const handleVerifySingleRow = async (act, targetRole) => {
-    if (!act?.UUID) return;
+    if (!canVerify || !act?.UUID) return;
     const roleToUse = targetRole || (isAnggaran ? "anggaran" : curRole);
     setVerifyingRowUuid(act.UUID);
     setRowErrors((prev) => {
@@ -1984,6 +1971,7 @@ export default function ProkerV3AktivitasPage() {
 
   // Single Row Reject
   const handleOpenSingleRejectModal = (act, targetRole) => {
+    if (!canVerify) return;
     setActToReject(act);
     setRejectRole(targetRole || (isAnggaran ? "anggaran" : curRole));
     setSingleRejectReason("");
@@ -1991,6 +1979,7 @@ export default function ProkerV3AktivitasPage() {
   };
 
   const handleSubmitSingleReject = async () => {
+    if (!canVerify) return;
     if (!singleRejectReason.trim()) {
       addToast("error", "Alasan penolakan wajib diisi");
       return;
@@ -2621,7 +2610,7 @@ export default function ProkerV3AktivitasPage() {
           </div>
 
           {/* Batch Action Banner if items selected */}
-          {selectedActUuids.length > 0 && (
+          {selectedActUuids.length > 0 && showBatchCheckbox && (
             <div className="bg-linear-to-r from-purple-50 via-indigo-50 to-blue-50 border-b border-purple-200 px-5 py-3 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
               <div className="flex items-center gap-2.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse" />
@@ -2641,34 +2630,38 @@ export default function ProkerV3AktivitasPage() {
               </div>
 
               <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={handleBatchTerima}
-                  disabled={isBatchProcessing}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow transition cursor-pointer disabled:opacity-50"
-                  title="Terima semua aktivitas yang dipilih secara paralel"
-                >
-                  {isBatchProcessing ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Check className="w-4 h-4" />
-                  )}
-                  <span>Terima Semua Proker</span>
-                </button>
+                {canVerify && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleBatchTerima}
+                      disabled={isBatchProcessing}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow transition cursor-pointer disabled:opacity-50"
+                      title="Terima semua aktivitas yang dipilih secara paralel"
+                    >
+                      {isBatchProcessing ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      <span>Terima Semua Proker</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBatchRejectReason("");
-                    setBatchRejectModalOpen(true);
-                  }}
-                  disabled={isBatchProcessing}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm hover:shadow transition cursor-pointer disabled:opacity-50"
-                  title="Tolak semua aktivitas yang dipilih dengan alasan"
-                >
-                  <X className="w-4 h-4" />
-                  <span>Tolak Semua Proker</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBatchRejectReason("");
+                        setBatchRejectModalOpen(true);
+                      }}
+                      disabled={isBatchProcessing}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm hover:shadow transition cursor-pointer disabled:opacity-50"
+                      title="Tolak semua aktivitas yang dipilih dengan alasan"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Tolak Semua Proker</span>
+                    </button>
+                  </>
+                )}
 
                 {canRevisiActDraft && (
                   <button
@@ -2695,7 +2688,7 @@ export default function ProkerV3AktivitasPage() {
             <table className="w-full text-left text-xs">
               <thead className="bg-gray-50/80 text-gray-600 font-bold border-b border-gray-100 uppercase tracking-wider text-[11px]">
                 <tr>
-                  {canVerify && (
+                  {showBatchCheckbox && (
                     <th className="py-3 px-3 w-10 text-center">
                       <input
                         type="checkbox"
@@ -2747,7 +2740,7 @@ export default function ProkerV3AktivitasPage() {
                   <tr>
                     <td
                       colSpan={
-                        canVerify
+                        showBatchCheckbox
                           ? isEvaluatorOrAnggaran
                             ? 9
                             : 11
@@ -2799,6 +2792,36 @@ export default function ProkerV3AktivitasPage() {
                     const rCount = rSlotSet.size;
                     const isSelected = selectedActUuids.includes(act.UUID);
                     const rowError = rowErrors[act.UUID];
+                    const canShowDraftBtn =
+                      canRevisiActDraft && actStatusStr !== "draft";
+                    const isTerimaAnggaranAct =
+                      isProkerAccAnggaran ||
+                      (act.StatusAnggaran || "").toLowerCase() ===
+                        "terima_anggaran" ||
+                      actStatusStr === "terima_anggaran";
+                    const canShowBatalActSwitch =
+                      !isAdmin &&
+                      isLevelUser &&
+                      !isUpmUser &&
+                      hasAssignedTarget &&
+                      isYearMatch &&
+                      isTerimaAnggaranAct &&
+                      isProkerBatalActive;
+                    const hasVerifyAction =
+                      !isAdmin &&
+                      [
+                        "upml",
+                        "upmf",
+                        "fakultas",
+                        "upms",
+                        "evaluator",
+                        "lpm",
+                      ].includes(curRole);
+                    const hasAnyRowAction =
+                      hasVerifyAction ||
+                      canShowDraftBtn ||
+                      canAddAktivitas ||
+                      canShowBatalActSwitch;
 
                     return (
                       <Fragment key={act.UUID}>
@@ -2810,7 +2833,7 @@ export default function ProkerV3AktivitasPage() {
                           }`}
                         >
                           {/* Checkbox column before No */}
-                          {canVerify && (
+                          {showBatchCheckbox && (
                             <td className="py-3.5 px-3 text-center">
                               <input
                                 type="checkbox"
@@ -3002,6 +3025,30 @@ export default function ProkerV3AktivitasPage() {
                                     </div>
                                   );
                                 })()}
+
+                                {/* Catatan Revisi Anggaran */}
+                                {(() => {
+                                  const catatanRevisi = (
+                                    act.CatatanRevisiAnggaran ||
+                                    act.catatan_revisi_anggaran ||
+                                    ""
+                                  ).trim();
+                                  if (!catatanRevisi) return null;
+                                  return (
+                                    <div
+                                      className="mt-1.5 w-full max-w-[230px] ml-auto rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-left font-sans shadow-2xs whitespace-normal"
+                                      title={catatanRevisi}
+                                    >
+                                      <div className="flex items-center gap-1 text-[10px] font-bold text-amber-900">
+                                        <FileText className="w-3 h-3 text-amber-800 shrink-0" />
+                                        <span>Catatan Revisi</span>
+                                      </div>
+                                      <p className="mt-0.5 text-[11px] leading-snug text-amber-950 break-words whitespace-pre-wrap">
+                                        {catatanRevisi}
+                                      </p>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             )}
 
@@ -3151,275 +3198,192 @@ export default function ProkerV3AktivitasPage() {
 
                           {/* Aksi */}
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-2">
-                              {/* 1. UPML VERIFY / REJECT ACTION */}
-                              {curRole === "upml" && (
-                                <>
-                                  {isProdi ? (
-                                    <span className="text-[11px] text-gray-400 italic">
-                                      Khusus Non-Prodi
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleVerifySingleRow(act, "upml")
-                                        }
-                                        disabled={
-                                          verifyingRowUuid === act.UUID ||
-                                          isBatchProcessing
-                                        }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                        title="Setujui verifikasi UPML"
-                                      >
-                                        {verifyingRowUuid === act.UUID ? (
-                                          <RefreshCw className="w-3 h-3 animate-spin" />
-                                        ) : (
-                                          <Check className="w-3 h-3" />
-                                        )}
-                                        <span>Verifikasi</span>
-                                      </button>
+                            {hasAnyRowAction ? (
+                              <div className="flex items-center justify-center gap-2">
+                                {/* 1. UPML VERIFY / REJECT ACTION */}
+                                {!isAdmin && curRole === "upml" && (
+                                  <>
+                                    {isProdi ? (
+                                      <span className="text-[11px] text-gray-400 italic">
+                                        Khusus Non-Prodi
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleVerifySingleRow(act, "upml")
+                                          }
+                                          disabled={
+                                            verifyingRowUuid === act.UUID ||
+                                            isBatchProcessing
+                                          }
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                          title="Setujui verifikasi UPML"
+                                        >
+                                          {verifyingRowUuid === act.UUID ? (
+                                            <RefreshCw className="w-3 h-3 animate-spin" />
+                                          ) : (
+                                            <Check className="w-3 h-3" />
+                                          )}
+                                          <span>Verifikasi</span>
+                                        </button>
 
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleOpenSingleRejectModal(
-                                            act,
-                                            "upml",
-                                          )
-                                        }
-                                        disabled={
-                                          verifyingRowUuid === act.UUID ||
-                                          isBatchProcessing
-                                        }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                        title="Tolak verifikasi UPML"
-                                      >
-                                        <X className="w-3 h-3" />
-                                        <span>Tolak</span>
-                                      </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleOpenSingleRejectModal(
+                                              act,
+                                              "upml",
+                                            )
+                                          }
+                                          disabled={
+                                            verifyingRowUuid === act.UUID ||
+                                            isBatchProcessing
+                                          }
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                          title="Tolak verifikasi UPML"
+                                        >
+                                          <X className="w-3 h-3" />
+                                          <span>Tolak</span>
+                                        </button>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* 2. UPMF VERIFY / REJECT ACTION */}
+                                {!isAdmin &&
+                                  (curRole === "upmf" ||
+                                    curRole === "fakultas") && (
+                                    <>
+                                      {!isProdi ? (
+                                        <span className="text-[11px] text-gray-400 italic">
+                                          Non-Prodi
+                                        </span>
+                                      ) : (
+                                        (() => {
+                                          const isUpmsApproved =
+                                            (act.StatusUpms || "")
+                                              .toLowerCase()
+                                              .trim() === "disetujui";
+                                          return (
+                                            <>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleVerifySingleRow(
+                                                    act,
+                                                    "upmf",
+                                                  )
+                                                }
+                                                disabled={
+                                                  !isUpmsApproved ||
+                                                  verifyingRowUuid === act.UUID ||
+                                                  isBatchProcessing
+                                                }
+                                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                                title={
+                                                  !isUpmsApproved
+                                                    ? "Menunggu persetujuan UPMS terlebih dahulu"
+                                                    : "Setujui verifikasi Fakultas (UPMF)"
+                                                }
+                                              >
+                                                {verifyingRowUuid === act.UUID ? (
+                                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                                ) : (
+                                                  <Check className="w-3 h-3" />
+                                                )}
+                                                <span>Verifikasi</span>
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleOpenSingleRejectModal(
+                                                    act,
+                                                    "upmf",
+                                                  )
+                                                }
+                                                disabled={
+                                                  !isUpmsApproved ||
+                                                  verifyingRowUuid === act.UUID ||
+                                                  isBatchProcessing
+                                                }
+                                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                                title={
+                                                  !isUpmsApproved
+                                                    ? "Menunggu persetujuan UPMS terlebih dahulu"
+                                                    : "Tolak verifikasi Fakultas (UPMF)"
+                                                }
+                                              >
+                                                <X className="w-3 h-3" />
+                                                <span>Tolak</span>
+                                              </button>
+                                            </>
+                                          );
+                                        })()
+                                      )}
                                     </>
                                   )}
-                                </>
-                              )}
 
-                              {/* 2. UPMF VERIFY / REJECT ACTION */}
-                              {(curRole === "upmf" ||
-                                curRole === "fakultas") && (
-                                <>
-                                  {!isProdi ? (
-                                    <span className="text-[11px] text-gray-400 italic">
-                                      Non-Prodi
-                                    </span>
-                                  ) : (
-                                    (() => {
-                                      const isUpmsApproved =
-                                        (act.StatusUpms || "")
-                                          .toLowerCase()
-                                          .trim() === "disetujui";
-                                      return (
-                                        <>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              handleVerifySingleRow(act, "upmf")
-                                            }
-                                            disabled={
-                                              !isUpmsApproved ||
-                                              verifyingRowUuid === act.UUID ||
-                                              isBatchProcessing
-                                            }
-                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                            title={
-                                              !isUpmsApproved
-                                                ? "Menunggu persetujuan UPMS terlebih dahulu"
-                                                : "Setujui verifikasi Fakultas (UPMF)"
-                                            }
-                                          >
-                                            {verifyingRowUuid === act.UUID ? (
-                                              <RefreshCw className="w-3 h-3 animate-spin" />
-                                            ) : (
-                                              <Check className="w-3 h-3" />
-                                            )}
-                                            <span>Verifikasi</span>
-                                          </button>
+                                {/* 3. UPMS VERIFY / REJECT ACTION */}
+                                {!isAdmin && curRole === "upms" && (
+                                  <>
+                                    {!isProdi ? (
+                                      <span className="text-[11px] text-gray-400 italic">
+                                        Khusus Prodi
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleVerifySingleRow(act, "upms")
+                                          }
+                                          disabled={
+                                            verifyingRowUuid === act.UUID ||
+                                            isBatchProcessing
+                                          }
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                          title="Setujui verifikasi UPMS"
+                                        >
+                                          {verifyingRowUuid === act.UUID ? (
+                                            <RefreshCw className="w-3 h-3 animate-spin" />
+                                          ) : (
+                                            <Check className="w-3 h-3" />
+                                          )}
+                                          <span>Verifikasi</span>
+                                        </button>
 
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              handleOpenSingleRejectModal(
-                                                act,
-                                                "upmf",
-                                              )
-                                            }
-                                            disabled={
-                                              !isUpmsApproved ||
-                                              verifyingRowUuid === act.UUID ||
-                                              isBatchProcessing
-                                            }
-                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                            title={
-                                              !isUpmsApproved
-                                                ? "Menunggu persetujuan UPMS terlebih dahulu"
-                                                : "Tolak verifikasi Fakultas (UPMF)"
-                                            }
-                                          >
-                                            <X className="w-3 h-3" />
-                                            <span>Tolak</span>
-                                          </button>
-                                        </>
-                                      );
-                                    })()
-                                  )}
-                                </>
-                              )}
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleOpenSingleRejectModal(
+                                              act,
+                                              "upms",
+                                            )
+                                          }
+                                          disabled={
+                                            verifyingRowUuid === act.UUID ||
+                                            isBatchProcessing
+                                          }
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                          title="Tolak verifikasi UPMS"
+                                        >
+                                          <X className="w-3 h-3" />
+                                          <span>Tolak</span>
+                                        </button>
+                                      </>
+                                    )}
+                                  </>
+                                )}
 
-                              {/* 3. UPMS VERIFY / REJECT ACTION */}
-                              {curRole === "upms" && (
-                                <>
-                                  {!isProdi ? (
-                                    <span className="text-[11px] text-gray-400 italic">
-                                      Khusus Prodi
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleVerifySingleRow(act, "upms")
-                                        }
-                                        disabled={
-                                          verifyingRowUuid === act.UUID ||
-                                          isBatchProcessing
-                                        }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                        title="Setujui verifikasi UPMS"
-                                      >
-                                        {verifyingRowUuid === act.UUID ? (
-                                          <RefreshCw className="w-3 h-3 animate-spin" />
-                                        ) : (
-                                          <Check className="w-3 h-3" />
-                                        )}
-                                        <span>Verifikasi</span>
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleOpenSingleRejectModal(
-                                            act,
-                                            "upms",
-                                          )
-                                        }
-                                        disabled={
-                                          verifyingRowUuid === act.UUID ||
-                                          isBatchProcessing
-                                        }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                        title="Tolak verifikasi UPMS"
-                                      >
-                                        <X className="w-3 h-3" />
-                                        <span>Tolak</span>
-                                      </button>
-                                    </>
-                                  )}
-                                </>
-                              )}
-
-                              {/* 4. LPM / EVALUATOR VERIFY / REJECT ACTION */}
-                              {(curRole === "evaluator" || curRole === "lpm") &&
-                                (() => {
-                                  const stUpms = (
-                                    act.StatusUpms ||
-                                    act.status_upms ||
-                                    ""
-                                  )
-                                    .toLowerCase()
-                                    .trim();
-                                  const stUpmf = (
-                                    act.StatusUpmf ||
-                                    act.status_upmf ||
-                                    ""
-                                  )
-                                    .toLowerCase()
-                                    .trim();
-                                  const stUpml = (
-                                    act.StatusUpml ||
-                                    act.status_upml ||
-                                    ""
-                                  )
-                                    .toLowerCase()
-                                    .trim();
-                                  const canLpmAct = isProdi
-                                    ? stUpms === "disetujui" &&
-                                      stUpmf === "disetujui"
-                                    : stUpml === "disetujui";
-                                  const disabledReason = isProdi
-                                    ? stUpms !== "disetujui"
-                                      ? "Menunggu persetujuan UPMS terlebih dahulu"
-                                      : "Menunggu persetujuan UPMF terlebih dahulu"
-                                    : "Menunggu persetujuan UPML terlebih dahulu";
-
-                                  return (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleVerifySingleRow(act, "lpm")
-                                        }
-                                        disabled={
-                                          !canLpmAct ||
-                                          verifyingRowUuid === act.UUID ||
-                                          isBatchProcessing
-                                        }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                        title={
-                                          !canLpmAct
-                                            ? disabledReason
-                                            : "Setujui verifikasi LPM"
-                                        }
-                                      >
-                                        {verifyingRowUuid === act.UUID ? (
-                                          <RefreshCw className="w-3 h-3 animate-spin" />
-                                        ) : (
-                                          <Check className="w-3 h-3" />
-                                        )}
-                                        <span>Verifikasi</span>
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleOpenSingleRejectModal(
-                                            act,
-                                            "lpm",
-                                          )
-                                        }
-                                        disabled={
-                                          !canLpmAct ||
-                                          verifyingRowUuid === act.UUID ||
-                                          isBatchProcessing
-                                        }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                        title={
-                                          !canLpmAct
-                                            ? disabledReason
-                                            : "Tolak verifikasi LPM"
-                                        }
-                                      >
-                                        <X className="w-3 h-3" />
-                                        <span>Tolak</span>
-                                      </button>
-                                    </>
-                                  );
-                                })()}
-
-                              {/* 5. ADMIN VERIFY / REJECT ACTION */}
-                              {isAdmin &&
-                                (() => {
-                                  let roleToUse = "lpm";
-                                  if (isProdi) {
+                                {/* 4. LPM / EVALUATOR VERIFY / REJECT ACTION */}
+                                {!isAdmin &&
+                                  (curRole === "evaluator" ||
+                                    curRole === "lpm") &&
+                                  (() => {
                                     const stUpms = (
                                       act.StatusUpms ||
                                       act.status_upms ||
@@ -3434,12 +3398,6 @@ export default function ProkerV3AktivitasPage() {
                                     )
                                       .toLowerCase()
                                       .trim();
-                                    if (stUpms !== "disetujui")
-                                      roleToUse = "upms";
-                                    else if (stUpmf !== "disetujui")
-                                      roleToUse = "upmf";
-                                    else roleToUse = "lpm";
-                                  } else {
                                     const stUpml = (
                                       act.StatusUpml ||
                                       act.status_upml ||
@@ -3447,61 +3405,72 @@ export default function ProkerV3AktivitasPage() {
                                     )
                                       .toLowerCase()
                                       .trim();
-                                    if (stUpml !== "disetujui")
-                                      roleToUse = "upml";
-                                    else roleToUse = "lpm";
-                                  }
+                                    const canLpmAct = isProdi
+                                      ? stUpms === "disetujui" &&
+                                        stUpmf === "disetujui"
+                                      : stUpml === "disetujui";
+                                    const disabledReason = isProdi
+                                      ? stUpms !== "disetujui"
+                                        ? "Menunggu persetujuan UPMS terlebih dahulu"
+                                        : "Menunggu persetujuan UPMF terlebih dahulu"
+                                      : "Menunggu persetujuan UPML terlebih dahulu";
 
-                                  return (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleVerifySingleRow(act, roleToUse)
-                                        }
-                                        disabled={
-                                          verifyingRowUuid === act.UUID ||
-                                          isBatchProcessing
-                                        }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                        title={`Setujui tahap ${roleToUse.toUpperCase()} (Admin)`}
-                                      >
-                                        {verifyingRowUuid === act.UUID ? (
-                                          <RefreshCw className="w-3 h-3 animate-spin" />
-                                        ) : (
-                                          <Check className="w-3 h-3" />
-                                        )}
-                                        <span>
-                                          Verifikasi ({roleToUse.toUpperCase()})
-                                        </span>
-                                      </button>
+                                    return (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleVerifySingleRow(act, "lpm")
+                                          }
+                                          disabled={
+                                            !canLpmAct ||
+                                            verifyingRowUuid === act.UUID ||
+                                            isBatchProcessing
+                                          }
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                          title={
+                                            !canLpmAct
+                                              ? disabledReason
+                                              : "Setujui verifikasi LPM"
+                                          }
+                                        >
+                                          {verifyingRowUuid === act.UUID ? (
+                                            <RefreshCw className="w-3 h-3 animate-spin" />
+                                          ) : (
+                                            <Check className="w-3 h-3" />
+                                          )}
+                                          <span>Verifikasi</span>
+                                        </button>
 
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleOpenSingleRejectModal(
-                                            act,
-                                            roleToUse,
-                                          )
-                                        }
-                                        disabled={
-                                          verifyingRowUuid === act.UUID ||
-                                          isBatchProcessing
-                                        }
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                        title={`Tolak tahap ${roleToUse.toUpperCase()} (Admin)`}
-                                      >
-                                        <X className="w-3 h-3" />
-                                        <span>Tolak</span>
-                                      </button>
-                                    </>
-                                  );
-                                })()}
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleOpenSingleRejectModal(
+                                              act,
+                                              "lpm",
+                                            )
+                                          }
+                                          disabled={
+                                            !canLpmAct ||
+                                            verifyingRowUuid === act.UUID ||
+                                            isBatchProcessing
+                                          }
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                          title={
+                                            !canLpmAct
+                                              ? disabledReason
+                                              : "Tolak verifikasi LPM"
+                                          }
+                                        >
+                                          <X className="w-3 h-3" />
+                                          <span>Tolak</span>
+                                        </button>
+                                      </>
+                                    );
+                                  })()}
 
-                              {/* Option to revert single activity to draft (bukan untuk upml, upmf, upms) */}
-                              {canRevisiActDraft &&
-                                (act.Status || "").toLowerCase() !==
-                                  "draft" && (
+                                {/* Option to revert single activity to draft (bukan untuk upml, upmf, upms) */}
+                                {canShowDraftBtn && (
                                   <button
                                     type="button"
                                     onClick={() => handleRevisiActDraft(act)}
@@ -3517,56 +3486,37 @@ export default function ProkerV3AktivitasPage() {
                                   </button>
                                 )}
 
-                              {/* User with assigned target Actions: Edit, Delete */}
-                              {canAddAktivitas && (
-                                <>
-                                  <Tooltip title="Edit Aktivitas">
-                                    <button
-                                      type="button"
-                                      onClick={() => openEditActivity(act)}
-                                      className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 hover:border-amber-300 transition cursor-pointer shadow-2xs"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                  </Tooltip>
-                                  {!isActApprovedByEvaluator(act) && (
-                                    <Tooltip title="Hapus Aktivitas">
+                                {/* User with assigned target Actions: Edit, Delete */}
+                                {canAddAktivitas && (
+                                  <>
+                                    <Tooltip title="Edit Aktivitas">
                                       <button
                                         type="button"
-                                        onClick={() => {
-                                          setActToDelete(act);
-                                          setConfirmDelete(true);
-                                        }}
-                                        className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 hover:border-rose-300 transition cursor-pointer shadow-2xs"
+                                        onClick={() => openEditActivity(act)}
+                                        className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 hover:border-amber-300 transition cursor-pointer shadow-2xs"
                                       >
-                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <Pencil className="w-3.5 h-3.5" />
                                       </button>
                                     </Tooltip>
-                                  )}
-                                </>
-                              )}
+                                    {!isActApprovedByEvaluator(act) && (
+                                      <Tooltip title="Hapus Aktivitas">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActToDelete(act);
+                                            setConfirmDelete(true);
+                                          }}
+                                          className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 hover:border-rose-300 transition cursor-pointer shadow-2xs"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </Tooltip>
+                                    )}
+                                  </>
+                                )}
 
-                              {/* Switch Proker / Aktivitas Batal untuk User Fakultas Unit */}
-                              {(() => {
-                                const isTerimaAnggaranAct =
-                                  isProkerAccAnggaran ||
-                                  (act.StatusAnggaran || "").toLowerCase() ===
-                                    "terima_anggaran" ||
-                                  (act.Status || "").toLowerCase() ===
-                                    "terima_anggaran";
-
-                                const canShowBatalActSwitch =
-                                  !isAdmin &&
-                                  isLevelUser &&
-                                  !isUpmUser &&
-                                  hasAssignedTarget &&
-                                  isYearMatch &&
-                                  isTerimaAnggaranAct &&
-                                  isJadwalProkerOpen;
-
-                                if (!canShowBatalActSwitch) return null;
-
-                                return (
+                                {/* Switch Proker / Aktivitas Batal untuk User Fakultas Unit */}
+                                {canShowBatalActSwitch && (
                                   <div className="flex items-center gap-1.5 pl-1 border-l border-gray-200">
                                     <label
                                       className="text-[11px] font-medium text-gray-700 select-none cursor-pointer flex items-center gap-1.5"
@@ -3616,9 +3566,13 @@ export default function ProkerV3AktivitasPage() {
                                       })()}
                                     </label>
                                   </div>
-                                );
-                              })()}
-                            </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 font-mono text-xs italic">
+                                -
+                              </span>
+                            )}
                           </td>
                         </tr>
 
@@ -3626,7 +3580,7 @@ export default function ProkerV3AktivitasPage() {
                         {isEvaluatorOrAnggaran && (
                           <ProkerV3AktivitasEvaluatorRow
                             activity={act}
-                            colSpan={canVerify ? 9 : 8}
+                            colSpan={showBatchCheckbox ? 9 : 8}
                             prokerDocuments={prokerDocuments}
                             isVerifierRoleOrLevel={isVerifikatorRoleOrLevel}
                           />
@@ -3637,7 +3591,7 @@ export default function ProkerV3AktivitasPage() {
                           <tr className="bg-rose-50/95 border-b border-rose-200 transition animate-in fade-in duration-200">
                             <td
                               colSpan={
-                                canVerify
+                                showBatchCheckbox
                                   ? isEvaluatorOrAnggaran
                                     ? 9
                                     : 11
@@ -4961,7 +4915,10 @@ export default function ProkerV3AktivitasPage() {
 
                   {/* Input Biaya Realisasi */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-800 mb-1.5">
+                    <label
+                      htmlFor="revisi-anggaran-input"
+                      className="block text-xs font-bold text-gray-800 mb-1.5"
+                    >
                       Biaya Realisasi Anggaran (Rp)
                       <span className="text-rose-500 font-bold ml-1">*</span>
                     </label>
@@ -4970,19 +4927,21 @@ export default function ProkerV3AktivitasPage() {
                         Rp
                       </div>
                       <input
+                        id="revisi-anggaran-input"
+                        name="realisasi"
                         type="text"
                         inputMode="numeric"
                         required
                         value={revisiAnggaranStr}
                         onChange={handleRevisiInputChange}
                         placeholder="0"
-                        className="w-full pl-11 pr-4 py-2.5 text-sm font-mono font-bold text-emerald-700 rounded-xl border border-gray-200 bg-gray-50/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition shadow-2xs"
+                        className="w-full pl-11 pr-4 py-2.5 text-sm font-mono font-bold text-emerald-700 rounded-xl border border-gray-300 bg-gray-50/30 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-600/25 focus:border-amber-600 transition shadow-2xs"
                       />
                     </div>
                     <div className="flex items-center justify-between mt-1.5">
-                      <p className="text-[11px] text-gray-500">
+                      <p className="text-[11px] text-gray-600">
                         Terbilang:{" "}
-                        <span className="font-semibold text-gray-700">
+                        <span className="font-semibold text-gray-800">
                           {formatRupiah(revisiAnggaran)}
                         </span>
                       </p>
@@ -4997,7 +4956,7 @@ export default function ProkerV3AktivitasPage() {
                                 new Intl.NumberFormat("id-ID").format(val),
                               );
                             }}
-                            className="text-[10px] font-bold text-amber-600 hover:text-amber-800 hover:underline cursor-pointer"
+                            className="text-[11px] font-bold text-amber-800 hover:text-amber-950 hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 cursor-pointer"
                           >
                             Samakan dgn Anggaran Awal
                           </button>
@@ -5007,17 +4966,17 @@ export default function ProkerV3AktivitasPage() {
 
                   {/* Selisih Penyesuaian */}
                   {actToRevisi?.Anggaran && (
-                    <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3 text-xs flex items-center justify-between">
+                    <div className="bg-amber-50 border border-amber-300/80 rounded-xl p-3 text-xs flex items-center justify-between">
                       <span className="text-amber-900 font-medium">
                         Selisih Penyesuaian:
                       </span>
                       <span
                         className={`font-mono font-bold ${
                           revisiAnggaran > Number(actToRevisi.Anggaran)
-                            ? "text-rose-600"
+                            ? "text-rose-700"
                             : revisiAnggaran < Number(actToRevisi.Anggaran)
-                              ? "text-emerald-600"
-                              : "text-gray-600"
+                              ? "text-emerald-800"
+                              : "text-gray-700"
                         }`}
                       >
                         {revisiAnggaran > Number(actToRevisi.Anggaran)
@@ -5029,6 +4988,39 @@ export default function ProkerV3AktivitasPage() {
                       </span>
                     </div>
                   )}
+
+                  {/* Input Catatan Revisi Anggaran */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <label
+                        htmlFor="revisi-catatan-input"
+                        className="block text-xs font-bold text-gray-800"
+                      >
+                        Catatan Revisi Anggaran
+                        <span className="ml-1.5 text-[11px] font-medium text-gray-600">
+                          (Opsional)
+                        </span>
+                      </label>
+                      {revisiCatatan.trim() !== "" && (
+                        <button
+                          type="button"
+                          onClick={() => setRevisiCatatan("")}
+                          className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 hover:underline rounded px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 cursor-pointer"
+                        >
+                          Hapus catatan
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      id="revisi-catatan-input"
+                      name="catatan_revisi_anggaran"
+                      rows={3}
+                      value={revisiCatatan}
+                      onChange={(e) => setRevisiCatatan(e.target.value)}
+                      placeholder="Tuliskan alasan atau rincian penyesuaian biaya realisasi anggaran..."
+                      className="w-full px-3.5 py-2.5 text-xs text-gray-900 placeholder:text-gray-500 rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-600/25 focus:border-amber-600 transition shadow-2xs resize-y"
+                    />
+                  </div>
 
                   {/* Footer Buttons */}
                   <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2.5">
@@ -5199,6 +5191,34 @@ export default function ProkerV3AktivitasPage() {
                       )}
                     </div>
                   )}
+
+                  {/* Catatan Revisi Realisasi Anggaran Banner */}
+                  {!isVerifikatorRoleOrLevel &&
+                    rabDetailAct &&
+                    (rabDetailAct.CatatanRevisiAnggaran ||
+                      rabDetailAct.catatan_revisi_anggaran) && (
+                      <div className="bg-amber-50 border border-amber-300 rounded-2xl px-4 py-3 flex items-start gap-2.5 text-xs shadow-2xs">
+                        <Coins className="w-4 h-4 text-amber-800 mt-0.5 shrink-0" />
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="font-bold text-amber-900 flex flex-wrap items-center gap-x-2">
+                            <span>Catatan Revisi Anggaran</span>
+                            {hasRealisasiAnggaran(rabDetailAct) && (
+                              <span className="font-mono text-[11px] font-bold text-emerald-800">
+                                (Realisasi:{" "}
+                                {formatRupiah(
+                                  getRealisasiAnggaran(rabDetailAct),
+                                )}
+                                )
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-amber-950 text-[11px] leading-relaxed whitespace-pre-wrap break-words">
+                            {rabDetailAct.CatatanRevisiAnggaran ||
+                              rabDetailAct.catatan_revisi_anggaran}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                   {/* Pagu Anggaran Banner (Case 1 vs Case 2) */}
                   {proker?.HasPagu && Number(proker?.PaguUnit) > 0 ? (

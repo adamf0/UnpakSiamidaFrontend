@@ -92,8 +92,10 @@ export function AuthProvider({ children }) {
    * USER INFO
    * ====================== */
 
-  const fetchUserInfo = async () => {
-    setUserLoading(true);
+  const fetchUserInfo = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setUserLoading(true);
+    }
     setUserError(null);
 
     try {
@@ -141,9 +143,10 @@ export function AuthProvider({ children }) {
 
       setUser({
         uuid: data.UUID,
+        username: data.Username || "",
         name: data.Name,
         level: data.Level,
-        email: data.Email,
+        email: data.Email || "",
         fakultas_unit: data.FakultasUnit,
         nama_fakultas_unit: data.NamaFakultasUnit || data.nama_fakultas_unit || "",
         extra_role: extraRoles,
@@ -158,7 +161,9 @@ export function AuthProvider({ children }) {
       setUserError("Session expired");
       throw err;
     } finally {
-      setUserLoading(false);
+      if (!silent) {
+        setUserLoading(false);
+      }
     }
   };
 

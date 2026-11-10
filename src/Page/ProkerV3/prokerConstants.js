@@ -148,6 +148,169 @@ export function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+export const TIMELINE_MAX_FILE_SIZE_MB = 150;
+export const TIMELINE_MAX_FILE_SIZE_BYTES =
+  TIMELINE_MAX_FILE_SIZE_MB * 1024 * 1024;
+export const TIMELINE_ALLOWED_FILE_EXTENSIONS = [
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".csv",
+  ".txt",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".zip",
+  ".rar",
+];
+export const TIMELINE_FILE_ACCEPT = TIMELINE_ALLOWED_FILE_EXTENSIONS.join(",");
+export const TIMELINE_ALLOWED_FILE_TYPES_LABEL =
+  "PDF, Word (.doc/.docx), Excel (.xls/.xlsx), PowerPoint (.ppt/.pptx), Gambar (.jpg/.jpeg/.png/.webp), CSV, TXT, Arsip (.zip/.rar)";
+export const TIMELINE_MAX_LINK_URL_LENGTH = 500;
+
+export function validateTimelineUploadFile(file) {
+  if (!file) {
+    return { valid: false, error: "Pilih berkas file terlebih dahulu." };
+  }
+  const fileName = String(file.name || "").trim();
+  const dotIdx = fileName.lastIndexOf(".");
+  const ext = dotIdx >= 0 ? fileName.slice(dotIdx).toLowerCase() : "";
+  if (!TIMELINE_ALLOWED_FILE_EXTENSIONS.includes(ext)) {
+    return {
+      valid: false,
+      error: `Format file "${ext || "tanpa ekstensi"}" tidak didukung. Gunakan: ${TIMELINE_ALLOWED_FILE_TYPES_LABEL}.`,
+    };
+  }
+  if (
+    typeof file.size === "number" &&
+    file.size > TIMELINE_MAX_FILE_SIZE_BYTES
+  ) {
+    return {
+      valid: false,
+      error: `Ukuran file (${formatBytes(file.size)}) melebihi batas maksimal ${TIMELINE_MAX_FILE_SIZE_MB} MB.`,
+    };
+  }
+  return { valid: true, error: "" };
+}
+
+export function validateTimelineLinkUrl(rawUrl) {
+  const trimmed = String(rawUrl || "").trim();
+  if (!trimmed) {
+    return {
+      valid: false,
+      normalizedUrl: "",
+      fallbackName: "",
+      error: "URL tautan bukti wajib diisi.",
+    };
+  }
+  if (/\s/.test(trimmed)) {
+    return {
+      valid: false,
+      normalizedUrl: "",
+      fallbackName: "",
+      error: "URL tautan tidak boleh mengandung spasi.",
+    };
+  }
+  if (trimmed.length > TIMELINE_MAX_LINK_URL_LENGTH) {
+    return {
+      valid: false,
+      normalizedUrl: "",
+      fallbackName: "",
+      error: `URL tautan maksimal ${TIMELINE_MAX_LINK_URL_LENGTH} karakter.`,
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return {
+      valid: false,
+      normalizedUrl: "",
+      fallbackName: "",
+      error:
+        "Format URL tidak valid. Gunakan awalan http:// atau https:// (contoh: https://drive.google.com/...).",
+    };
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return {
+      valid: false,
+      normalizedUrl: "",
+      fallbackName: "",
+      error: "URL tautan bukti harus diawali http:// atau https://.",
+    };
+  }
+
+  const host = parsed.hostname || "";
+  if (!host || (!host.includes(".") && host.toLowerCase() !== "localhost")) {
+    return {
+      valid: false,
+      normalizedUrl: "",
+      fallbackName: "",
+      error: "Nama host URL tidak valid. Pastikan alamat domain lengkap.",
+    };
+  }
+
+  const normalizedUrl = parsed.toString();
+  if (normalizedUrl.length > TIMELINE_MAX_LINK_URL_LENGTH) {
+    return {
+      valid: false,
+      normalizedUrl: "",
+      fallbackName: "",
+      error: `URL tautan maksimal ${TIMELINE_MAX_LINK_URL_LENGTH} karakter.`,
+    };
+  }
+
+  const cleanPath =
+    parsed.pathname && parsed.pathname !== "/"
+      ? parsed.pathname.replace(/\/+$/, "")
+      : "";
+  const fallbackName = (parsed.host + cleanPath).slice(0, 255);
+  return { valid: true, normalizedUrl, fallbackName, error: "" };
+}
+
+export function isTimelineLinkRecord(file) {
+  if (!file) return false;
+  const fileType = String(file.FileType || file.file_type || "")
+    .trim()
+    .toLowerCase();
+  const fileUrl = String(file.FileURL || file.file_url || "").trim();
+  const filePath = String(file.File || file.file || "").trim();
+  return (
+    fileType === "link" ||
+    /^https?:\/\//i.test(fileUrl) ||
+    /^https?:\/\//i.test(filePath)
+  );
+}
+
+export function resolveProkerFileUrl(file, apiBaseUrl = "") {
+  if (!file) return null;
+  const rawUrl = String(file.FileURL || file.file_url || "").trim();
+  const rawFile = String(file.File || file.file || "").trim();
+  const candidate = rawUrl || rawFile;
+  if (!candidate) return null;
+  if (/^https?:\/\//i.test(candidate)) {
+    return candidate;
+  }
+  const base = String(apiBaseUrl || "").replace(/\/+$/, "");
+  if (
+    !rawUrl &&
+    rawFile &&
+    !rawFile.includes("/") &&
+    !rawFile.includes("\\")
+  ) {
+    return `${base}/upload/proker_v3/${rawFile}`;
+  }
+  const normalizedPath = candidate.replace(/^\.\//, "").replace(/^\/+/, "");
+  return `${base}/${normalizedPath}`;
+}
+
 export function formatRupiah(val, isCensored = false) {
   if (isCensored) return "***";
   if (!val && val !== 0) return "-";

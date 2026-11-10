@@ -283,7 +283,7 @@ export default function AccountUserPage() {
                 },
                 {
                   key: "UserAbac",
-                  label: "Rule Tambahan (ABAC)",
+                  label: "Rule Tambahan",
                   searchable: false,
                   renderKey: (row) => {
                     const uId = row?.ID || row?.id;

@@ -41,6 +41,7 @@ import ProkerV3AktivitasPage from "./Page/ProkerV3/ProkerV3AktivitasPage";
 import ProkerV3DokumenPage from "./Page/ProkerV3/ProkerV3DokumenPage";
 import ProkerV3TimelinePage from "./Page/ProkerV3/ProkerV3TimelinePage";
 import JadwalProkerV3Page from "./Page/ProkerV3/JadwalProkerV3Page";
+import SettingsPage from "./Page/Settings/SettingsPage";
 
 export default function App() {
   return (
@@ -123,6 +124,7 @@ export default function App() {
 
                       <Route path="/berita_acara/:target" element={<BeritaAcaraPage />} />
                       <Route path="/report" element={<ReportPage />} />
+                      <Route path="/settings" element={<SettingsPage />} />
 
                       {/* <Route element={<AccessControlRoute checkAccess={(auth) => (auth.isAdminAccess() || auth.isCompanyAccess())} />}>
                         <Route path="/users" element={<UserPage />} />

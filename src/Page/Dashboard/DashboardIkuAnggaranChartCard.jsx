@@ -12,13 +12,27 @@ import { fetchFakultasUnits } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import { useContent } from "@/Providers/ContentProvider";
 import {
-  SANKEY_DATA,
+  buildScopedSankeyData,
   calculateSankeySummary,
   getCorrelationMatrix,
   getRootCauseAnalysis,
   getAllFakultasProdiUnitOptions,
+  buildSankeyEdges,
+  getSankeyConnectedNodeIds,
+  V_FAKULTAS_UNIT_ROWS,
   MOCK_ALIASES,
 } from "./sankeyMockData";
+import {
+  filterUnitsForAccessScope,
+  buildStructuralBoundaryFromUnits,
+  getUnitUuid,
+  getUnitRawId,
+  getUnitType,
+  getUnitName,
+  getUnitJenjang,
+  getUnitKodeFakultas,
+  getUnitMockAlias,
+} from "./ikuAnggaranScope";
 import { Dialog, Transition } from "@headlessui/react";
 import {
   Workflow,
@@ -232,7 +246,26 @@ function SearchableDropdown({
   );
 }
 
-export default function DashboardIkuAnggaranChartCard() {
+export default function DashboardIkuAnggaranChartCard({
+  accessScope = null,
+  realFakultasUnitsProp = null,
+}) {
+  const effectiveAccessScope = useMemo(
+    () =>
+      accessScope || {
+        allowed: true,
+        mode: "all",
+        roleType: "admin",
+        scopeLabel: "Administrator (Semua Unit)",
+        targetUnit: null,
+        facultyKode: null,
+        facultyName: null,
+        boundaryId: null,
+      },
+    [accessScope],
+  );
+  const isFacultyScoped = effectiveAccessScope.mode === "fakultas";
+
   // Navigation Tabs: 'matrix' | 'rootcause' | 'boundary' | 'sankey'
   const [activeTab, setActiveTab] = useState("matrix");
 
@@ -262,8 +295,12 @@ export default function DashboardIkuAnggaranChartCard() {
   const [activePathId, setActivePathId] = useState(null);
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
 
-  // Data riil v_fakultas_unit dari API /fakultasunits?mode=all
-  const [realFakultasUnits, setRealFakultasUnits] = useState([]);
+  // Data riil v_fakultas_unit dari API /fakultasunits?mode=all (prioritaskan prop dari DashboardPage)
+  const [fetchedFakultasUnits, setFetchedFakultasUnits] = useState([]);
+  const realFakultasUnits =
+    Array.isArray(realFakultasUnitsProp) && realFakultasUnitsProp.length > 0
+      ? realFakultasUnitsProp
+      : fetchedFakultasUnits;
 
   // Filter Tahun Master dari master_tahun
   const { positionYear, activeYear } = useContent();
@@ -307,11 +344,14 @@ export default function DashboardIkuAnggaranChartCard() {
   }, [positionYear, masterYears]);
 
   useEffect(() => {
+    if (Array.isArray(realFakultasUnitsProp) && realFakultasUnitsProp.length > 0) {
+      return;
+    }
     let active = true;
     fetchFakultasUnits()
       .then((data) => {
         if (active && Array.isArray(data) && data.length > 0) {
-          setRealFakultasUnits(data);
+          setFetchedFakultasUnits(data);
         }
       })
       .catch((err) => {
@@ -320,7 +360,7 @@ export default function DashboardIkuAnggaranChartCard() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [realFakultasUnitsProp]);
 
   // Global Kegiatan Detail Modal
   const [selectedKegiatanDetail, setSelectedKegiatanDetail] = useState(null);
@@ -330,8 +370,27 @@ export default function DashboardIkuAnggaranChartCard() {
   const nodeRefs = useRef({});
   const [ribbonPaths, setRibbonPaths] = useState([]);
 
-  // Ringkasan Eksekutif
-  const summary = useMemo(() => calculateSankeySummary(selectedYear), [selectedYear]);
+  // Dataset dan daftar unit/prodi sesuai cakupan akses user
+  const scopedDataset = useMemo(
+    () => buildScopedSankeyData(effectiveAccessScope),
+    [effectiveAccessScope],
+  );
+
+  const allUnitsSource = useMemo(
+    () => (realFakultasUnits.length > 0 ? realFakultasUnits : V_FAKULTAS_UNIT_ROWS),
+    [realFakultasUnits],
+  );
+
+  const scopedAllUnits = useMemo(
+    () => filterUnitsForAccessScope(allUnitsSource, effectiveAccessScope),
+    [allUnitsSource, effectiveAccessScope],
+  );
+
+  // Ringkasan Eksekutif (terfilter sesuai scope)
+  const summary = useMemo(
+    () => calculateSankeySummary(selectedYear, scopedDataset),
+    [selectedYear, scopedDataset],
+  );
 
   // Options untuk Tab 1: Filter Kuadran (Gambar 1)
   const quadrantFilterOptions = useMemo(
@@ -401,9 +460,38 @@ export default function DashboardIkuAnggaranChartCard() {
 
   // Data Matriks Korelasi
   const correlationItems = useMemo(
-    () => getCorrelationMatrix(matrixLevel),
-    [matrixLevel],
+    () => getCorrelationMatrix(matrixLevel, scopedDataset),
+    [matrixLevel, scopedDataset],
   );
+
+  // Jumlah item per level & sebaran kuadran untuk header/tombol level
+  const prodiCorrelationItems = useMemo(
+    () => getCorrelationMatrix("prodi", scopedDataset),
+    [scopedDataset],
+  );
+
+  const ikuCorrelationCount = scopedDataset.rootIkus.length;
+  const boundaryCorrelationCount = scopedDataset.boundaries.length;
+  const prodiCorrelationCount = prodiCorrelationItems.length;
+
+  const scopedUnitCount = useMemo(
+    () => scopedAllUnits.filter((u) => getUnitType(u) === "unit").length,
+    [scopedAllUnits],
+  );
+  const scopedProdiCount = useMemo(
+    () => scopedAllUnits.filter((u) => getUnitType(u) === "prodi").length,
+    [scopedAllUnits],
+  );
+
+  const quadrantCounts = useMemo(() => {
+    const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    prodiCorrelationItems.forEach((item) => {
+      if (counts[item.kuadran] !== undefined) {
+        counts[item.kuadran] += 1;
+      }
+    });
+    return counts;
+  }, [prodiCorrelationItems]);
 
   // Filtered Matriks Korelasi
   const filteredMatrixItems = useMemo(() => {
@@ -418,21 +506,32 @@ export default function DashboardIkuAnggaranChartCard() {
         rootCauseTargetId,
         rootCauseFocusType,
         rootCauseStatusFilter,
-        realFakultasUnits,
+        scopedAllUnits,
+        scopedDataset,
+        effectiveAccessScope,
       ),
-    [rootCauseTargetId, rootCauseFocusType, rootCauseStatusFilter, realFakultasUnits],
+    [
+      rootCauseTargetId,
+      rootCauseFocusType,
+      rootCauseStatusFilter,
+      scopedAllUnits,
+      scopedDataset,
+      effectiveAccessScope,
+    ],
   );
 
-  // Options untuk Tab 2: Pilih Entitas (Gambar 3 - dengan opsi "Semua Prodi")
+  // Options untuk Tab 2: Pilih Entitas (terfilter sesuai scope user)
   const rootCauseEntityOptions = useMemo(() => {
     if (rootCauseFocusType === "iku") {
       return [
         {
           id: "all",
-          label: "Semua Target IKU",
+          label: isFacultyScoped
+            ? `Semua Target IKU (${effectiveAccessScope.facultyName})`
+            : "Semua Target IKU",
           badge: "SEMUA",
         },
-        ...SANKEY_DATA.rootIkus.map((r) => ({
+        ...scopedDataset.rootIkus.map((r) => ({
           id: r.id,
           label: `${r.kode} - ${r.nama}`,
           badge: "IKU",
@@ -440,53 +539,73 @@ export default function DashboardIkuAnggaranChartCard() {
       ];
     }
     if (rootCauseFocusType === "boundary") {
+      const boundaryOpts =
+        scopedDataset.boundaries.length > 0
+          ? scopedDataset.boundaries.map((b) => ({
+              id: b.id,
+              label: b.nama,
+              badge: b.type === "fakultas" ? "FAKULTAS" : "UNIT",
+            }))
+          : isFacultyScoped
+          ? [
+              {
+                id: effectiveAccessScope.boundaryId || "all",
+                label: effectiveAccessScope.facultyName,
+                badge: "FAKULTAS",
+              },
+            ]
+          : [];
       return [
         {
           id: "all",
-          label: "Semua Fakultas & Unit",
+          label: isFacultyScoped
+            ? `Semua di ${effectiveAccessScope.facultyName}`
+            : "Semua Fakultas & Unit",
           badge: "SEMUA",
         },
-        ...SANKEY_DATA.boundaries.map((b) => ({
-          id: b.id,
-          label: b.nama,
-          badge: b.type === "fakultas" ? "FAKULTAS" : "UNIT",
-        })),
+        ...boundaryOpts.filter((b) => b.id !== "all"),
       ];
     }
     // 'prodi'
-    const prodiSources =
-      realFakultasUnits.length > 0
-        ? realFakultasUnits.filter((u) => u.type === "prodi")
-        : getAllFakultasProdiUnitOptions().filter((o) => o.type === "prodi");
+    const prodiSources = scopedAllUnits.filter((u) => getUnitType(u) === "prodi");
 
     return [
       {
         id: "all",
-        label: "Semua Prodi",
+        label: isFacultyScoped
+          ? `Semua Prodi (${effectiveAccessScope.facultyName})`
+          : "Semua Prodi",
         badge: "SEMUA",
       },
       ...prodiSources.map((p) => {
-        const jenjangUpper = p.jenjang ? String(p.jenjang).toUpperCase() : "";
-        const cleanName = p.nama_fak_prod_unit || p.pureName || p.label || p.nama || "";
+        const jenjangUpper = getUnitJenjang(p).toUpperCase();
+        const cleanName = getUnitName(p);
         const hasJenjang =
           jenjangUpper && cleanName.toUpperCase().includes(`(${jenjangUpper})`);
         const label =
           jenjangUpper && !hasJenjang ? `${cleanName} (${jenjangUpper})` : cleanName;
+        const uuid = getUnitUuid(p);
+        const rawId = getUnitRawId(p) ?? p.id;
         return {
-          id: p.id || p.uuid,
-          uuid: p.uuid,
-          legacyId:
-            p.legacyId ||
-            (MOCK_ALIASES && (MOCK_ALIASES[p.uuid] || MOCK_ALIASES[String(p.id)])),
-          rawId: p.rawId || p.id,
-          label: label,
+          id: uuid || String(p.id ?? rawId),
+          uuid,
+          legacyId: getUnitMockAlias(p),
+          rawId,
+          label,
           badge: "PRODI",
           type: "prodi",
-          prodiId: p.prodiId || p.id,
+          prodiId: p.prodiId || uuid || String(rawId),
         };
       }),
     ];
-  }, [rootCauseFocusType, realFakultasUnits]);
+  }, [
+    rootCauseFocusType,
+    scopedDataset,
+    scopedAllUnits,
+    isFacultyScoped,
+    effectiveAccessScope.facultyName,
+    effectiveAccessScope.boundaryId,
+  ]);
 
   // Options untuk Tab 2: Filter Status
   const rootCauseStatusOptions = useMemo(
@@ -507,13 +626,13 @@ export default function DashboardIkuAnggaranChartCard() {
   const sankeyIkuOptions = useMemo(
     () => [
       { id: "all", label: "Semua IKU", badge: "SEMUA" },
-      ...SANKEY_DATA.rootIkus.map((r) => ({
+      ...scopedDataset.rootIkus.map((r) => ({
         id: r.id,
         label: `${r.kode} - ${r.nama}`,
         badge: "IKU",
       })),
     ],
-    [],
+    [scopedDataset.rootIkus],
   );
 
   // Options untuk Tab 4: Filter Status Kegiatan (Terlaksana, Belum Terlaksana, Draf)
@@ -542,77 +661,165 @@ export default function DashboardIkuAnggaranChartCard() {
     [],
   );
 
-  // Options untuk Tab 4: Filter Fakultas/Unit Dropdown Search
-  // (Gambar 4 - diambil langsung dari v_fakultas_unit dengan badge=type dan nama=nama_fakultas_prodi_unit (jenjang))
+  // Options untuk Tab 4: Filter Fakultas/Unit/Prodi Dropdown Search (terfilter sesuai scope user)
   const sankeyFakultasProdiOptions = useMemo(() => {
-    const rawList =
-      realFakultasUnits.length > 0
-        ? realFakultasUnits.map((u) => {
-            const typeUpper = String(u.type || u.badge || "unit").toUpperCase();
-            const jenjangUpper = u.jenjang ? String(u.jenjang).toUpperCase() : "";
-            const cleanName = u.nama_fak_prod_unit || u.pureName || u.label || u.nama || "";
-            const hasJenjang =
-              jenjangUpper && cleanName.toUpperCase().includes(`(${jenjangUpper})`);
-            const label =
-              jenjangUpper && !hasJenjang ? `${cleanName} (${jenjangUpper})` : cleanName;
-            return {
-              id: String(u.uuid || u.id),
-              rawId: u.rawId || u.id,
-              uuid: u.uuid,
-              legacyId:
-                u.legacyId ||
-                (MOCK_ALIASES &&
-                  (MOCK_ALIASES[u.uuid] || MOCK_ALIASES[String(u.id)])),
-              label: label,
-              badge: typeUpper,
-              type: u.type,
-              jenjang: u.jenjang,
-              name: cleanName,
-            };
-          })
-        : getAllFakultasProdiUnitOptions().map((o) => ({
-            id: o.id,
-            rawId: o.rawId,
-            uuid: o.uuid,
-            label: o.label,
-            badge: o.badgeText,
-            type: o.type,
-            jenjang: o.jenjang,
-            name: o.nama,
-          }));
-
-    const typeWeight = {
-      fakultas: 1,
-      prodi: 2,
-      unit: 3,
-    };
-
-    const sortedList = [...rawList].sort((a, b) => {
-      const wA = typeWeight[(a.type || "").toLowerCase()] || 99;
-      const wB = typeWeight[(b.type || "").toLowerCase()] || 99;
-      if (wA !== wB) return wA - wB;
-      const nameCmp = (a.name || a.label || "").localeCompare(
-        b.name || b.label || "",
-        "id",
-        { sensitivity: "base" },
-      );
-      if (nameCmp !== 0) return nameCmp;
-      return (a.jenjang || "").localeCompare(b.jenjang || "");
-    });
+    const normalizedList = getAllFakultasProdiUnitOptions(scopedAllUnits).map((o) => ({
+      id: o.id,
+      rawId: o.rawId,
+      uuid: o.uuid,
+      legacyId: o.legacyId,
+      label: o.label,
+      badge: o.badgeText,
+      type: o.type,
+      jenjang: o.jenjang,
+      kodeFakultas: o.kodeFakultas,
+      name: o.nama,
+    }));
 
     return [
       {
         id: "all",
-        label: "Semua Fakultas, Unit & Prodi",
+        label: isFacultyScoped
+          ? `Semua Unit & Prodi (${effectiveAccessScope.facultyName})`
+          : "Semua Fakultas, Unit & Prodi",
         badge: "SEMUA",
       },
-      ...sortedList,
+      ...normalizedList,
     ];
-  }, [realFakultasUnits]);
+  }, [scopedAllUnits, isFacultyScoped, effectiveAccessScope.facultyName]);
+
+  // Sinkronkan filter dan pilihan entitas saat scope akses atau dataset berubah
+  useEffect(() => {
+    setSelectedMatrixItem(null);
+    setSelectedKegiatanDetail(null);
+    setActivePathId(null);
+    setHoveredNodeId(null);
+    if (isFacultyScoped) {
+      const bId =
+        scopedDataset.boundaries[0]?.id ||
+        effectiveAccessScope.boundaryId ||
+        `structural-${effectiveAccessScope.facultyKode || "fak"}`;
+      setExpandedBoundaries({ [bId]: true });
+    }
+  }, [
+    isFacultyScoped,
+    effectiveAccessScope.roleType,
+    effectiveAccessScope.facultyKode,
+    effectiveAccessScope.boundaryId,
+    scopedDataset.boundaries,
+  ]);
+
+  useEffect(() => {
+    if (rootCauseTargetId === "all") return;
+    const isValid = rootCauseEntityOptions.some(
+      (o) =>
+        o.id === rootCauseTargetId ||
+        o.uuid === rootCauseTargetId ||
+        o.legacyId === rootCauseTargetId,
+    );
+    if (!isValid) {
+      const fallbackId =
+        rootCauseFocusType === "iku" && scopedDataset.rootIkus.length > 0
+          ? scopedDataset.rootIkus[0].id
+          : rootCauseFocusType === "boundary" && scopedDataset.boundaries.length > 0
+          ? scopedDataset.boundaries[0].id
+          : "all";
+      setRootCauseTargetId(fallbackId);
+    }
+  }, [
+    rootCauseTargetId,
+    rootCauseFocusType,
+    rootCauseEntityOptions,
+    scopedDataset.rootIkus,
+    scopedDataset.boundaries,
+  ]);
+
+  useEffect(() => {
+    if (
+      selectedIkuFilter !== "all" &&
+      !sankeyIkuOptions.some((o) => o.id === selectedIkuFilter)
+    ) {
+      setSelectedIkuFilter("all");
+    }
+  }, [selectedIkuFilter, sankeyIkuOptions]);
+
+  useEffect(() => {
+    if (selectedFakultasProdiFilter === "all") return;
+    const exists = sankeyFakultasProdiOptions.some(
+      (o) =>
+        o.id === selectedFakultasProdiFilter ||
+        o.uuid === selectedFakultasProdiFilter ||
+        o.legacyId === selectedFakultasProdiFilter,
+    );
+    if (!exists) {
+      setSelectedFakultasProdiFilter("all");
+    }
+  }, [selectedFakultasProdiFilter, sankeyFakultasProdiOptions]);
+
+  // Daftar Boundary untuk Tab 3 (terfilter sesuai scope + pencarian + status)
+  const displayBoundaries = useMemo(() => {
+    let list = [...scopedDataset.boundaries];
+    if (isFacultyScoped && list.length === 0) {
+      const structural = buildStructuralBoundaryFromUnits(
+        effectiveAccessScope,
+        scopedAllUnits,
+      );
+      if (structural) list = [structural];
+    }
+
+    const unitsOnly = scopedAllUnits.filter((u) => getUnitType(u) === "unit");
+
+    return list
+      .map((b) => {
+        const unitListForB =
+          b.type === "fakultas"
+            ? (isFacultyScoped
+                ? unitsOnly
+                : unitsOnly.filter((u) => getUnitKodeFakultas(u) === b.kode)
+              ).map((u) => ({
+                id: getUnitUuid(u) || String(u.id ?? getUnitRawId(u)),
+                nama: getUnitName(u),
+              }))
+            : [];
+        return { ...b, unitList: unitListForB };
+      })
+      .filter((b) => {
+        const q = boundarySearchQuery.trim().toLowerCase();
+        const boundaryKegs = scopedDataset.kegiatans.filter(
+          (k) => k.boundaryId === b.id,
+        );
+        if (
+          boundaryStatusFilter !== "all" &&
+          !boundaryKegs.some((k) => k.status === boundaryStatusFilter)
+        ) {
+          return false;
+        }
+        if (!q) return true;
+        const hitHeader =
+          b.nama?.toLowerCase().includes(q) ||
+          b.namaSingkat?.toLowerCase().includes(q) ||
+          b.unitFakultas?.nama?.toLowerCase().includes(q);
+        const hitUnit = b.unitList?.some((u) => u.nama.toLowerCase().includes(q));
+        const hitProdi = b.jenjangList?.some((j) =>
+          j.prodis?.some((p) => p.nama.toLowerCase().includes(q)),
+        );
+        const hitKeg = boundaryKegs.some((k) =>
+          k.namaKegiatan?.toLowerCase().includes(q),
+        );
+        return Boolean(hitHeader || hitUnit || hitProdi || hitKeg);
+      });
+  }, [
+    scopedDataset,
+    isFacultyScoped,
+    effectiveAccessScope,
+    scopedAllUnits,
+    boundarySearchQuery,
+    boundaryStatusFilter,
+  ]);
 
   // Filtered dataset untuk Tab 4 (Sankey Flow)
   const filteredSankeyData = useMemo(() => {
-    let kegiatans = SANKEY_DATA.kegiatans;
+    let kegiatans = scopedDataset.kegiatans;
 
     // Filter IKU
     if (selectedIkuFilter !== "all") {
@@ -625,11 +832,19 @@ export default function DashboardIkuAnggaranChartCard() {
         (o) => o.id === selectedFakultasProdiFilter,
       );
       const selName = (selectedOpt?.name || selectedOpt?.label || "").toLowerCase();
+      const optLegacy =
+        selectedOpt?.legacyId || getUnitMockAlias(selectedOpt) || "";
 
       kegiatans = kegiatans.filter((k) => {
         if (
           k.boundaryId === selectedFakultasProdiFilter ||
           k.prodiId === selectedFakultasProdiFilter
+        ) {
+          return true;
+        }
+        if (
+          optLegacy &&
+          (k.boundaryId === optLegacy || k.prodiId === optLegacy)
         ) {
           return true;
         }
@@ -648,8 +863,7 @@ export default function DashboardIkuAnggaranChartCard() {
         if (
           selName &&
           ((k.boundaryNama && k.boundaryNama.toLowerCase().includes(selName)) ||
-            (k.prodiNama && k.prodiNama.toLowerCase().includes(selName)) ||
-            (k.namaKegiatan && k.namaKegiatan.toLowerCase().includes(selName)))
+            (k.prodiNama && k.prodiNama.toLowerCase().includes(selName)))
         ) {
           return true;
         }
@@ -663,34 +877,34 @@ export default function DashboardIkuAnggaranChartCard() {
     }
 
     const activeBoundaryIds = new Set(kegiatans.map((k) => k.boundaryId));
-    const boundaries = SANKEY_DATA.boundaries.filter((b) =>
+    const boundaries = scopedDataset.boundaries.filter((b) =>
       activeBoundaryIds.has(b.id),
     );
 
     const activeAktIds = new Set(kegiatans.map((k) => k.aktivitasId));
-    const aktivitas = SANKEY_DATA.aktivitas.filter((a) =>
+    const aktivitas = scopedDataset.aktivitas.filter((a) =>
       activeAktIds.has(a.id),
     );
 
     const activeProkerIds = new Set(aktivitas.map((a) => a.prokerId));
-    const prokers = SANKEY_DATA.prokers.filter((p) =>
+    const prokers = scopedDataset.prokers.filter((p) =>
       activeProkerIds.has(p.id),
     );
 
     const activeIndIds = new Set(kegiatans.map((k) => k.indikatorId));
-    const indikators = SANKEY_DATA.indikators.filter((i) =>
+    const indikators = scopedDataset.indikators.filter((i) =>
       activeIndIds.has(i.id),
     );
 
     const activeChildIds = new Set(
       kegiatans.map((k) => k.subIkuId).filter(Boolean),
     );
-    const childIkus = SANKEY_DATA.childIkus.filter((c) =>
+    const childIkus = scopedDataset.childIkus.filter((c) =>
       activeChildIds.has(c.id),
     );
 
     const activeRootIds = new Set(kegiatans.map((k) => k.ikuId));
-    const rootIkus = SANKEY_DATA.rootIkus.filter((r) => activeRootIds.has(r.id));
+    const rootIkus = scopedDataset.rootIkus.filter((r) => activeRootIds.has(r.id));
 
     return {
       rootIkus,
@@ -701,7 +915,13 @@ export default function DashboardIkuAnggaranChartCard() {
       aktivitas,
       kegiatans,
     };
-  }, [selectedIkuFilter, selectedFakultasProdiFilter, selectedKegiatanStatusFilter]);
+  }, [
+    selectedIkuFilter,
+    selectedFakultasProdiFilter,
+    selectedKegiatanStatusFilter,
+    scopedDataset,
+    sankeyFakultasProdiOptions,
+  ]);
 
   // Toggle boundary expand/collapse
   const toggleBoundary = (id) => {
@@ -727,92 +947,77 @@ export default function DashboardIkuAnggaranChartCard() {
     setSelectedMatrixItem(null);
   };
 
-  // Traversal untuk Sankey Highlighting
-  const connectedNodeIds = useMemo(() => {
-    const targetId = hoveredNodeId || activePathId;
-    if (!targetId) return null;
+  const isSankeyFiltered =
+    selectedIkuFilter !== "all" ||
+    selectedFakultasProdiFilter !== "all" ||
+    selectedKegiatanStatusFilter !== "all";
 
-    const set = new Set();
-    set.add(targetId);
+  const sankeyEdges = useMemo(
+    () => buildSankeyEdges(filteredSankeyData, { isFiltered: isSankeyFiltered }),
+    [filteredSankeyData, isSankeyFiltered],
+  );
 
-    const { kegiatans } = SANKEY_DATA;
+  // Node yang diklik (terkunci) mendapat prioritas di atas hover agar tidak bergeser saat scroll horizontal
+  const focusTargetId = activePathId || hoveredNodeId;
 
-    const addKegChain = (k) => {
-      set.add(k.id);
-      if (k.ikuId) set.add(k.ikuId);
-      if (k.subIkuId) set.add(k.subIkuId);
-      if (k.indikatorId) set.add(k.indikatorId);
-      if (k.boundaryId) set.add(k.boundaryId);
-      if (k.aktivitasId) set.add(k.aktivitasId);
-      const akt = SANKEY_DATA.aktivitas.find((a) => a.id === k.aktivitasId);
-      if (akt?.prokerId) set.add(akt.prokerId);
-    };
+  const connectedNodeIds = useMemo(
+    () => getSankeyConnectedNodeIds(focusTargetId, filteredSankeyData, sankeyEdges),
+    [focusTargetId, filteredSankeyData, sankeyEdges],
+  );
 
-    const foundKeg = kegiatans.find((k) => k.id === targetId);
-    if (foundKeg) {
-      addKegChain(foundKeg);
-      set.add("node-dana-utama");
-      return set;
-    }
+  const handleToggleNodeFocus = useCallback((nodeId) => {
+    setActivePathId((prev) => (prev === nodeId ? null : nodeId));
+  }, []);
 
-    if (targetId.startsWith("akt-")) {
-      const matchKegs = kegiatans.filter((k) => k.aktivitasId === targetId);
-      matchKegs.forEach(addKegChain);
-      const akt = SANKEY_DATA.aktivitas.find((a) => a.id === targetId);
-      if (akt?.prokerId) {
-        set.add(akt.prokerId);
-        const p = SANKEY_DATA.prokers.find((px) => px.id === akt.prokerId);
-        if (p?.boundaryId) set.add(p.boundaryId);
+  const getNodeFocusClass = useCallback(
+    (nodeId) => {
+      if (!connectedNodeIds) return "";
+      if (focusTargetId === nodeId) {
+        return "ring-2 ring-indigo-500 border-indigo-500 shadow-md";
       }
-      set.add("node-dana-utama");
-      return set;
+      if (connectedNodeIds.has(nodeId)) {
+        return "border-indigo-400 ring-1 ring-indigo-300 shadow-sm";
+      }
+      return "opacity-35";
+    },
+    [connectedNodeIds, focusTargetId],
+  );
+
+  const activePathLabel = useMemo(() => {
+    if (!activePathId) return null;
+    if (activePathId === "node-dana-utama") {
+      return isFacultyScoped ? scopedDataset.danaUtama.judul : "Dana Universitas";
     }
+    const r = filteredSankeyData.rootIkus.find((x) => x.id === activePathId);
+    if (r) return `${r.kode} - ${r.nama}`;
+    const c = filteredSankeyData.childIkus.find((x) => x.id === activePathId);
+    if (c) return `${c.kode} - ${c.nama}`;
+    const ind = filteredSankeyData.indikators.find((x) => x.id === activePathId);
+    if (ind) return `${ind.kode} - ${ind.nama}`;
+    const b = filteredSankeyData.boundaries.find((x) => x.id === activePathId);
+    if (b) return b.nama;
+    const p = filteredSankeyData.prokers.find((x) => x.id === activePathId);
+    if (p) return p.namaProker;
+    const a = filteredSankeyData.aktivitas.find((x) => x.id === activePathId);
+    if (a) return a.namaAktivitas;
+    return activePathId;
+  }, [activePathId, filteredSankeyData, isFacultyScoped, scopedDataset.danaUtama.judul]);
 
-    if (targetId.startsWith("proker-")) {
-      const akts = SANKEY_DATA.aktivitas.filter((a) => a.prokerId === targetId);
-      const aktIds = new Set(akts.map((a) => a.id));
-      const matchKegs = kegiatans.filter((k) => aktIds.has(k.aktivitasId));
-      matchKegs.forEach(addKegChain);
-      akts.forEach((a) => set.add(a.id));
-      const p = SANKEY_DATA.prokers.find((px) => px.id === targetId);
-      if (p?.boundaryId) set.add(p.boundaryId);
-      set.add("node-dana-utama");
-      return set;
+  useEffect(() => {
+    if (!activePathId || activePathId === "node-dana-utama") return;
+    const stillVisible =
+      filteredSankeyData.rootIkus.some((x) => x.id === activePathId) ||
+      filteredSankeyData.childIkus.some((x) => x.id === activePathId) ||
+      filteredSankeyData.indikators.some((x) => x.id === activePathId) ||
+      filteredSankeyData.boundaries.some((x) => x.id === activePathId) ||
+      filteredSankeyData.prokers.some((x) => x.id === activePathId) ||
+      filteredSankeyData.aktivitas.some((x) => x.id === activePathId);
+    if (!stillVisible) {
+      setActivePathId(null);
     }
+  }, [activePathId, filteredSankeyData]);
 
-    if (targetId.startsWith("fak-") || targetId.startsWith("unit-")) {
-      const matchKegs = kegiatans.filter((k) => k.boundaryId === targetId);
-      matchKegs.forEach(addKegChain);
-      set.add("node-dana-utama");
-      return set;
-    }
-
-    if (targetId.startsWith("ind-")) {
-      const matchKegs = kegiatans.filter((k) => k.indikatorId === targetId);
-      matchKegs.forEach(addKegChain);
-      set.add("node-dana-utama");
-      return set;
-    }
-
-    if (targetId.startsWith("child-iku") || targetId === "child-sub11") {
-      const matchKegs = kegiatans.filter((k) => k.subIkuId === targetId);
-      matchKegs.forEach(addKegChain);
-      set.add("node-dana-utama");
-      return set;
-    }
-
-    if (targetId.startsWith("root-iku")) {
-      const matchKegs = kegiatans.filter((k) => k.ikuId === targetId);
-      matchKegs.forEach(addKegChain);
-      set.add("node-dana-utama");
-      return set;
-    }
-
-    set.add("node-dana-utama");
-    return set;
-  }, [hoveredNodeId, activePathId]);
-
-  // Menghitung pita Bezier SVG Sankey
+  // Menghitung pita Bezier SVG Sankey (hanya geometri, hover/klik di-render tanpa hitung ulang DOM)
   const recalculateRibbons = useCallback(() => {
     if (activeTab !== "sankey" || !containerRef.current) {
       setRibbonPaths([]);
@@ -820,11 +1025,10 @@ export default function DashboardIkuAnggaranChartCard() {
     }
 
     const containerRect = containerRef.current.getBoundingClientRect();
-    const newPaths = [];
 
     const getCenterRight = (id) => {
       const el = nodeRefs.current[id];
-      if (!el) return null;
+      if (!el || !el.isConnected) return null;
       const rect = el.getBoundingClientRect();
       return {
         x: rect.right - containerRect.left,
@@ -834,7 +1038,7 @@ export default function DashboardIkuAnggaranChartCard() {
 
     const getCenterLeft = (id) => {
       const el = nodeRefs.current[id];
-      if (!el) return null;
+      if (!el || !el.isConnected) return null;
       const rect = el.getBoundingClientRect();
       return {
         x: rect.left - containerRect.left,
@@ -843,197 +1047,46 @@ export default function DashboardIkuAnggaranChartCard() {
     };
 
     const makeBezier = (start, end) => {
-      const dx = (end.x - start.x) / 2;
+      const dx = Math.max(Math.abs(end.x - start.x) * 0.5, 24);
       return `M ${start.x} ${start.y} C ${start.x + dx} ${start.y}, ${end.x - dx} ${end.y}, ${end.x} ${end.y}`;
     };
 
-    // 1. Dana Utama -> Root IKUs
-    const danaPos = getCenterRight("node-dana-utama");
-    if (danaPos) {
-      filteredSankeyData.rootIkus.forEach((r) => {
-        const rootPos = getCenterLeft(r.id);
-        if (rootPos) {
-          const isActive =
-            connectedNodeIds &&
-            connectedNodeIds.has("node-dana-utama") &&
-            connectedNodeIds.has(r.id);
-          newPaths.push({
-            id: `path-dana-${r.id}`,
-            d: makeBezier(danaPos, rootPos),
-            color: r.color,
-            isActive: Boolean(isActive),
-          });
-        }
-      });
-    }
+    const newPaths = [];
 
-    // 2. IKU 1 -> Sub-IKUs
-    const iku1Pos = getCenterRight("root-iku-1");
-    if (iku1Pos) {
-      filteredSankeyData.childIkus.forEach((c) => {
-        const subPos = getCenterLeft(c.id);
-        if (subPos) {
-          const isActive =
-            connectedNodeIds &&
-            connectedNodeIds.has("root-iku-1") &&
-            connectedNodeIds.has(c.id);
-          newPaths.push({
-            id: `path-iku1-${c.id}`,
-            d: makeBezier(iku1Pos, subPos),
-            color: c.color,
-            isActive: Boolean(isActive),
-          });
-        }
-      });
-    }
-
-    // 3. Sub-IKUs -> Indikators
-    filteredSankeyData.childIkus.forEach((c) => {
-      const cPos = getCenterRight(c.id);
-      if (!cPos) return;
-      (c.indikatorIds || []).forEach((indId) => {
-        const indPos = getCenterLeft(indId);
-        if (indPos) {
-          const isActive =
-            connectedNodeIds &&
-            connectedNodeIds.has(c.id) &&
-            connectedNodeIds.has(indId);
-          newPaths.push({
-            id: `path-${c.id}-${indId}`,
-            d: makeBezier(cPos, indPos),
-            color: c.color,
-            isActive: Boolean(isActive),
-          });
-        }
-      });
-    });
-
-    // 4. Direct Root IKUs (IKU 2, 5, 7) -> Indikators
-    filteredSankeyData.rootIkus.forEach((r) => {
-      if (r.id === "root-iku-1") return;
-      const rPos = getCenterRight(r.id);
-      if (!rPos) return;
-      (r.indikatorIds || []).forEach((indId) => {
-        const indPos = getCenterLeft(indId);
-        if (indPos) {
-          const isActive =
-            connectedNodeIds &&
-            connectedNodeIds.has(r.id) &&
-            connectedNodeIds.has(indId);
-          newPaths.push({
-            id: `path-direct-${r.id}-${indId}`,
-            d: makeBezier(rPos, indPos),
-            color: r.color,
-            isActive: Boolean(isActive),
-          });
-        }
-      });
-    });
-
-    // 5. Indikators -> Boundaries
-    filteredSankeyData.indikators.forEach((ind) => {
-      const indPos = getCenterRight(ind.id);
-      if (!indPos) return;
-      (ind.boundaryIds || []).forEach((bId) => {
-        const bPos = getCenterLeft(bId);
-        if (bPos) {
-          const isActive =
-            connectedNodeIds &&
-            connectedNodeIds.has(ind.id) &&
-            connectedNodeIds.has(bId);
-          newPaths.push({
-            id: `path-${ind.id}-${bId}`,
-            d: makeBezier(indPos, bPos),
-            color: ind.color,
-            isActive: Boolean(isActive),
-          });
-        }
-      });
-    });
-
-    // 6. Boundaries -> Prokers
-    filteredSankeyData.boundaries.forEach((b) => {
-      const bPos = getCenterRight(b.id);
-      if (!bPos) return;
-      const boundaryProkers = filteredSankeyData.prokers.filter(
-        (p) => p.boundaryId === b.id
-      );
-      boundaryProkers.forEach((p) => {
-        const pPos = getCenterLeft(p.id);
-        if (pPos) {
-          const isActive =
-            connectedNodeIds &&
-            connectedNodeIds.has(b.id) &&
-            connectedNodeIds.has(p.id);
-          newPaths.push({
-            id: `path-${b.id}-${p.id}`,
-            d: makeBezier(bPos, pPos),
-            color: b.color || "#6366f1",
-            isActive: Boolean(isActive),
-          });
-        }
-      });
-    });
-
-    // 7. Prokers -> Aktivitas
-    filteredSankeyData.prokers.forEach((p) => {
-      const pPos = getCenterRight(p.id);
-      if (!pPos) return;
-      const bParent = filteredSankeyData.boundaries.find(
-        (b) => b.id === p.boundaryId
-      );
-      (p.aktivitasIds || []).forEach((aktId) => {
-        const aktPos = getCenterLeft(aktId);
-        if (aktPos) {
-          const isActive =
-            connectedNodeIds &&
-            connectedNodeIds.has(p.id) &&
-            connectedNodeIds.has(aktId);
-          newPaths.push({
-            id: `path-${p.id}-${aktId}`,
-            d: makeBezier(pPos, aktPos),
-            color: bParent?.color || "#8b5cf6",
-            isActive: Boolean(isActive),
-          });
-        }
-      });
-    });
-
-    // 8. Aktivitas -> Kegiatan
-    filteredSankeyData.aktivitas.forEach((a) => {
-      const aktPos = getCenterRight(a.id);
-      if (!aktPos) return;
-      const pParent = filteredSankeyData.prokers.find(
-        (p) => p.id === a.prokerId
-      );
-      const bParent = pParent
-        ? filteredSankeyData.boundaries.find((b) => b.id === pParent.boundaryId)
-        : null;
-      (a.kegiatanIds || []).forEach((kegId) => {
-        const kegPos = getCenterLeft(kegId);
-        if (kegPos) {
-          const isActive =
-            connectedNodeIds &&
-            connectedNodeIds.has(a.id) &&
-            connectedNodeIds.has(kegId);
-          newPaths.push({
-            id: `path-${a.id}-${kegId}`,
-            d: makeBezier(aktPos, kegPos),
-            color: bParent?.color || "#a855f7",
-            isActive: Boolean(isActive),
-          });
-        }
-      });
+    sankeyEdges.forEach((edge) => {
+      const start = getCenterRight(edge.fromId);
+      const end = getCenterLeft(edge.toId);
+      if (start && end) {
+        newPaths.push({
+          id: edge.id,
+          fromId: edge.fromId,
+          toId: edge.toId,
+          d: makeBezier(start, end),
+          color: edge.color,
+        });
+      }
     });
 
     setRibbonPaths(newPaths);
-  }, [activeTab, filteredSankeyData, connectedNodeIds]);
+  }, [activeTab, sankeyEdges]);
 
   useLayoutEffect(() => {
+    recalculateRibbons();
+    const raf = requestAnimationFrame(recalculateRibbons);
     const timer = setTimeout(recalculateRibbons, 120);
+    const stageEl = containerRef.current;
+    let resizeObserver = null;
+    if (stageEl && typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        recalculateRibbons();
+      });
+      resizeObserver.observe(stageEl);
+    }
     window.addEventListener("resize", recalculateRibbons);
     return () => {
+      cancelAnimationFrame(raf);
       clearTimeout(timer);
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", recalculateRibbons);
     };
   }, [recalculateRibbons]);
@@ -1046,34 +1099,57 @@ export default function DashboardIkuAnggaranChartCard() {
       <div className="p-6 border-gray-100 bg-gradient-to-r from-gray-50/80 via-white to-gray-50/60">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div>
+            {(effectiveAccessScope.roleType === "warek" ||
+              effectiveAccessScope.roleType === "fakultas") && (
+              <div
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border mb-2 ${
+                  effectiveAccessScope.roleType === "warek"
+                    ? "bg-indigo-50 text-indigo-800 border-indigo-200"
+                    : "bg-teal-50 text-teal-800 border-teal-200"
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                {effectiveAccessScope.roleType === "warek"
+                  ? `Akses Penuh Seluruh Universitas (${effectiveAccessScope.scopeLabel})`
+                  : `Cakupan Fakultas: ${effectiveAccessScope.facultyName} (${scopedUnitCount} Unit & ${scopedProdiCount} Prodi)`}
+              </div>
+            )}
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2.5">
               Matriks Korelasi &amp; Pelaporan Kinerja IKU Berbasis Anggaran
             </h2>
-            <p className="text-sm mt-1 max-w-3xl leading-relaxed">
-              Mengevaluasi korelasi penyerapan dana terhadap keterlaksanaan kerja riil, investigasi akar masalah (*Root Cause Tracing*), dan penataan hierarki unit pelaksana (*Boundary Unit &amp; Prodi*) — Periode Tahun Anggaran {selectedYear}.
+            <p className="text-sm text-gray-600 mt-1 max-w-3xl leading-relaxed">
+              Mengevaluasi korelasi penyerapan dana terhadap keterlaksanaan kerja riil, investigasi akar masalah (Root Cause Tracing), dan penataan hierarki unit pelaksana (Boundary Unit &amp; Prodi) pada Periode Tahun Anggaran {selectedYear}.
             </p>
           </div>
 
           {/* Quick Health Summary Pill */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="border border-emerald-600 px-3.5 py-2 rounded-xl text-left">
-              <div className="text-[11px] font-medium text-emerald-600">Optimal (Kuadran I)</div>
-              <div className="text-base font-bold text-emerald-500">11 Unit / Prodi</div>
+            <div className="border border-emerald-600 px-3.5 py-2 rounded-xl text-left bg-white">
+              <div className="text-[11px] font-semibold text-emerald-800">Optimal (Kuadran I)</div>
+              <div className="text-base font-bold text-emerald-700">
+                {quadrantCounts[1]} {isFacultyScoped ? "Prodi" : "Unit / Prodi"}
+              </div>
             </div>
-            <div className="border border-rose-600 px-3.5 py-2 rounded-xl text-left">
-              <div className="text-[11px] font-medium text-rose-600 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3 text-rose-500" />
+            <div className="border border-rose-600 px-3.5 py-2 rounded-xl text-left bg-white">
+              <div className="text-[11px] font-semibold text-rose-800 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 text-rose-700" />
                 Red Flag (Kuadran II)
               </div>
-              <div className="text-base font-bold text-rose-500">4 Unit / Prodi</div>
+              <div className="text-base font-bold text-rose-700">
+                {quadrantCounts[2]} {isFacultyScoped ? "Prodi" : "Unit / Prodi"}
+              </div>
             </div>
-            <div className="border border-amber-600 px-3.5 py-2 rounded-xl text-left">
-              <div className="text-[11px] font-medium text-amber-600">Mandek (Kuadran III)</div>
-              <div className="text-base font-bold text-amber-500">1 Unit / Prodi</div>
+            <div className="border border-amber-600 px-3.5 py-2 rounded-xl text-left bg-white">
+              <div className="text-[11px] font-semibold text-amber-800">Mandek (Kuadran III)</div>
+              <div className="text-base font-bold text-amber-800">
+                {quadrantCounts[3]} {isFacultyScoped ? "Prodi" : "Unit / Prodi"}
+              </div>
             </div>
-            <div className="border border-sky-600 px-3.5 py-2 rounded-xl text-left">
-              <div className="text-[11px] font-medium text-sky-600">Efisien (Kuadran IV)</div>
-              <div className="text-base font-bold text-sky-500">1 Unit / Prodi</div>
+            <div className="border border-sky-600 px-3.5 py-2 rounded-xl text-left bg-white">
+              <div className="text-[11px] font-semibold text-sky-800">Efisien (Kuadran IV)</div>
+              <div className="text-base font-bold text-sky-700">
+                {quadrantCounts[4]} {isFacultyScoped ? "Prodi" : "Unit / Prodi"}
+              </div>
             </div>
           </div>
         </div>
@@ -1082,13 +1158,21 @@ export default function DashboardIkuAnggaranChartCard() {
         <div className="mt-6 pt-5 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-white/5 border border-white/10 rounded-xl p-3.5">
             <div className="flex items-center justify-between text-xs mb-1">
-              <span>Total Pagu Universitas ({selectedYear})</span>
+              <span>
+                {isFacultyScoped
+                  ? `Total Pagu ${effectiveAccessScope.facultyName} (${selectedYear})`
+                  : `Total Pagu Universitas (${selectedYear})`}
+              </span>
               <Coins className="w-4 h-4 text-indigo-400" />
             </div>
             <div className="text-lg font-bold tracking-tight">
               {formatRupiah(summary.totalDana)}
             </div>
-            <div className="text-[11px] mt-0.5">Alokasi seluruh target IKU</div>
+            <div className="text-[11px] mt-0.5">
+              {isFacultyScoped
+                ? "Alokasi unit & prodi fakultas"
+                : "Alokasi seluruh target IKU"}
+            </div>
           </div>
 
           <div className="bg-white/5 border border-white/10 rounded-xl p-3.5">
@@ -1130,10 +1214,14 @@ export default function DashboardIkuAnggaranChartCard() {
               <Building2 className="w-4 h-4 text-sky-400" />
             </div>
             <div className="text-lg font-bold tracking-tight">
-              {summary.totalBoundary} Fakultas &amp; Unit
+              {isFacultyScoped
+                ? `${scopedProdiCount} Program Studi`
+                : `${summary.totalBoundary} Fakultas & Unit`}
             </div>
             <div className="text-[11px] mt-0.5">
-              17 Program Studi &amp; Unit Pusat
+              {isFacultyScoped
+                ? `${scopedUnitCount} Unit Fakultas (${effectiveAccessScope.facultyName})`
+                : `${prodiCorrelationCount} Program Studi & Unit Pusat`}
             </div>
           </div>
         </div>
@@ -1235,7 +1323,7 @@ export default function DashboardIkuAnggaranChartCard() {
                       : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  Per Target IKU (4)
+                  Per Target IKU ({ikuCorrelationCount})
                 </button>
                 <button
                   onClick={() => setMatrixLevel("boundary")}
@@ -1245,7 +1333,7 @@ export default function DashboardIkuAnggaranChartCard() {
                       : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  Per Fakultas &amp; Unit (8)
+                  Per Fakultas &amp; Unit ({boundaryCorrelationCount})
                 </button>
                 <button
                   onClick={() => setMatrixLevel("prodi")}
@@ -1255,7 +1343,7 @@ export default function DashboardIkuAnggaranChartCard() {
                       : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  Per Program Studi (17)
+                  Per Program Studi ({prodiCorrelationCount})
                 </button>
               </div>
             </div>
@@ -1275,8 +1363,19 @@ export default function DashboardIkuAnggaranChartCard() {
             </div>
           </div>
 
-          {/* 4-QUADRANT MATRIX VISUALIZATION */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {correlationItems.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50/80 rounded-2xl border border-gray-200 px-6">
+              <Building2 className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+              <h4 className="text-sm font-bold text-gray-900">
+                Belum Ada Data Realisasi Anggaran IKU untuk {effectiveAccessScope.facultyName || "Cakupan Ini"}
+              </h4>
+              <p className="text-xs text-gray-600 mt-1 max-w-lg mx-auto">
+                Fakultas ini tercatat memiliki {scopedProdiCount} Program Studi dan {scopedUnitCount} Unit Kerja. Data korelasi akan muncul setelah kegiatan anggaran terinput.
+              </p>
+            </div>
+          ) : (
+            /* 4-QUADRANT MATRIX VISUALIZATION */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* KUADRAN 4: EFISIEN / HEMAT (Kiri Atas) */}
             <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/40 p-5 space-y-4">
               <div className="flex items-start justify-between">
@@ -1536,6 +1635,7 @@ export default function DashboardIkuAnggaranChartCard() {
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -1554,7 +1654,11 @@ export default function DashboardIkuAnggaranChartCard() {
                 <button
                   onClick={() => {
                     setRootCauseFocusType("iku");
-                    setRootCauseTargetId("root-iku-5");
+                    setRootCauseTargetId(
+                      scopedDataset.rootIkus.find((r) => r.id === "root-iku-5")?.id ||
+                        scopedDataset.rootIkus[0]?.id ||
+                        "all",
+                    );
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     rootCauseFocusType === "iku"
@@ -1567,7 +1671,15 @@ export default function DashboardIkuAnggaranChartCard() {
                 <button
                   onClick={() => {
                     setRootCauseFocusType("boundary");
-                    setRootCauseTargetId("fak-mipa");
+                    setRootCauseTargetId(
+                      isFacultyScoped
+                        ? scopedDataset.boundaries[0]?.id ||
+                            effectiveAccessScope.boundaryId ||
+                            "all"
+                        : scopedDataset.boundaries.find((b) => b.id === "fak-mipa")?.id ||
+                            scopedDataset.boundaries[0]?.id ||
+                            "all",
+                    );
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     rootCauseFocusType === "boundary"
@@ -1580,7 +1692,7 @@ export default function DashboardIkuAnggaranChartCard() {
                 <button
                   onClick={() => {
                     setRootCauseFocusType("prodi");
-                    setRootCauseTargetId("prodi-mipa-apt");
+                    setRootCauseTargetId(isFacultyScoped ? "all" : "prodi-mipa-apt");
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     rootCauseFocusType === "prodi"
@@ -1751,13 +1863,23 @@ export default function DashboardIkuAnggaranChartCard() {
                   </div>
                 </div>
               ))
+            ) : rootCauseData.totalKegiatan === 0 ? (
+              <div className="text-center py-12 bg-slate-50/80 rounded-2xl border border-gray-200 px-6">
+                <Building2 className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                <h4 className="text-sm font-bold text-gray-900">
+                  Belum Ada Data Kegiatan Anggaran untuk Entitas Ini
+                </h4>
+                <p className="text-xs text-gray-600 mt-1 max-w-md mx-auto">
+                  Belum ada kegiatan anggaran IKU yang tercatat pada cakupan yang dipilih.
+                </p>
+              </div>
             ) : (
               <div className="text-center py-12 bg-slate-50/80 rounded-2xl border border-gray-200">
                 <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
                 <h4 className="text-sm font-bold text-gray-900">
                   Tidak Ada Kegiatan dengan Filter Status Ini
                 </h4>
-                <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                <p className="text-xs text-gray-600 mt-1 max-w-md mx-auto">
                   Semua kegiatan pada entitas ini telah diperiksa. Silakan ubah filter status ke <strong>Semua Status</strong> untuk melihat seluruh riwayat kegiatan.
                 </p>
               </div>
@@ -1775,10 +1897,14 @@ export default function DashboardIkuAnggaranChartCard() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-gray-150">
             <div>
               <h3 className="text-sm font-bold text-gray-900">
-                Hierarki Boundary
+                {isFacultyScoped
+                  ? `Hierarki Unit & Prodi (${effectiveAccessScope.facultyName})`
+                  : "Hierarki Boundary"}
               </h3>
               <p className="text-xs text-gray-600 mt-0.5">
-                Struktur organisasi resmi Unpak dengan rincian dana, keterlaksanaan, dan kendala per unit kerja.
+                {isFacultyScoped
+                  ? `Unit kerja dan program studi di bawah ${effectiveAccessScope.facultyName} beserta rincian pagu, serapan, dan kendala.`
+                  : "Struktur organisasi resmi Unpak dengan rincian dana, keterlaksanaan, dan kendala per unit kerja."}
               </p>
             </div>
 
@@ -1808,303 +1934,359 @@ export default function DashboardIkuAnggaranChartCard() {
 
           {/* Boundary Accordion Tree */}
           <div className="space-y-4">
-            {SANKEY_DATA.boundaries.map((boundary) => {
-              const isExpanded = Boolean(expandedBoundaries[boundary.id]);
-              const relatedKegiatans = SANKEY_DATA.kegiatans.filter(
-                (k) => k.boundaryId === boundary.id,
-              );
-              const totalKeg = relatedKegiatans.length;
-              const doneKeg = relatedKegiatans.filter(
-                (k) => k.status === "Terlaksana",
-              ).length;
-              const persenSerap =
-                boundary.pagu > 0
-                  ? Number(((boundary.serapan / boundary.pagu) * 100).toFixed(1))
-                  : 0;
+            {displayBoundaries.length === 0 ? (
+              <div className="text-center py-12 bg-slate-50/80 rounded-2xl border border-gray-200 px-6">
+                <Building2 className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                <h4 className="text-sm font-bold text-gray-900">
+                  Tidak Ada Unit atau Prodi yang Sesuai Filter
+                </h4>
+                <p className="text-xs text-gray-600 mt-1 max-w-md mx-auto">
+                  Silakan ubah kata kunci pencarian atau pilih <strong>Semua Status</strong> untuk menampilkan seluruh hierarki unit dan prodi.
+                </p>
+              </div>
+            ) : (
+              displayBoundaries.map((boundary) => {
+                const isExpanded = Boolean(expandedBoundaries[boundary.id]);
+                const relatedKegiatans = scopedDataset.kegiatans.filter(
+                  (k) => k.boundaryId === boundary.id,
+                );
+                const visibleRelatedKegiatans =
+                  boundaryStatusFilter === "all"
+                    ? relatedKegiatans
+                    : relatedKegiatans.filter((k) => k.status === boundaryStatusFilter);
+                const facultyUnitKegiatans = visibleRelatedKegiatans.filter(
+                  (k) => !k.prodiId,
+                );
+                const totalKeg = relatedKegiatans.length;
+                const doneKeg = relatedKegiatans.filter(
+                  (k) => k.status === "Terlaksana",
+                ).length;
+                const persenSerap =
+                  boundary.pagu > 0
+                    ? Number(((boundary.serapan / boundary.pagu) * 100).toFixed(1))
+                    : 0;
 
-              return (
-                <div
-                  key={boundary.id}
-                  className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xs"
-                >
-                  {/* Boundary Header Card */}
+                return (
                   <div
-                    onClick={() => toggleBoundary(boundary.id)}
-                    className="p-4 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition-colors flex items-center justify-between gap-4"
+                    key={boundary.id}
+                    className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-xs"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
-                        {boundary.type === "fakultas" ? (
-                          <GraduationCap className="w-5 h-5" />
-                        ) : (
-                          <Briefcase className="w-5 h-5" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-gray-900">
-                            {boundary.nama}
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 uppercase border border-indigo-200">
-                            {boundary.type}
-                          </span>
+                    {/* Boundary Header Card */}
+                    <div
+                      onClick={() => toggleBoundary(boundary.id)}
+                      className="p-4 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition-colors flex items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
+                          {boundary.type === "fakultas" ? (
+                            <GraduationCap className="w-5 h-5" />
+                          ) : (
+                            <Briefcase className="w-5 h-5" />
+                          )}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          Pimpinan: {boundary.dekan || boundary.kepala || "Pimpinan Unit"}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-gray-900">
+                              {boundary.nama}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 uppercase border border-indigo-200">
+                              {boundary.type}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Pimpinan: {boundary.dekan || boundary.kepala || "Pimpinan Unit"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-5">
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-gray-900">
+                            {formatRupiah(boundary.serapan)}{" "}
+                            <span className="text-gray-500 font-normal">
+                              / {formatRupiah(boundary.pagu)}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-semibold text-emerald-700">
+                            Serapan: {persenSerap}% • {doneKeg}/{totalKeg} Kegiatan Terlaksana
+                          </div>
+                        </div>
+
+                        <div className="w-6 h-6 rounded-lg bg-gray-200/60 flex items-center justify-center text-gray-600">
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-5">
-                      <div className="text-right">
-                        <div className="text-xs font-bold text-gray-900">
-                          {formatRupiah(boundary.serapan)}{" "}
-                          <span className="text-gray-400 font-normal">
-                            / {formatRupiah(boundary.pagu)}
-                          </span>
-                        </div>
-                        <div className="text-[11px] font-semibold text-emerald-600">
-                          Serapan: {persenSerap}% • {doneKeg}/{totalKeg} Kegiatan Terlaksana
-                        </div>
-                      </div>
-
-                      <div className="w-6 h-6 rounded-lg bg-gray-200/60 flex items-center justify-center text-gray-600">
-                        {isExpanded ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expanded Content: Unit Fakultas + Jenjang & Prodi / Central Proker */}
-                  {isExpanded && (
-                    <div className="p-4 pt-3 border-t border-gray-150 space-y-4 bg-white">
-                      {/* 1. SEBELUM JENJANG: TAMBAHKAN TYPE UNIT FAKULTAS BESERTA PROKERNYA (Sesuai Permintaan Gambar 1) */}
-                      {boundary.type === "fakultas" && boundary.unitFakultas && (
-                        <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-200 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-600 text-white uppercase">
-                                Unit
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Proker Tingkat Fakultas */}
-                          {boundary.unitFakultas.proker && (
-                            <div className="p-3 bg-white rounded-lg border border-indigo-200 shadow-2xs space-y-2">
-                              <div className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                                📋 <span>Program Kerja Fakultas:</span>{" "}
-                                <span className="font-semibold text-gray-800">
-                                  {boundary.unitFakultas.proker.namaProker}
-                                </span>
-                              </div>
-
-                              {/* Kegiatannya jika ada */}
-                              {SANKEY_DATA.kegiatans
-                                .filter((k) => k.boundaryId === boundary.id && !k.prodiId)
-                                .map((keg) => (
-                                  <div
-                                    key={keg.id}
-                                    onClick={() => setSelectedKegiatanDetail(keg)}
-                                    className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 text-xs hover:border-indigo-400 cursor-pointer transition-all flex items-center justify-between gap-3"
-                                  >
-                                    <div>
-                                      <div className="font-semibold text-gray-900">
-                                        {keg.namaKegiatan}
-                                      </div>
-                                      <div className="text-[11px] text-gray-500">
-                                        PIC: {keg.pic}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 shrink-0">
-                                      <div className="text-right">
-                                        <div className="font-bold text-gray-800">
-                                          {formatRupiah(keg.realisasi)}
-                                        </div>
-                                        <div className="text-[10px] text-gray-400">
-                                          Pagu: {formatRupiah(keg.anggaran)}
-                                        </div>
-                                      </div>
-                                      <span
-                                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                          keg.status === "Terlaksana"
-                                            ? "bg-emerald-100 text-emerald-800"
-                                            : "bg-amber-100 text-amber-800"
-                                        }`}
-                                      >
-                                        {keg.status}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 2. JENJANG DAN PRODI DI BAWAH FAKULTAS */}
-                      {boundary.type === "fakultas" && boundary.jenjangList ? (
-                        boundary.jenjangList.map((jenjang) => (
-                          <div
-                            key={jenjang.jenjang}
-                            className="pl-4 border-l-2 border-indigo-200 space-y-3"
-                          >
-                            <div className="text-xs font-bold text-indigo-900 bg-indigo-50/80 px-2.5 py-1 rounded inline-block border border-indigo-150">
-                              🎓 Jenjang: {jenjang.namaJenjang}
-                            </div>
-
-                            <div className="space-y-3 pl-2">
-                              {jenjang.prodis.map((prodi) => {
-                                const proker = SANKEY_DATA.prokers.find(
-                                  (p) => p.prodiId === prodi.id,
-                                );
-                                const prodiKegiatans = SANKEY_DATA.kegiatans.filter(
-                                  (k) => k.prodiId === prodi.id,
-                                );
-
-                                return (
-                                  <div
-                                    key={prodi.id}
-                                    className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-200/80 space-y-3"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div>
-                                        <div className="text-xs font-bold text-gray-900">
-                                          {prodi.nama}
-                                        </div>
-                                        <div className="text-[11px] text-gray-500">
-                                          Kaprodi: {prodi.kaprodi}
-                                        </div>
-                                      </div>
-                                      <div className="text-right text-xs">
-                                        <div className="font-bold text-gray-800">
-                                          {formatRupiah(prodi.serapan)}
-                                        </div>
-                                        <div className="text-[11px] text-gray-500">
-                                          Pagu: {formatRupiah(prodi.pagu)}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Program Kerja Prodi Tampil Jelas */}
-                                    {proker && (
-                                      <div className="text-xs text-indigo-900 bg-white p-2.5 rounded-lg border border-indigo-150 shadow-2xs font-medium">
-                                        📋 <strong>Program Kerja:</strong> {proker.namaProker}
-                                      </div>
-                                    )}
-
-                                    {/* Activities and Kegiatans under this Prodi */}
-                                    <div className="space-y-2">
-                                      {prodiKegiatans.map((keg) => (
-                                        <div
-                                          key={keg.id}
-                                          onClick={() => setSelectedKegiatanDetail(keg)}
-                                          className="p-2.5 bg-white rounded-lg border border-gray-200 text-xs hover:border-indigo-400 cursor-pointer transition-all flex items-center justify-between gap-3"
-                                        >
-                                          <div>
-                                            <div className="font-semibold text-gray-900">
-                                              {keg.namaKegiatan}
-                                            </div>
-                                            <div className="text-[11px] text-gray-500">
-                                              PIC: {keg.pic}
-                                            </div>
-                                          </div>
-
-                                          <div className="flex items-center gap-3 shrink-0">
-                                            <div className="text-right">
-                                              <div className="font-bold text-gray-800">
-                                                {formatRupiah(keg.realisasi)}
-                                              </div>
-                                              <div className="text-[10px] text-gray-400">
-                                                Pagu: {formatRupiah(keg.anggaran)}
-                                              </div>
-                                            </div>
-
-                                            <span
-                                              className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                                keg.status === "Terlaksana"
-                                                  ? "bg-emerald-100 text-emerald-800"
-                                                  : keg.status === "Draf"
-                                                  ? "bg-gray-100 text-gray-700"
-                                                  : "bg-amber-100 text-amber-800"
-                                              }`}
-                                            >
-                                              {keg.status}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        // Unit Universitas (BPSI, LPPM, Tracer, dll.)
-                        <div className="space-y-3">
-                          {boundary.prokerId && (
-                            <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-200 text-xs font-semibold text-indigo-900">
-                              📋 <strong>Program Kerja Unit:</strong>{" "}
-                              {
-                                SANKEY_DATA.prokers.find((p) => p.id === boundary.prokerId)
-                                  ?.namaProker
-                              }
-                            </div>
-                          )}
-
-                          <div className="space-y-2">
-                            {relatedKegiatans.map((keg) => (
-                              <div
-                                key={keg.id}
-                                onClick={() => setSelectedKegiatanDetail(keg)}
-                                className="p-3 bg-white rounded-xl border border-gray-200 text-xs hover:border-indigo-400 cursor-pointer transition-all flex items-center justify-between gap-3"
-                              >
-                                <div>
-                                  <div className="font-semibold text-gray-900">
-                                    {keg.namaKegiatan}
-                                  </div>
-                                  <div className="text-[11px] text-gray-500">
-                                    PIC: {keg.pic}
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-3 shrink-0">
-                                  <div className="text-right">
-                                    <div className="font-bold text-gray-800">
-                                      {formatRupiah(keg.realisasi)}
-                                    </div>
-                                    <div className="text-[10px] text-gray-400">
-                                      Pagu: {formatRupiah(keg.anggaran)}
-                                    </div>
-                                  </div>
-
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                      keg.status === "Terlaksana"
-                                        ? "bg-emerald-100 text-emerald-800"
-                                        : keg.status === "Draf"
-                                        ? "bg-gray-100 text-gray-700"
-                                        : "bg-amber-100 text-amber-800"
-                                    }`}
-                                  >
-                                    {keg.status}
+                    {/* Expanded Content: Unit Fakultas + Jenjang & Prodi / Central Proker */}
+                    {isExpanded && (
+                      <div className="p-4 pt-3 border-t border-gray-150 space-y-4 bg-white">
+                        {/* 1. UNIT DI BAWAH FAKULTAS BESERTA PROKERNYA */}
+                        {boundary.type === "fakultas" &&
+                          (boundary.unitFakultas ||
+                            (boundary.unitList && boundary.unitList.length > 0)) && (
+                            <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-200 space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-600 text-white uppercase">
+                                    Unit
+                                  </span>
+                                  <span className="text-xs font-bold text-indigo-950">
+                                    {boundary.unitFakultas?.nama || `Unit Kerja ${boundary.nama}`}
                                   </span>
                                 </div>
+                                {boundary.unitList && boundary.unitList.length > 0 && (
+                                  <span className="text-[11px] font-semibold text-indigo-800">
+                                    {boundary.unitList.length} Unit
+                                  </span>
+                                )}
                               </div>
-                            ))}
+
+                              {boundary.unitList && boundary.unitList.length > 0 && (
+                                <div className="space-y-1.5">
+                                  <div className="text-[11px] font-semibold text-indigo-900">
+                                    Unit Kerja di Bawah {boundary.namaSingkat || boundary.nama}:
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {boundary.unitList.map((u) => (
+                                      <span
+                                        key={u.id}
+                                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white text-gray-800 border border-indigo-200"
+                                      >
+                                        {u.nama}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Proker Tingkat Fakultas */}
+                              {boundary.unitFakultas?.proker && (
+                                <div className="p-3 bg-white rounded-lg border border-indigo-200 shadow-2xs space-y-2">
+                                  <div className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                                    📋 <span>Program Kerja Fakultas:</span>{" "}
+                                    <span className="font-semibold text-gray-800">
+                                      {boundary.unitFakultas.proker.namaProker}
+                                    </span>
+                                  </div>
+
+                                  {facultyUnitKegiatans.map((keg) => (
+                                    <div
+                                      key={keg.id}
+                                      onClick={() => setSelectedKegiatanDetail(keg)}
+                                      className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 text-xs hover:border-indigo-400 cursor-pointer transition-all flex items-center justify-between gap-3"
+                                    >
+                                      <div>
+                                        <div className="font-semibold text-gray-900">
+                                          {keg.namaKegiatan}
+                                        </div>
+                                        <div className="text-[11px] text-gray-500">
+                                          PIC: {keg.pic}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-3 shrink-0">
+                                        <div className="text-right">
+                                          <div className="font-bold text-gray-800">
+                                            {formatRupiah(keg.realisasi)}
+                                          </div>
+                                          <div className="text-[10px] text-gray-500">
+                                            Pagu: {formatRupiah(keg.anggaran)}
+                                          </div>
+                                        </div>
+                                        <span
+                                          className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                            keg.status === "Terlaksana"
+                                              ? "bg-emerald-100 text-emerald-800"
+                                              : keg.status === "Draf"
+                                              ? "bg-gray-100 text-gray-700"
+                                              : "bg-amber-100 text-amber-800"
+                                          }`}
+                                        >
+                                          {keg.status}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                        {/* 2. JENJANG DAN PRODI DI BAWAH FAKULTAS */}
+                        {boundary.type === "fakultas" && boundary.jenjangList ? (
+                          boundary.jenjangList.map((jenjang) => (
+                            <div
+                              key={jenjang.jenjang}
+                              className="pl-4 border-l-2 border-indigo-200 space-y-3"
+                            >
+                              <div className="text-xs font-bold text-indigo-900 bg-indigo-50/80 px-2.5 py-1 rounded inline-block border border-indigo-150">
+                                🎓 Jenjang: {jenjang.namaJenjang}
+                              </div>
+
+                              <div className="space-y-3 pl-2">
+                                {jenjang.prodis.map((prodi) => {
+                                  const proker = scopedDataset.prokers.find(
+                                    (p) => p.prodiId === prodi.id,
+                                  );
+                                  const prodiKegiatans = scopedDataset.kegiatans.filter(
+                                    (k) =>
+                                      k.prodiId === prodi.id &&
+                                      (boundaryStatusFilter === "all" ||
+                                        k.status === boundaryStatusFilter),
+                                  );
+
+                                  return (
+                                    <div
+                                      key={prodi.id}
+                                      className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-200/80 space-y-3"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <div className="text-xs font-bold text-gray-900">
+                                            {prodi.nama}
+                                          </div>
+                                          <div className="text-[11px] text-gray-500">
+                                            Kaprodi: {prodi.kaprodi}
+                                          </div>
+                                        </div>
+                                        <div className="text-right text-xs">
+                                          <div className="font-bold text-gray-800">
+                                            {formatRupiah(prodi.serapan)}
+                                          </div>
+                                          <div className="text-[11px] text-gray-500">
+                                            Pagu: {formatRupiah(prodi.pagu)}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Program Kerja Prodi Tampil Jelas */}
+                                      {proker && (
+                                        <div className="text-xs text-indigo-900 bg-white p-2.5 rounded-lg border border-indigo-150 shadow-2xs font-medium">
+                                          📋 <strong>Program Kerja:</strong> {proker.namaProker}
+                                        </div>
+                                      )}
+
+                                      {/* Activities and Kegiatans under this Prodi */}
+                                      <div className="space-y-2">
+                                        {prodiKegiatans.length === 0 ? (
+                                          <div className="text-[11px] text-gray-500 italic py-1">
+                                            Belum ada kegiatan anggaran tercatat pada status ini.
+                                          </div>
+                                        ) : (
+                                          prodiKegiatans.map((keg) => (
+                                            <div
+                                              key={keg.id}
+                                              onClick={() => setSelectedKegiatanDetail(keg)}
+                                              className="p-2.5 bg-white rounded-lg border border-gray-200 text-xs hover:border-indigo-400 cursor-pointer transition-all flex items-center justify-between gap-3"
+                                            >
+                                              <div>
+                                                <div className="font-semibold text-gray-900">
+                                                  {keg.namaKegiatan}
+                                                </div>
+                                                <div className="text-[11px] text-gray-500">
+                                                  PIC: {keg.pic}
+                                                </div>
+                                              </div>
+
+                                              <div className="flex items-center gap-3 shrink-0">
+                                                <div className="text-right">
+                                                  <div className="font-bold text-gray-800">
+                                                    {formatRupiah(keg.realisasi)}
+                                                  </div>
+                                                  <div className="text-[10px] text-gray-500">
+                                                    Pagu: {formatRupiah(keg.anggaran)}
+                                                  </div>
+                                                </div>
+
+                                                <span
+                                                  className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                                    keg.status === "Terlaksana"
+                                                      ? "bg-emerald-100 text-emerald-800"
+                                                      : keg.status === "Draf"
+                                                      ? "bg-gray-100 text-gray-700"
+                                                      : "bg-amber-100 text-amber-800"
+                                                  }`}
+                                                >
+                                                  {keg.status}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          // Unit Universitas (BPSI, LPPM, Tracer, dll.)
+                          <div className="space-y-3">
+                            {boundary.prokerId && (
+                              <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-200 text-xs font-semibold text-indigo-900">
+                                📋 <strong>Program Kerja Unit:</strong>{" "}
+                                {
+                                  scopedDataset.prokers.find(
+                                    (p) => p.id === boundary.prokerId,
+                                  )?.namaProker
+                                }
+                              </div>
+                            )}
+
+                            <div className="space-y-2">
+                              {visibleRelatedKegiatans.map((keg) => (
+                                <div
+                                  key={keg.id}
+                                  onClick={() => setSelectedKegiatanDetail(keg)}
+                                  className="p-3 bg-white rounded-xl border border-gray-200 text-xs hover:border-indigo-400 cursor-pointer transition-all flex items-center justify-between gap-3"
+                                >
+                                  <div>
+                                    <div className="font-semibold text-gray-900">
+                                      {keg.namaKegiatan}
+                                    </div>
+                                    <div className="text-[11px] text-gray-500">
+                                      PIC: {keg.pic}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    <div className="text-right">
+                                      <div className="font-bold text-gray-800">
+                                        {formatRupiah(keg.realisasi)}
+                                      </div>
+                                      <div className="text-[10px] text-gray-500">
+                                        Pagu: {formatRupiah(keg.anggaran)}
+                                      </div>
+                                    </div>
+
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                        keg.status === "Terlaksana"
+                                          ? "bg-emerald-100 text-emerald-800"
+                                          : keg.status === "Draf"
+                                          ? "bg-gray-100 text-gray-700"
+                                          : "bg-amber-100 text-amber-800"
+                                      }`}
+                                    >
+                                      {keg.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -2180,29 +2362,70 @@ export default function DashboardIkuAnggaranChartCard() {
             )}
           </div>
 
-          {/* Sankey Flow Columns Container */}
-          <div
-            ref={containerRef}
-            className="relative overflow-x-auto min-h-[600px] pb-6"
-          >
-            {/* Background SVG Ribbons */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-              {ribbonPaths.map((p) => (
-                <path
-                  key={p.id}
-                  d={p.d}
-                  fill="none"
-                  stroke={p.color}
-                  strokeWidth={p.isActive ? 4 : 1.5}
-                  strokeOpacity={p.isActive ? 0.9 : 0.25}
-                  strokeLinecap="round"
-                  className="transition-all duration-200"
-                />
-              ))}
-            </svg>
+          {/* Banner Fokus Jalur Terkunci (saat user mengklik node kolom 1-7) */}
+          {activePathId && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900">
+              <div className="flex items-center gap-2 min-w-0">
+                <Target className="w-4 h-4 text-indigo-700 shrink-0" />
+                <span className="font-semibold truncate">
+                  Fokus jalur: {activePathLabel}
+                </span>
+                <span className="text-[11px] text-indigo-700 hidden sm:inline">
+                  (geser horizontal untuk melihat alur ke semua kolom)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivePathId(null)}
+                className="px-2.5 py-1 rounded-lg bg-white text-indigo-800 border border-indigo-300 hover:bg-indigo-100 font-semibold text-[11px] shrink-0"
+              >
+                Lepas Fokus
+              </button>
+            </div>
+          )}
 
-            {/* 8 Grid Columns */}
-            <div className="relative z-10 grid grid-cols-8 gap-5 min-w-[1920px]">
+          {/* Sankey Flow Columns Container */}
+          {scopedDataset.kegiatans.length === 0 ? (
+            <div className="text-center py-14 bg-slate-50/80 rounded-2xl border border-gray-200 px-6">
+              <Workflow className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+              <h4 className="text-sm font-bold text-gray-900">
+                Belum Ada Alokasi Anggaran IKU untuk {effectiveAccessScope.facultyName || "Cakupan Ini"}
+              </h4>
+              <p className="text-xs text-gray-600 mt-1 max-w-lg mx-auto">
+                Fakultas ini tercatat memiliki {scopedProdiCount} Program Studi dan {scopedUnitCount} Unit Kerja. Diagram alir alokasi akan tampil setelah data kegiatan anggaran tercatat.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto pb-6">
+              <div
+                ref={containerRef}
+                className="relative min-w-[2080px] min-h-[600px]"
+              >
+                {/* Background SVG Ribbons */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0 overflow-visible">
+                  {ribbonPaths.map((p) => {
+                    const isActive = Boolean(
+                      connectedNodeIds &&
+                        connectedNodeIds.has(p.fromId) &&
+                        connectedNodeIds.has(p.toId),
+                    );
+                    return (
+                      <path
+                        key={p.id}
+                        d={p.d}
+                        fill="none"
+                        stroke={p.color}
+                        strokeWidth={isActive ? 3.5 : 1.25}
+                        strokeOpacity={isActive ? 0.95 : connectedNodeIds ? 0.08 : 0.3}
+                        strokeLinecap="round"
+                        className="transition-[stroke-width,stroke-opacity] duration-150"
+                      />
+                    );
+                  })}
+                </svg>
+
+                {/* 8 Grid Columns */}
+                <div className="relative z-10 grid grid-cols-8 gap-8">
               {/* KOLOM 1: DANA UTAMA */}
               <div className="space-y-4">
                 <div className="text-xs font-bold text-gray-700 uppercase tracking-wider">
@@ -2212,18 +2435,19 @@ export default function DashboardIkuAnggaranChartCard() {
                   ref={(el) => (nodeRefs.current["node-dana-utama"] = el)}
                   onMouseEnter={() => setHoveredNodeId("node-dana-utama")}
                   onMouseLeave={() => setHoveredNodeId(null)}
-                  className="p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-300 shadow-sm space-y-3 cursor-pointer"
+                  onClick={() => handleToggleNodeFocus("node-dana-utama")}
+                  className={`p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-300 shadow-sm space-y-3 cursor-pointer transition-all ${getNodeFocusClass("node-dana-utama")}`}
                 >
                   <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
                     <Coins className="w-4 h-4" />
-                    Dana Universitas
+                    {isFacultyScoped ? scopedDataset.danaUtama.judul : "Dana Universitas"}
                   </div>
                   <div>
                     <div className="text-lg font-bold text-indigo-950">
-                      {formatRupiah(SANKEY_DATA.danaUtama.totalDana)}
+                      {formatRupiah(scopedDataset.danaUtama.totalDana)}
                     </div>
                     <div className="text-xs font-semibold text-emerald-600 mt-0.5">
-                      Terserap: {formatRupiah(SANKEY_DATA.danaUtama.totalSerapan)}
+                      Terserap: {formatRupiah(scopedDataset.danaUtama.totalSerapan)}
                     </div>
                   </div>
                 </div>
@@ -2241,14 +2465,15 @@ export default function DashboardIkuAnggaranChartCard() {
                       ref={(el) => (nodeRefs.current[r.id] = el)}
                       onMouseEnter={() => setHoveredNodeId(r.id)}
                       onMouseLeave={() => setHoveredNodeId(null)}
-                      className="p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5"
+                      onClick={() => handleToggleNodeFocus(r.id)}
+                      className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(r.id)}`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-indigo-700">
                           {r.kode}
                         </span>
-                        <span className="text-[10px] font-semibold text-gray-400">
-                          {r.childIds?.length > 0 ? "5 Sub-IKU ➔" : "Langsung ➔"}
+                        <span className="text-[10px] font-semibold text-gray-500">
+                          {r.childIds?.length > 0 ? `${r.childIds.length} Sub-IKU ➔` : "Langsung ➔"}
                         </span>
                       </div>
                       <div className="text-xs font-bold text-gray-900 line-clamp-2">
@@ -2274,7 +2499,8 @@ export default function DashboardIkuAnggaranChartCard() {
                       ref={(el) => (nodeRefs.current[c.id] = el)}
                       onMouseEnter={() => setHoveredNodeId(c.id)}
                       onMouseLeave={() => setHoveredNodeId(null)}
-                      className="p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5"
+                      onClick={() => handleToggleNodeFocus(c.id)}
+                      className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(c.id)}`}
                     >
                       <div className="text-xs font-bold text-purple-700">
                         {c.kode}
@@ -2307,7 +2533,8 @@ export default function DashboardIkuAnggaranChartCard() {
                       ref={(el) => (nodeRefs.current[ind.id] = el)}
                       onMouseEnter={() => setHoveredNodeId(ind.id)}
                       onMouseLeave={() => setHoveredNodeId(null)}
-                      className="p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5"
+                      onClick={() => handleToggleNodeFocus(ind.id)}
+                      className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(ind.id)}`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-sky-700">
@@ -2355,7 +2582,8 @@ export default function DashboardIkuAnggaranChartCard() {
                       ref={(el) => (nodeRefs.current[b.id] = el)}
                       onMouseEnter={() => setHoveredNodeId(b.id)}
                       onMouseLeave={() => setHoveredNodeId(null)}
-                      className="p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5"
+                      onClick={() => handleToggleNodeFocus(b.id)}
+                      className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(b.id)}`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-emerald-700">
@@ -2397,7 +2625,8 @@ export default function DashboardIkuAnggaranChartCard() {
                       ref={(el) => (nodeRefs.current[p.id] = el)}
                       onMouseEnter={() => setHoveredNodeId(p.id)}
                       onMouseLeave={() => setHoveredNodeId(null)}
-                      className="p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5"
+                      onClick={() => handleToggleNodeFocus(p.id)}
+                      className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(p.id)}`}
                     >
                       <div
                         className="text-xs font-bold text-indigo-700 line-clamp-2"
@@ -2434,7 +2663,8 @@ export default function DashboardIkuAnggaranChartCard() {
                       ref={(el) => (nodeRefs.current[a.id] = el)}
                       onMouseEnter={() => setHoveredNodeId(a.id)}
                       onMouseLeave={() => setHoveredNodeId(null)}
-                      className="p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5"
+                      onClick={() => handleToggleNodeFocus(a.id)}
+                      className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(a.id)}`}
                     >
                       <div
                         className="text-xs font-bold text-violet-700 line-clamp-2"
@@ -2469,7 +2699,7 @@ export default function DashboardIkuAnggaranChartCard() {
                 <div className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                   8. Kegiatan RAB ({filteredSankeyData.kegiatans.length})
                 </div>
-                <div className="space-y-2.5 max-h-[700px] overflow-y-auto pr-1">
+                <div className="space-y-2.5">
                   {filteredSankeyData.kegiatans.map((k) => (
                     <div
                       key={k.id}
@@ -2477,7 +2707,7 @@ export default function DashboardIkuAnggaranChartCard() {
                       onMouseEnter={() => setHoveredNodeId(k.id)}
                       onMouseLeave={() => setHoveredNodeId(null)}
                       onClick={() => setSelectedKegiatanDetail(k)}
-                      className="p-2.5 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-500 cursor-pointer transition-all space-y-1.5"
+                      className={`p-2.5 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-500 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(k.id)}`}
                     >
                       <div className="flex items-center justify-between">
                         <span
@@ -2526,7 +2756,9 @@ export default function DashboardIkuAnggaranChartCard() {
                 </div>
               </div>
             </div>
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
