@@ -494,7 +494,12 @@ export default function ProkerV3AktivitasPage() {
 
   useEffect(() => {
     let cancel = false;
-    const targetUnitId = proker?.IdFakultasUnit || userUnitData?.id || "";
+    const targetUnitId =
+      proker?.IdFakultasUnit ||
+      proker?.id_fakultas_unit ||
+      user?.fakultas_unit ||
+      user?.id_fakultas_unit ||
+      "";
     const unitParam = targetUnitId ? `?unit_id=${encodeURIComponent(targetUnitId)}` : "";
     apiClient
       .get(`/settings/proker-batal${unitParam}`)
@@ -507,7 +512,7 @@ export default function ProkerV3AktivitasPage() {
     return () => {
       cancel = true;
     };
-  }, [proker?.IdFakultasUnit, userUnitData]);
+  }, [proker?.IdFakultasUnit, proker?.id_fakultas_unit, user?.fakultas_unit, user?.id_fakultas_unit]);
 
   useEffect(() => {
     if (!proker) {
