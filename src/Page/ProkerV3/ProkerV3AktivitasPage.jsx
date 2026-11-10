@@ -149,6 +149,9 @@ export default function ProkerV3AktivitasPage() {
     );
   }, [curRole, level, user]);
 
+  // Tombol tambah aktivitas hanya boleh muncul jika role aktif adalah "user"
+  const isLevelUser = curRole === "user";
+
   // Level verifikator dan role verifikator (yang nominal anggarannya disensor)
   const isVerifikatorRoleOrLevel = useMemo(() => {
     if (isAdmin) return false;
@@ -176,6 +179,9 @@ export default function ProkerV3AktivitasPage() {
         ));
     if (isUpml) return false;
 
+    // Level USER biasa juga TIDAK disensor (pengusul proker)
+    if (isLevelUser || normRole === "user" || normLevel === "user") return false;
+
     const verifierRoles = [
       "upmf",
       "upms",
@@ -189,25 +195,13 @@ export default function ProkerV3AktivitasPage() {
       verifierRoles.some((v) => userLevel.includes(v)) ||
       isEvaluator
     );
-  }, [curRole, level, user, isAdmin, isEvaluator]);
-
-  // Tombol tambah aktivitas hanya boleh muncul jika role aktif adalah "user"
-  const isLevelUser = curRole === "user";
+  }, [curRole, level, user, isAdmin, isEvaluator, isLevelUser]);
 
   // Cek apakah akun ini merupakan akun verifikator UPM (upml, upmf, upms)
   const isUpmUser = useMemo(() => {
-    if (["upml", "upmf", "upms"].includes(curRole)) return true;
-    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
-      return user.extra_role.some((r) =>
-        ["upml", "upmf", "upms"].includes(
-          String(r.role ?? r.Role ?? "")
-            .toLowerCase()
-            .trim(),
-        ),
-      );
-    }
-    return false;
-  }, [curRole, user?.extra_role]);
+    if (isLevelUser) return false;
+    return ["upml", "upmf", "upms"].includes(curRole);
+  }, [isLevelUser, curRole]);
 
   // Data state
   const [loading, setLoading] = useState(true);
@@ -272,8 +266,8 @@ export default function ProkerV3AktivitasPage() {
         const rRole = String(r.role ?? r.Role ?? "")
           .toLowerCase()
           .trim();
-        // Hanya role "user" / operator yang berhak mengelola aktivitas
-        if (rRole && rRole !== "user") {
+        // Jika di level user, izinkan penugasan unit dari extra_role
+        if (!isLevelUser && rRole && rRole !== curRole) {
           return false;
         }
 

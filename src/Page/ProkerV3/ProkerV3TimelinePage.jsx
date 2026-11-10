@@ -169,6 +169,9 @@ export default function ProkerV3TimelinePage() {
         ));
     if (isUpml) return false;
 
+    // Level USER biasa juga TIDAK disensor (pengusul proker)
+    if (isLevelUser || normRole === "user" || normLevel === "user") return false;
+
     const verifierRoles = [
       "upmf",
       "upms",
@@ -182,21 +185,12 @@ export default function ProkerV3TimelinePage() {
       verifierRoles.some((v) => userLevel.includes(v)) ||
       isEvaluator
     );
-  }, [curRole, level, user, isAdmin, isEvaluator]);
+  }, [curRole, level, user, isAdmin, isEvaluator, isLevelUser]);
 
   const isUpmUser = useMemo(() => {
-    if (["upml", "upmf", "upms"].includes(curRole)) return true;
-    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
-      return user.extra_role.some((r) =>
-        ["upml", "upmf", "upms"].includes(
-          String(r.role ?? r.Role ?? "")
-            .toLowerCase()
-            .trim(),
-        ),
-      );
-    }
-    return false;
-  }, [curRole, user?.extra_role]);
+    if (isLevelUser) return false;
+    return ["upml", "upmf", "upms"].includes(curRole);
+  }, [isLevelUser, curRole]);
 
   // Data states
   const [loading, setLoading] = useState(true);
@@ -270,7 +264,13 @@ export default function ProkerV3TimelinePage() {
         const rFuUuid = String(
           r.uuid_fakultas_unit ?? r.UuidFakultasUnit ?? "",
         ).toLowerCase();
-        const rFuName = String(r.fakultas_unit ?? r.FakultasUnit ?? "")
+        const rFuName = String(
+          r.fakultas_unit ??
+            r.FakultasUnit ??
+            r.nama_fakultas_unit ??
+            r.NamaFakultasUnit ??
+            "",
+        )
           .trim()
           .toLowerCase();
         if (targetFuId && rFuId && targetFuId === rFuId) return true;

@@ -247,6 +247,9 @@ export default function ProkerV3Page() {
         ));
     if (isUpml) return false;
 
+    // Level USER biasa juga TIDAK disensor (pengusul proker)
+    if (isLevelUser || normRole === "user" || normLevel === "user") return false;
+
     const verifierRoles = [
       "upmf",
       "upms",
@@ -260,7 +263,7 @@ export default function ProkerV3Page() {
       verifierRoles.some((v) => userLevel.includes(v)) ||
       isEvaluator
     );
-  }, [curRole, level, user, isAdmin, isEvaluator]);
+  }, [curRole, level, user, isAdmin, isEvaluator, isLevelUser]);
 
   const [selectedUnit, setSelectedUnit] = useState("all");
   const [selectedUnitObj, setSelectedUnitObj] = useState(null);
@@ -298,60 +301,95 @@ export default function ProkerV3Page() {
   const userUnitData = useMemo(() => {
     let userFU =
       user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit;
-    if (Array.isArray(user?.extra_role)) {
-      const match =
-        user.extra_role.find(
-          (r) =>
-            String(r.role || "").toLowerCase() === "user" &&
-            (!positionYear ||
-              String(r.tahun ?? r.Tahun) === String(positionYear)) &&
-            (r.id_fakultas_unit || r.IdFakultasUnit),
-        ) ||
-        user.extra_role.find(
-          (r) =>
-            String(r.role || "").toLowerCase() === "user" &&
-            (r.id_fakultas_unit || r.IdFakultasUnit),
-        );
-      if (match?.id_fakultas_unit || match?.IdFakultasUnit) {
-        userFU = match.id_fakultas_unit || match.IdFakultasUnit;
+    let fallbackName = user?.nama_fakultas_unit || user?.NamaFakultasUnit || "";
+
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      // 1. Role matching curRole on active positionYear
+      const matchCurRoleYear = user.extra_role.find(
+        (r) =>
+          (!curRole ||
+            String(r.role ?? r.Role ?? "").toLowerCase().trim() === curRole) &&
+          (!positionYear ||
+            String(r.tahun ?? r.Tahun) === String(positionYear)) &&
+          (r.id_fakultas_unit || r.IdFakultasUnit),
+      );
+      // 2. Role 'user' on active positionYear
+      const matchUserYear = user.extra_role.find(
+        (r) =>
+          String(r.role ?? r.Role ?? "").toLowerCase().trim() === "user" &&
+          (!positionYear ||
+            String(r.tahun ?? r.Tahun) === String(positionYear)) &&
+          (r.id_fakultas_unit || r.IdFakultasUnit),
+      );
+      // 3. Any role on active positionYear with id_fakultas_unit
+      const matchAnyYear = user.extra_role.find(
+        (r) =>
+          (!positionYear ||
+            String(r.tahun ?? r.Tahun) === String(positionYear)) &&
+          (r.id_fakultas_unit || r.IdFakultasUnit),
+      );
+      // 4. Fallback: role 'user' any year
+      const matchUserAny = user.extra_role.find(
+        (r) =>
+          String(r.role ?? r.Role ?? "").toLowerCase().trim() === "user" &&
+          (r.id_fakultas_unit || r.IdFakultasUnit),
+      );
+      // 5. Fallback: any role any year with id_fakultas_unit (e.g. upml bpsi)
+      const matchAnyAll = user.extra_role.find(
+        (r) => r.id_fakultas_unit || r.IdFakultasUnit,
+      );
+
+      const chosen =
+        matchCurRoleYear ||
+        matchUserYear ||
+        matchAnyYear ||
+        matchUserAny ||
+        matchAnyAll;
+
+      if (chosen?.id_fakultas_unit || chosen?.IdFakultasUnit) {
+        userFU = chosen.id_fakultas_unit || chosen.IdFakultasUnit;
+      }
+      if (chosen?.nama_fakultas_unit || chosen?.NamaFakultasUnit) {
+        fallbackName = chosen.nama_fakultas_unit || chosen.NamaFakultasUnit;
       }
     }
+
     const fuStr = String(userFU ?? "").trim();
     if (!fuStr || fuStr === "0" || fuStr === "null" || fuStr === "undefined")
       return null;
 
-    return (
-      unitOptions.find((u) => {
-        const uid = String(u.id ?? u.Id ?? "").trim();
-        const uuid = String(u.uuid ?? u.UUID ?? "")
-          .trim()
-          .toLowerCase();
-        const uName = String(u.Nama ?? u.nama ?? u.nama_fak_prod_unit ?? "")
-          .trim()
-          .toLowerCase();
-        return (
-          (uid !== "" && uid === fuStr) ||
-          (uuid !== "" && uuid === fuStr.toLowerCase()) ||
-          (uName !== "" && uName === fuStr.toLowerCase())
-        );
-      }) || {
-        id: userFU,
-        uuid: userFU,
-        nama:
-          user?.nama_fakultas_unit ||
-          user?.NamaFakultasUnit ||
-          `Unit #${userFU}`,
-        label:
-          user?.nama_fakultas_unit ||
-          user?.NamaFakultasUnit ||
-          `Unit #${userFU}`,
-        name:
-          user?.nama_fakultas_unit ||
-          user?.NamaFakultasUnit ||
-          `Unit #${userFU}`,
-      }
-    );
-  }, [user, unitOptions, positionYear]);
+    const matchedUnit = unitOptions.find((u) => {
+      const uid = String(u.id ?? u.Id ?? "").trim();
+      const uuid = String(u.uuid ?? u.UUID ?? "")
+        .trim()
+        .toLowerCase();
+      const uName = String(u.Nama ?? u.nama ?? u.nama_fak_prod_unit ?? "")
+        .trim()
+        .toLowerCase();
+      return (
+        (uid !== "" && uid === fuStr) ||
+        (uuid !== "" && uuid === fuStr.toLowerCase()) ||
+        (uName !== "" && uName === fuStr.toLowerCase())
+      );
+    });
+
+    if (matchedUnit) {
+      return {
+        ...matchedUnit,
+        raw_nama: matchedUnit.nama || matchedUnit.Nama || fallbackName,
+      };
+    }
+
+    const displayName = fallbackName || `Unit #${userFU}`;
+    return {
+      id: userFU,
+      uuid: userFU,
+      nama: displayName,
+      label: displayName,
+      name: displayName,
+      raw_nama: displayName,
+    };
+  }, [user, unitOptions, positionYear, curRole]);
 
   // Fetch Jadwal Proker V3 Status Check (Mendukung spesifik unit / global)
   useEffect(() => {
@@ -416,11 +454,21 @@ export default function ProkerV3Page() {
   // Semua unit yang ditugaskan ke user ini via user_abac untuk role & tahun ini
   const userAssignedUnits = useMemo(() => {
     if (!Array.isArray(user?.extra_role)) return [];
-    const matched = user.extra_role.filter(
+    let matched = user.extra_role.filter(
       (r) =>
         String(r.role ?? r.Role).toLowerCase() === curRole &&
         (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear)),
     );
+    if (matched.length === 0 && curRole === "user") {
+      matched = user.extra_role.filter(
+        (r) =>
+          (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear)) &&
+          (r.id_fakultas_unit || r.IdFakultasUnit),
+      );
+      if (matched.length === 0) {
+        matched = user.extra_role.filter((r) => r.id_fakultas_unit || r.IdFakultasUnit);
+      }
+    }
     const unique = [];
     const seen = new Set();
     matched.forEach((m) => {
@@ -889,18 +937,9 @@ export default function ProkerV3Page() {
 
   // Cek apakah akun ini adalah akun UPM (upml, upmf, upms)
   const isUpmUser = useMemo(() => {
-    if (isUpm) return true;
-    if (Array.isArray(user?.extra_role)) {
-      return user.extra_role.some((r) =>
-        ["upml", "upmf", "upms"].includes(
-          String(r.role ?? r.Role ?? "")
-            .toLowerCase()
-            .trim(),
-        ),
-      );
-    }
-    return false;
-  }, [isUpm, user?.extra_role]);
+    if (isLevelUser) return false;
+    return isUpm;
+  }, [isLevelUser, isUpm]);
 
   const canAddProker =
     isAdmin ||
@@ -1014,7 +1053,7 @@ export default function ProkerV3Page() {
         const rRole = String(roleItem.role ?? roleItem.Role ?? "")
           .toLowerCase()
           .trim();
-        if (rRole && rRole !== "user") return false;
+        if (curRole !== "user" && rRole && rRole !== curRole) return false;
 
         const uId = roleItem.id_fakultas_unit ?? roleItem.IdFakultasUnit;
         if (uId && prokerFuId && String(uId) === prokerFuId) return true;
@@ -1226,11 +1265,12 @@ export default function ProkerV3Page() {
         userUnitData?.uuid ||
         user?.fakultas_unit ||
         user?.id_fakultas_unit ||
-        user?.FakultasUnit;
+        user?.FakultasUnit ||
+        (Array.isArray(user?.extra_role) &&
+          user.extra_role.find((r) => r.id_fakultas_unit || r.IdFakultasUnit)
+            ?.id_fakultas_unit);
       if (targetUnitId) {
         params.append("filter_fakultas_unit", String(targetUnitId));
-      } else {
-        params.append("filter_fakultas_unit", "-1");
       }
       if (isFakultasSelected && selectedProdi && selectedProdi !== "all") {
         params.append("filter_prodi", selectedProdi);
