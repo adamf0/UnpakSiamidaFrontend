@@ -159,10 +159,23 @@ export default function ProkerV3AktivitasPage() {
     const userLevel = String(user?.level || "")
       .toLowerCase()
       .trim();
-    // Role UPML diizinkan melihat nominal anggaran (tidak disensor)
-    if (normRole === "upml" || normLevel === "upml" || userLevel === "upml") {
-      return false;
-    }
+    const userName = String(user?.name || "").toLowerCase().trim();
+    const userNidn = String(user?.nidn_username || "").toLowerCase().trim();
+
+    // Role / Level UPML SELALU diizinkan melihat nominal anggaran (TIDAK disensor)
+    const isUpml =
+      normRole.includes("upml") ||
+      normLevel.includes("upml") ||
+      userLevel.includes("upml") ||
+      userName.includes("upml") ||
+      userNidn.includes("upml") ||
+      (Array.isArray(user?.extra_role) &&
+        user.extra_role.some(
+          (r) =>
+            String(r.role || r.Role || "").toLowerCase().trim() === "upml"
+        ));
+    if (isUpml) return false;
+
     const verifierRoles = [
       "upmf",
       "upms",
@@ -171,16 +184,12 @@ export default function ProkerV3AktivitasPage() {
       "verifikator",
     ];
     return (
-      verifierRoles.includes(normRole) ||
-      normRole.includes("verifikator") ||
-      verifierRoles.includes(normLevel) ||
-      normLevel.includes("verifikator") ||
-      userLevel === "verifikator" ||
-      userLevel.includes("verifikator") ||
-      isVerifier ||
+      verifierRoles.some((v) => normRole.includes(v)) ||
+      verifierRoles.some((v) => normLevel.includes(v)) ||
+      verifierRoles.some((v) => userLevel.includes(v)) ||
       isEvaluator
     );
-  }, [curRole, level, user?.level, isAdmin, isVerifier, isEvaluator]);
+  }, [curRole, level, user, isAdmin, isEvaluator]);
 
   // Tombol tambah aktivitas hanya boleh muncul jika role aktif adalah "user"
   const isLevelUser = curRole === "user";
