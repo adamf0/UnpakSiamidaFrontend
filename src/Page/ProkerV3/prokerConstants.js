@@ -148,7 +148,7 @@ export function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-export const TIMELINE_MAX_FILE_SIZE_MB = 150;
+export const TIMELINE_MAX_FILE_SIZE_MB = 10;
 export const TIMELINE_MAX_FILE_SIZE_BYTES =
   TIMELINE_MAX_FILE_SIZE_MB * 1024 * 1024;
 export const TIMELINE_ALLOWED_FILE_EXTENSIONS = [

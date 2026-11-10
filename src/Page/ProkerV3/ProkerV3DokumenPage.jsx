@@ -962,7 +962,7 @@ export default function ProkerV3DokumenPage() {
                 {!isEvaluator &&
                   !(
                     !isAdmin &&
-                    ["upml", "upmf", "upms", "fakultas", "verifikator"].includes(
+                    ["upmf", "upms", "fakultas", "verifikator"].includes(
                       curRole,
                     )
                   ) &&

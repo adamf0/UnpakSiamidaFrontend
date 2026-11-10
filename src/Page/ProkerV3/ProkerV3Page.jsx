@@ -220,7 +220,7 @@ export default function ProkerV3Page() {
     );
   }, [curRole, level, user]);
 
-  // Level verifikator dan role verifikator
+  // Level verifikator dan role verifikator (yang nominal anggarannya disensor)
   const isVerifikatorRoleOrLevel = useMemo(() => {
     if (isAdmin) return false;
     const normRole = curRole.toLowerCase().trim();
@@ -230,8 +230,11 @@ export default function ProkerV3Page() {
     const userLevel = String(user?.level || "")
       .toLowerCase()
       .trim();
+    // Role UPML diizinkan melihat nominal anggaran (tidak disensor)
+    if (normRole === "upml" || normLevel === "upml" || userLevel === "upml") {
+      return false;
+    }
     const verifierRoles = [
-      "upml",
       "upmf",
       "upms",
       "fakultas",
@@ -377,8 +380,13 @@ export default function ProkerV3Page() {
   // Fetch pengaturan tanggal aktif Proker Batal
   useEffect(() => {
     let cancel = false;
+    const targetUnitId =
+      selectedUnit && selectedUnit !== "all"
+        ? selectedUnit
+        : userUnitData?.id || "";
+    const unitParam = targetUnitId ? `?unit_id=${encodeURIComponent(targetUnitId)}` : "";
     apiClient
-      .get("/settings/proker-batal")
+      .get(`/settings/proker-batal${unitParam}`)
       .then((res) => {
         if (!cancel) setProkerBatalStatus(res?.data || null);
       })
@@ -388,7 +396,7 @@ export default function ProkerV3Page() {
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [selectedUnit, userUnitData]);
 
   const userTargetName =
     userUnitData?.raw_nama ||
@@ -3594,6 +3602,10 @@ export default function ProkerV3Page() {
       searchable: true,
       renderKey: (r) => {
         const scopes = r.Scopes || [];
+        const primary = scopes[0] || {};
+        const targetUnpak = primary.TargetUnpak || r.TargetUnpak || "-";
+        const targetUnit = primary.TargetUnit || r.TargetUnit || "-";
+        const capaianUnitLalu = primary.CapaianUnitLalu || r.CapaianUnitLalu || "-";
         const hasMultiple = scopes.length > 1;
         return (
           <div className="text-xs space-y-1">
@@ -3602,7 +3614,7 @@ export default function ProkerV3Page() {
                 Unpak:
               </span>
               <span className="font-bold text-gray-900 text-right leading-tight">
-                {r.TargetUnpak || "-"}
+                {targetUnpak}
               </span>
             </div>
             <div className="flex items-start justify-between gap-2">
@@ -3610,7 +3622,7 @@ export default function ProkerV3Page() {
                 Unit:
               </span>
               <span className="font-semibold text-purple-900 text-right leading-tight">
-                {r.TargetUnit || "-"}
+                {targetUnit}
               </span>
             </div>
             <div className="flex items-start justify-between gap-2 pt-1 border-t border-gray-100">
@@ -3618,7 +3630,7 @@ export default function ProkerV3Page() {
                 Lalu:
               </span>
               <span className="text-[11px] text-gray-600 text-right leading-tight">
-                {r.CapaianUnitLalu || "-"}
+                {capaianUnitLalu}
               </span>
             </div>
             {hasMultiple && (
@@ -3647,16 +3659,18 @@ export default function ProkerV3Page() {
       searchable: true,
       renderKey: (r) => {
         const scopes = r.Scopes || [];
+        const primary = scopes[0] || {};
+        const outputVal = primary.Output || r.Output || "-";
         const allOutputs =
           scopes.length > 0
             ? scopes.map((s, idx) => `#${idx + 1}: ${s.Output || "-"}`).join("\n")
-            : r.Output || "-";
+            : outputVal;
         return (
           <div
             className="text-xs text-gray-800 line-clamp-2 leading-relaxed"
             title={allOutputs}
           >
-            {r.Output || "-"}
+            {outputVal}
             {scopes.length > 1 && (
               <span className="block text-[10px] text-purple-600 font-medium">
                 +{scopes.length - 1} luaran lainnya
@@ -3673,16 +3687,18 @@ export default function ProkerV3Page() {
       searchable: true,
       renderKey: (r) => {
         const scopes = r.Scopes || [];
+        const primary = scopes[0] || {};
+        const outcomeVal = primary.Outcome || r.Outcome || "-";
         const allOutcomes =
           scopes.length > 0
             ? scopes.map((s, idx) => `#${idx + 1}: ${s.Outcome || "-"}`).join("\n")
-            : r.Outcome || "-";
+            : outcomeVal;
         return (
           <div
             className="text-xs text-gray-800 line-clamp-2 leading-relaxed"
             title={allOutcomes}
           >
-            {r.Outcome || "-"}
+            {outcomeVal}
             {scopes.length > 1 && (
               <span className="block text-[10px] text-purple-600 font-medium">
                 +{scopes.length - 1} dampak lainnya
@@ -3910,25 +3926,31 @@ export default function ProkerV3Page() {
                   <span>Semua Data</span>
                 </button>
               )}
-              {(isAdmin || isVerifier || isAnggaran || isUpm || isUpmUser) && (
+              {(isAdmin ||
+                isVerifier ||
+                isAnggaran ||
+                isUpm ||
+                isUpmUser ||
+                isUserWithFakultasUnit ||
+                isLevelUser) && (
                 <>
                   <button
                     type="button"
                     onClick={() => handleTabChange("menunggu")}
                     className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       activeTab === "menunggu"
-                        ? isAdmin
-                          ? "bg-amber-500 text-white shadow-xs"
-                          : "bg-white text-purple-700 shadow-xs border border-gray-200/80"
+                        ? isVerifier || isUpmUser
+                          ? "bg-white text-purple-700 shadow-xs border border-gray-200/80"
+                          : "bg-amber-500 text-white shadow-xs"
                         : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
                     }`}
                   >
                     <Clock
                       className={`w-3.5 h-3.5 ${
                         activeTab === "menunggu"
-                          ? isAdmin
-                            ? "text-white"
-                            : "text-purple-600"
+                          ? isVerifier || isUpmUser
+                            ? "text-purple-600"
+                            : "text-white"
                           : "text-gray-400"
                       }`}
                     />
@@ -4019,7 +4041,7 @@ export default function ProkerV3Page() {
                     : activeTab === "menunggu"
                       ? isAnggaran
                         ? "Menunggu Persetujuan Anggaran"
-                        : isAdmin
+                        : isAdmin || isUserWithFakultasUnit || isLevelUser
                           ? "Menunggu Verifikasi"
                           : "Menunggu Verifikasi UPM"
                       : activeTab === "revisi"
@@ -4029,12 +4051,12 @@ export default function ProkerV3Page() {
                         : activeTab === "terima"
                           ? isAnggaran
                             ? "Diterima Anggaran"
-                            : isAdmin
+                            : isAdmin || isUserWithFakultasUnit || isLevelUser
                               ? "Diterima / Disetujui"
                               : "Diterima Verifikator"
                           : isAnggaran
                             ? "Ditolak Anggaran"
-                            : isAdmin
+                            : isAdmin || isUserWithFakultasUnit || isLevelUser
                               ? "Ditolak"
                               : "Ditolak Verifikator"}
               </span>

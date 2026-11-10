@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Settings as SettingsIcon,
   UserCheck,
@@ -14,6 +14,13 @@ import {
   Shield,
   ChevronDown,
   ChevronUp,
+  Globe,
+  Building2,
+  Search,
+  Trash2,
+  X,
+  Check,
+  Filter,
 } from "lucide-react";
 import Navbar from "@/Components/Navbar";
 import PageHeader from "@/Components/PageHeader";
@@ -186,6 +193,7 @@ export default function SettingsPage() {
   // =======================
   // STATE: PROKER BATAL SETTING (ADMIN)
   // =======================
+  const [batalTab, setBatalTab] = useState("global"); // 'global' | 'unit'
   const [batalSetting, setBatalSetting] = useState(null);
   const [batalDateInput, setBatalDateInput] = useState("");
   const [loadingBatalSetting, setLoadingBatalSetting] = useState(false);
@@ -193,6 +201,67 @@ export default function SettingsPage() {
   const [batalDateError, setBatalDateError] = useState("");
   const [batalFeedback, setBatalFeedback] = useState(null);
   const [savingBatalSetting, setSavingBatalSetting] = useState(false);
+
+  // Unit-specific state
+  const [unitOptions, setUnitOptions] = useState([]);
+  const [loadingUnits, setLoadingUnits] = useState(false);
+  const [selectedTargetUnitIds, setSelectedTargetUnitIds] = useState([]);
+  const [unitDateInput, setUnitDateInput] = useState("");
+  const [unitDateError, setUnitDateError] = useState("");
+  const [unitDropdownOpen, setUnitDropdownOpen] = useState(false);
+  const [unitSearchQuery, setUnitSearchQuery] = useState("");
+  const [unitTypeFilter, setUnitTypeFilter] = useState("all"); // 'all' | 'fakultas' | 'prodi' | 'unit'
+  const [deletingUnitId, setDeletingUnitId] = useState(null);
+  const unitDropdownRef = useRef(null);
+
+  const fetchUnits = useCallback(async () => {
+    if (!isAdmin) return;
+    setLoadingUnits(true);
+    try {
+      const res = await apiClient.get("/proker_v3_options");
+      const units = res?.data?.units || [];
+      setUnitOptions(Array.isArray(units) ? units : []);
+    } catch (e) {
+      console.error("Gagal memuat daftar unit:", e);
+    } finally {
+      setLoadingUnits(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    fetchUnits();
+  }, [fetchUnits]);
+
+  useEffect(() => {
+    if (!unitDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (
+        unitDropdownRef.current &&
+        !unitDropdownRef.current.contains(e.target)
+      ) {
+        setUnitDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [unitDropdownOpen]);
+
+  const filteredUnitOptions = useMemo(() => {
+    let list = unitOptions;
+    if (unitTypeFilter !== "all") {
+      list = list.filter(
+        (u) => String(u.type || "").toLowerCase() === unitTypeFilter
+      );
+    }
+    if (!unitSearchQuery.trim()) return list;
+    const q = unitSearchQuery.toLowerCase().trim();
+    return list.filter((u) => {
+      const name = String(u.nama || u.nama_fak_prod_unit || "").toLowerCase();
+      const type = String(u.type || "").toLowerCase();
+      const fak = String(u.fakultas || "").toLowerCase();
+      return name.includes(q) || type.includes(q) || fak.includes(q);
+    });
+  }, [unitOptions, unitTypeFilter, unitSearchQuery]);
 
   const fetchBatalSetting = useCallback(async () => {
     if (!isAdmin) return;
@@ -202,7 +271,9 @@ export default function SettingsPage() {
       const res = await apiClient.get("/settings/proker-batal");
       const data = res?.data || null;
       setBatalSetting(data);
-      setBatalDateInput(data?.proker_batal_aktif_tanggal || "");
+      setBatalDateInput(
+        data?.global_date || data?.proker_batal_aktif_tanggal || ""
+      );
     } catch (err) {
       const parsed = parseApiError(
         err,
@@ -224,7 +295,7 @@ export default function SettingsPage() {
 
     if (!batalDateInput.trim()) {
       setBatalDateError(
-        "Pilih tanggal aktif Proker Batal, atau klik Reset Tanggal untuk menonaktifkan."
+        "Pilih tanggal aktif Proker Batal (Global), atau klik Reset Tanggal untuk menonaktifkan."
       );
       return;
     }
@@ -233,22 +304,18 @@ export default function SettingsPage() {
     setSavingBatalSetting(true);
     try {
       const res = await apiClient.put("/settings/proker-batal", {
-        proker_batal_aktif_tanggal: batalDateInput.trim(),
+        global_date: batalDateInput.trim(),
       });
       const data = res?.data || {};
-      setBatalSetting({
-        setting_key: data.setting_key,
-        proker_batal_aktif_tanggal: data.proker_batal_aktif_tanggal || "",
-        has_date: Boolean(data.has_date),
-        is_active: Boolean(data.is_active),
-        status: data.status,
-        status_label: data.status_label,
-        message: data.detail_message || "",
-        updated_at: data.updated_at || "",
-      });
-      setBatalDateInput(data.proker_batal_aktif_tanggal || "");
+      setBatalSetting((prev) => ({
+        ...prev,
+        ...data,
+      }));
+      setBatalDateInput(
+        data.global_date || data.proker_batal_aktif_tanggal || ""
+      );
       const okMsg =
-        data.message || "Tanggal aktif Proker Batal berhasil disimpan";
+        data.message || "Tanggal aktif Proker Batal (Global) berhasil disimpan";
       setBatalFeedback({ type: "success", text: okMsg });
       addToast("success", okMsg);
     } catch (err) {
@@ -269,22 +336,16 @@ export default function SettingsPage() {
     setSavingBatalSetting(true);
     try {
       const res = await apiClient.put("/settings/proker-batal", {
-        proker_batal_aktif_tanggal: "",
+        action: "reset_global",
       });
       const data = res?.data || {};
-      setBatalSetting({
-        setting_key: data.setting_key,
-        proker_batal_aktif_tanggal: "",
-        has_date: false,
-        is_active: false,
-        status: data.status || "belum_diatur",
-        status_label: data.status_label || "Belum Diatur",
-        message: data.detail_message || "",
-        updated_at: data.updated_at || "",
-      });
+      setBatalSetting((prev) => ({
+        ...prev,
+        ...data,
+      }));
       setBatalDateInput("");
       const okMsg =
-        data.message || "Tanggal aktif Proker Batal berhasil direset";
+        data.message || "Tanggal aktif Proker Batal (Global) berhasil direset";
       setBatalFeedback({ type: "success", text: okMsg });
       addToast("success", okMsg);
     } catch (err) {
@@ -297,6 +358,97 @@ export default function SettingsPage() {
     } finally {
       setSavingBatalSetting(false);
     }
+  };
+
+  const handleSaveUnitBatalSetting = async (e) => {
+    e.preventDefault();
+    setBatalFeedback(null);
+
+    if (selectedTargetUnitIds.length === 0) {
+      setUnitDateError("Pilih minimal satu target fakultas atau unit.");
+      return;
+    }
+    if (!unitDateInput.trim()) {
+      setUnitDateError("Pilih tanggal aktif untuk unit yang dipilih.");
+      return;
+    }
+
+    setUnitDateError("");
+    setSavingBatalSetting(true);
+    try {
+      const res = await apiClient.put("/settings/proker-batal", {
+        target_units: selectedTargetUnitIds,
+        tanggal: unitDateInput.trim(),
+      });
+      const data = res?.data || {};
+      setBatalSetting((prev) => ({
+        ...prev,
+        ...data,
+      }));
+      setSelectedTargetUnitIds([]);
+      setUnitDateInput("");
+      setUnitDropdownOpen(false);
+      const okMsg =
+        data.message || "Jadwal khusus fakultas/unit berhasil disimpan";
+      setBatalFeedback({ type: "success", text: okMsg });
+      addToast("success", okMsg);
+    } catch (err) {
+      const parsed = parseApiError(
+        err,
+        "Gagal menyimpan jadwal khusus unit"
+      );
+      setBatalFeedback({ type: "error", text: parsed.summary });
+      addToast("error", parsed.summary);
+    } finally {
+      setSavingBatalSetting(false);
+    }
+  };
+
+  const handleDeleteUnitOverride = async (unitId, unitName) => {
+    setBatalFeedback(null);
+    setDeletingUnitId(unitId);
+    try {
+      const res = await apiClient.put("/settings/proker-batal", {
+        action: "delete_unit",
+        delete_unit_id: unitId,
+      });
+      const data = res?.data || {};
+      setBatalSetting((prev) => ({
+        ...prev,
+        ...data,
+      }));
+      const okMsg = `Jadwal khusus untuk ${
+        unitName || `Unit #${unitId}`
+      } dihapus (kembali mengikuti jadwal Global)`;
+      setBatalFeedback({ type: "success", text: okMsg });
+      addToast("success", okMsg);
+    } catch (err) {
+      const parsed = parseApiError(
+        err,
+        "Gagal menghapus jadwal khusus unit"
+      );
+      setBatalFeedback({ type: "error", text: parsed.summary });
+      addToast("error", parsed.summary);
+    } finally {
+      setDeletingUnitId(null);
+    }
+  };
+
+  const handleToggleSelectUnit = (id) => {
+    setSelectedTargetUnitIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+    if (unitDateError) setUnitDateError("");
+  };
+
+  const handleSelectAllFilteredUnits = () => {
+    const ids = filteredUnitOptions.map((u) => u.id).filter((id) => id > 0);
+    setSelectedTargetUnitIds((prev) => Array.from(new Set([...prev, ...ids])));
+    if (unitDateError) setUnitDateError("");
+  };
+
+  const handleClearSelectedUnits = () => {
+    setSelectedTargetUnitIds([]);
   };
 
   const inputBaseClass = (hasErr) =>
@@ -830,47 +982,66 @@ export default function SettingsPage() {
                     </div>
                   ) : (
                     <>
-                      {/* Live Status Panel */}
-                      <div
-                        className={`rounded-lg px-4 py-3 border text-xs space-y-1 ${
-                          batalSetting?.status === "aktif"
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                            : batalSetting?.status === "belum_aktif"
-                            ? "bg-amber-50 border-amber-200 text-amber-800"
-                            : "bg-gray-50 border-gray-200 text-gray-700"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 font-bold">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              batalSetting?.status === "aktif"
-                                ? "bg-emerald-600"
-                                : batalSetting?.status === "belum_aktif"
-                                ? "bg-amber-600"
-                                : "bg-gray-500"
-                            }`}
+                      {/* Segmented Tab Selector */}
+                      <div className="flex items-center gap-1.5 p-1 bg-gray-100/80 rounded-xl mb-4 border border-gray-200/60">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBatalTab("global");
+                            setBatalFeedback(null);
+                          }}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                            batalTab === "global"
+                              ? "bg-white text-purple-700 shadow-2xs border border-gray-200/80"
+                              : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
+                          }`}
+                        >
+                          <Globe
+                            size={14}
+                            className={
+                              batalTab === "global"
+                                ? "text-purple-600"
+                                : "text-gray-400"
+                            }
                           />
-                          <span>
-                            Status Fitur:{" "}
-                            {batalSetting?.status_label || "Belum Diatur"}
-                          </span>
-                        </div>
-                        <p className="leading-relaxed">
-                          {batalSetting?.message ||
-                            "Fitur Proker Batal nonaktif untuk user unit sampai tanggal mulai ditentukan."}
-                        </p>
-                        {batalSetting?.updated_at && (
-                          <p className="text-[11px] opacity-90 pt-0.5">
-                            Terakhir diperbarui: {batalSetting.updated_at}
-                          </p>
-                        )}
+                          <span>Default (Global)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBatalTab("unit");
+                            setBatalFeedback(null);
+                          }}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                            batalTab === "unit"
+                              ? "bg-white text-purple-700 shadow-2xs border border-gray-200/80"
+                              : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
+                          }`}
+                        >
+                          <Building2
+                            size={14}
+                            className={
+                              batalTab === "unit"
+                                ? "text-purple-600"
+                                : "text-gray-400"
+                            }
+                          />
+                          <span>Target Spesifik Unit</span>
+                          {Array.isArray(batalSetting?.units) &&
+                            batalSetting.units.length > 0 && (
+                              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
+                                {batalSetting.units.length}
+                              </span>
+                            )}
+                        </button>
                       </div>
 
+                      {/* Feedback banner */}
                       {batalFeedback && (
                         <div
                           role="status"
                           aria-live="polite"
-                          className={`rounded-lg px-3.5 py-2.5 text-xs border flex items-start gap-2 ${
+                          className={`rounded-lg px-3.5 py-2.5 mb-4 text-xs border flex items-start gap-2 ${
                             batalFeedback.type === "success"
                               ? "bg-emerald-50 border-emerald-200 text-emerald-800"
                               : "bg-red-50 border-red-200 text-red-800"
@@ -885,88 +1056,470 @@ export default function SettingsPage() {
                         </div>
                       )}
 
-                      <form
-                        onSubmit={handleSaveBatalSetting}
-                        noValidate
-                        className="space-y-4"
-                      >
-                        <div>
-                          <label
-                            htmlFor="proker_batal_aktif_tanggal"
-                            className="block text-xs font-semibold text-gray-800 mb-1.5"
+                      {batalTab === "global" ? (
+                        <>
+                          {/* Live Status Panel (Global) */}
+                          <div
+                            className={`rounded-lg px-4 py-3 border text-xs space-y-1 ${
+                              batalSetting?.status === "aktif"
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                                : batalSetting?.status === "belum_aktif"
+                                ? "bg-amber-50 border-amber-200 text-amber-800"
+                                : "bg-gray-50 border-gray-200 text-gray-700"
+                            }`}
                           >
-                            Aktif Mulai Tanggal
-                          </label>
-                          <input
-                            id="proker_batal_aktif_tanggal"
-                            name="proker_batal_aktif_tanggal"
-                            type="date"
-                            value={batalDateInput}
-                            onChange={(e) => {
-                              setBatalDateInput(e.target.value);
-                              if (batalDateError) setBatalDateError("");
-                            }}
-                            aria-invalid={Boolean(batalDateError)}
-                            aria-describedby={
-                              batalDateError
-                                ? "batal_date_error"
-                                : "batal_date_help"
-                            }
-                            className={inputBaseClass(Boolean(batalDateError))}
-                          />
-                          {batalDateError ? (
-                            <p
-                              id="batal_date_error"
-                              role="alert"
-                              className="text-xs text-red-700 mt-1"
-                            >
-                              {batalDateError}
+                            <div className="flex items-center gap-2 font-bold">
+                              <span
+                                className={`w-2 h-2 rounded-full ${
+                                  batalSetting?.status === "aktif"
+                                    ? "bg-emerald-600"
+                                    : batalSetting?.status === "belum_aktif"
+                                    ? "bg-amber-600"
+                                    : "bg-gray-500"
+                                }`}
+                              />
+                              <span>
+                                Status Fitur (Global):{" "}
+                                {batalSetting?.status_label || "Belum Diatur"}
+                              </span>
+                            </div>
+                            <p className="leading-relaxed">
+                              {batalSetting?.message ||
+                                "Fitur Proker Batal nonaktif untuk user unit sampai tanggal mulai ditentukan."}
                             </p>
-                          ) : (
-                            <p
-                              id="batal_date_help"
-                              className="text-xs text-gray-600 mt-1.5 leading-relaxed"
-                            >
-                              Switch Proker Batal dan Aktivitas Batal pada user
-                              fakultas atau unit aktif mulai tanggal ini pukul
-                              00:00 WIB.
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                          <button
-                            type="submit"
-                            disabled={savingBatalSetting}
-                            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white text-sm font-semibold shadow-2xs transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2"
-                          >
-                            {savingBatalSetting ? (
-                              <>
-                                <RefreshCw size={15} className="animate-spin" />
-                                <span>Menyimpan...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Save size={15} />
-                                <span>Simpan Tanggal</span>
-                              </>
+                            {batalSetting?.updated_at && (
+                              <p className="text-[11px] opacity-90 pt-0.5">
+                                Terakhir diperbarui: {batalSetting.updated_at}
+                              </p>
                             )}
-                          </button>
+                          </div>
 
-                          <button
-                            type="button"
-                            disabled={
-                              savingBatalSetting ||
-                              (!batalSetting?.has_date && !batalDateInput)
-                            }
-                            onClick={handleResetBatalSetting}
-                            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 text-xs font-semibold transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
+                          <form
+                            onSubmit={handleSaveBatalSetting}
+                            noValidate
+                            className="space-y-4 mt-4"
                           >
-                            <RotateCcw size={14} />
-                            <span>Reset</span>
-                          </button>
+                            <div>
+                              <label
+                                htmlFor="proker_batal_aktif_tanggal"
+                                className="block text-xs font-semibold text-gray-800 mb-1.5"
+                              >
+                                Aktif Mulai Tanggal (Global)
+                              </label>
+                              <input
+                                id="proker_batal_aktif_tanggal"
+                                name="proker_batal_aktif_tanggal"
+                                type="date"
+                                value={batalDateInput}
+                                onChange={(e) => {
+                                  setBatalDateInput(e.target.value);
+                                  if (batalDateError) setBatalDateError("");
+                                }}
+                                aria-invalid={Boolean(batalDateError)}
+                                aria-describedby={
+                                  batalDateError
+                                    ? "batal_date_error"
+                                    : "batal_date_help"
+                                }
+                                className={inputBaseClass(Boolean(batalDateError))}
+                              />
+                              {batalDateError ? (
+                                <p
+                                  id="batal_date_error"
+                                  role="alert"
+                                  className="text-xs text-red-700 mt-1"
+                                >
+                                  {batalDateError}
+                                </p>
+                              ) : (
+                                <p
+                                  id="batal_date_help"
+                                  className="text-xs text-gray-600 mt-1.5 leading-relaxed"
+                                >
+                                  Jadwal default ini berlaku untuk semua unit dan fakultas yang tidak memiliki jadwal khusus tersendiri.
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                              <button
+                                type="submit"
+                                disabled={savingBatalSetting}
+                                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white text-sm font-semibold shadow-2xs transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-700 focus-visible:ring-offset-2"
+                              >
+                                {savingBatalSetting ? (
+                                  <>
+                                    <RefreshCw size={15} className="animate-spin" />
+                                    <span>Menyimpan...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save size={15} />
+                                    <span>Simpan Tanggal Global</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={
+                                  savingBatalSetting ||
+                                  (!batalSetting?.has_date && !batalDateInput)
+                                }
+                                onClick={handleResetBatalSetting}
+                                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 text-xs font-semibold transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
+                              >
+                                <RotateCcw size={14} />
+                                <span>Reset Global</span>
+                              </button>
+                            </div>
+                          </form>
+                        </>
+                      ) : (
+                        /* UNIT SPECIFIC TAB */
+                        <div className="space-y-5">
+                          <form
+                            onSubmit={handleSaveUnitBatalSetting}
+                            noValidate
+                            className="p-3.5 bg-gray-50/70 border border-gray-200/80 rounded-2xl space-y-3.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                                <Building2 size={14} className="text-purple-600" />
+                                <span>Atur Target Fakultas / Unit</span>
+                              </h3>
+                              {selectedTargetUnitIds.length > 0 && (
+                                <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                                  {selectedTargetUnitIds.length} unit terpilih
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Dropdown Multi-Select Trigger & Popover */}
+                            <div className="relative" ref={unitDropdownRef}>
+                              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                Pilih Unit / Fakultas (Multiple Target)
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setUnitDropdownOpen((prev) => !prev)}
+                                className={`w-full px-3 py-2 text-xs rounded-xl border bg-white flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+                                  unitDropdownOpen
+                                    ? "border-purple-600 ring-2 ring-purple-500/20"
+                                    : "border-gray-300 hover:border-gray-400"
+                                }`}
+                              >
+                                {selectedTargetUnitIds.length === 0 ? (
+                                  <span className="text-gray-400">
+                                    Pilih satu atau lebih target fakultas / unit...
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                                    <span className="px-1.5 py-0.5 rounded bg-purple-700 text-white font-bold text-[10px]">
+                                      {selectedTargetUnitIds.length} Dipilih
+                                    </span>
+                                    {selectedTargetUnitIds.slice(0, 2).map((id) => {
+                                      const u = unitOptions.find((opt) => opt.id === id);
+                                      const name = u?.nama || u?.nama_fak_prod_unit || `Unit #${id}`;
+                                      return (
+                                        <span
+                                          key={id}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[11px] max-w-[150px] truncate"
+                                        >
+                                          <span className="truncate">{name}</span>
+                                        </span>
+                                      );
+                                    })}
+                                    {selectedTargetUnitIds.length > 2 && (
+                                      <span className="text-[11px] text-gray-500 font-medium">
+                                        +{selectedTargetUnitIds.length - 2} lainnya
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                <ChevronDown
+                                  size={15}
+                                  className={`text-gray-400 shrink-0 transition-transform ${
+                                    unitDropdownOpen ? "rotate-180" : ""
+                                  }`}
+                                />
+                              </button>
+
+                              {/* Dropdown Popover */}
+                              {unitDropdownOpen && (
+                                <div className="absolute z-50 left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden text-xs">
+                                  {/* Filter & Search Header */}
+                                  <div className="p-2.5 bg-gray-50 border-b border-gray-100 space-y-2">
+                                    <div className="relative">
+                                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                      <input
+                                        type="text"
+                                        value={unitSearchQuery}
+                                        onChange={(e) => setUnitSearchQuery(e.target.value)}
+                                        placeholder="Cari nama fakultas / prodi / unit..."
+                                        className="w-full pl-7 pr-6 py-1 text-xs rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                                      />
+                                      {unitSearchQuery && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setUnitSearchQuery("")}
+                                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* Type filter buttons */}
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {["all", "fakultas", "prodi", "unit"].map((typeKey) => (
+                                        <button
+                                          key={typeKey}
+                                          type="button"
+                                          onClick={() => setUnitTypeFilter(typeKey)}
+                                          className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition cursor-pointer capitalize ${
+                                            unitTypeFilter === typeKey
+                                              ? "bg-purple-700 text-white"
+                                              : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"
+                                          }`}
+                                        >
+                                          {typeKey === "all" ? "Semua Tipe" : typeKey}
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    {/* Batch select / clear actions */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-gray-200/60 text-[11px]">
+                                      <button
+                                        type="button"
+                                        onClick={handleSelectAllFilteredUnits}
+                                        className="text-purple-700 hover:underline font-semibold cursor-pointer"
+                                      >
+                                        Pilih Semua Filtered ({filteredUnitOptions.length})
+                                      </button>
+                                      {selectedTargetUnitIds.length > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={handleClearSelectedUnits}
+                                          className="text-red-600 hover:underline font-semibold cursor-pointer"
+                                        >
+                                          Kosongkan
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* List of Units */}
+                                  <div className="max-h-52 overflow-y-auto divide-y divide-gray-100">
+                                    {loadingUnits ? (
+                                      <div className="py-4 text-center text-gray-400">
+                                        Memuat daftar unit...
+                                      </div>
+                                    ) : filteredUnitOptions.length === 0 ? (
+                                      <div className="py-4 text-center text-gray-400">
+                                        Tidak ada unit ditemukan
+                                      </div>
+                                    ) : (
+                                      filteredUnitOptions.map((u) => {
+                                        const isChecked = selectedTargetUnitIds.includes(u.id);
+                                        const name = u.nama || u.nama_fak_prod_unit || `Unit #${u.id}`;
+                                        return (
+                                          <label
+                                            key={u.id}
+                                            className={`px-3 py-2 flex items-center justify-between gap-2 cursor-pointer transition select-none ${
+                                              isChecked
+                                                ? "bg-purple-50/70 text-purple-900 font-semibold"
+                                                : "hover:bg-gray-50 text-gray-700"
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => handleToggleSelectUnit(u.id)}
+                                                className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                              />
+                                              <span className="truncate">{name}</span>
+                                            </div>
+                                            {u.type && (
+                                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 shrink-0">
+                                                {u.type}
+                                              </span>
+                                            )}
+                                          </label>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Selected Chips Preview */}
+                            {selectedTargetUnitIds.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-white border border-gray-200 rounded-xl">
+                                {selectedTargetUnitIds.map((id) => {
+                                  const u = unitOptions.find((opt) => opt.id === id);
+                                  const name = u?.nama || u?.nama_fak_prod_unit || `Unit #${id}`;
+                                  return (
+                                    <span
+                                      key={id}
+                                      className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 text-[11px]"
+                                    >
+                                      <span className="truncate max-w-[120px]">{name}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleSelectUnit(id)}
+                                        className="text-purple-400 hover:text-purple-700 cursor-pointer p-0.5"
+                                      >
+                                        <X size={11} />
+                                      </button>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Date Input for selected units */}
+                            <div>
+                              <label
+                                htmlFor="unit_batal_aktif_tanggal"
+                                className="block text-xs font-semibold text-gray-800 mb-1"
+                              >
+                                Aktif Mulai Tanggal untuk Unit Terpilih
+                              </label>
+                              <input
+                                id="unit_batal_aktif_tanggal"
+                                name="unit_batal_aktif_tanggal"
+                                type="date"
+                                value={unitDateInput}
+                                onChange={(e) => {
+                                  setUnitDateInput(e.target.value);
+                                  if (unitDateError) setUnitDateError("");
+                                }}
+                                aria-invalid={Boolean(unitDateError)}
+                                className={inputBaseClass(Boolean(unitDateError))}
+                              />
+                              {unitDateError && (
+                                <p role="alert" className="text-xs text-red-700 mt-1">
+                                  {unitDateError}
+                                </p>
+                              )}
+                            </div>
+
+                            <button
+                              type="submit"
+                              disabled={savingBatalSetting}
+                              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
+                            >
+                              {savingBatalSetting ? (
+                                <>
+                                  <RefreshCw size={13} className="animate-spin" />
+                                  <span>Menyimpan...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Save size={13} />
+                                  <span>
+                                    Terapkan ke{" "}
+                                    {selectedTargetUnitIds.length > 0
+                                      ? `${selectedTargetUnitIds.length} Unit Terpilih`
+                                      : "Unit Terpilih"}
+                                  </span>
+                                </>
+                              )}
+                            </button>
+                          </form>
+
+                          {/* List of Configured Unit Overrides */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                                <Layers size={13} className="text-purple-600" />
+                                <span>
+                                  Daftar Jadwal Khusus Unit (
+                                  {batalSetting?.units?.length || 0})
+                                </span>
+                              </h4>
+                            </div>
+
+                            {Array.isArray(batalSetting?.units) &&
+                            batalSetting.units.length > 0 ? (
+                              <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden bg-white">
+                                {batalSetting.units.map((u) => (
+                                  <div
+                                    key={u.id_fakultas_unit}
+                                    className="p-2.5 flex items-center justify-between gap-2 hover:bg-gray-50/80 transition"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-semibold text-xs text-gray-900 truncate">
+                                          {u.nama_fakultas_unit ||
+                                            `Unit #${u.id_fakultas_unit}`}
+                                        </span>
+                                        <span
+                                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                            u.is_active
+                                              ? "bg-emerald-100 text-emerald-800"
+                                              : "bg-amber-100 text-amber-800"
+                                          }`}
+                                        >
+                                          {u.status_label ||
+                                            (u.is_active
+                                              ? "Aktif"
+                                              : "Belum Aktif")}
+                                        </span>
+                                      </div>
+                                      <p className="text-[11px] text-gray-500 mt-0.5">
+                                        Aktif mulai:{" "}
+                                        <span className="font-medium text-gray-700">
+                                          {u.tanggal}
+                                        </span>
+                                        {u.updated_at && (
+                                          <span className="text-[10px] text-gray-400 ml-2">
+                                            ({u.updated_at})
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        deletingUnitId === u.id_fakultas_unit
+                                      }
+                                      onClick={() =>
+                                        handleDeleteUnitOverride(
+                                          u.id_fakultas_unit,
+                                          u.nama_fakultas_unit
+                                        )
+                                      }
+                                      title="Hapus jadwal khusus ini (unit akan kembali mengikuti jadwal Global)"
+                                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer disabled:opacity-40"
+                                    >
+                                      {deletingUnitId === u.id_fakultas_unit ? (
+                                        <RefreshCw
+                                          size={13}
+                                          className="animate-spin text-red-600"
+                                        />
+                                      ) : (
+                                        <Trash2 size={13} />
+                                      )}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 text-center border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                                <p className="text-xs text-gray-500">
+                                  Belum ada jadwal khusus per unit. Seluruh
+                                  fakultas dan unit saat ini mengikuti jadwal
+                                  Global.
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </form>
+                      )}
                     </>
                   )}
                 </div>

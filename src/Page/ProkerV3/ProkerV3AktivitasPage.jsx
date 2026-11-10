@@ -149,7 +149,7 @@ export default function ProkerV3AktivitasPage() {
     );
   }, [curRole, level, user]);
 
-  // Level verifikator dan role verifikator
+  // Level verifikator dan role verifikator (yang nominal anggarannya disensor)
   const isVerifikatorRoleOrLevel = useMemo(() => {
     if (isAdmin) return false;
     const normRole = curRole.toLowerCase().trim();
@@ -159,8 +159,11 @@ export default function ProkerV3AktivitasPage() {
     const userLevel = String(user?.level || "")
       .toLowerCase()
       .trim();
+    // Role UPML diizinkan melihat nominal anggaran (tidak disensor)
+    if (normRole === "upml" || normLevel === "upml" || userLevel === "upml") {
+      return false;
+    }
     const verifierRoles = [
-      "upml",
       "upmf",
       "upms",
       "fakultas",
@@ -482,8 +485,10 @@ export default function ProkerV3AktivitasPage() {
 
   useEffect(() => {
     let cancel = false;
+    const targetUnitId = proker?.IdFakultasUnit || userUnitData?.id || "";
+    const unitParam = targetUnitId ? `?unit_id=${encodeURIComponent(targetUnitId)}` : "";
     apiClient
-      .get("/settings/proker-batal")
+      .get(`/settings/proker-batal${unitParam}`)
       .then((res) => {
         if (!cancel) setProkerBatalStatus(res?.data || null);
       })
@@ -493,7 +498,7 @@ export default function ProkerV3AktivitasPage() {
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [proker?.IdFakultasUnit, userUnitData]);
 
   useEffect(() => {
     if (!proker) {

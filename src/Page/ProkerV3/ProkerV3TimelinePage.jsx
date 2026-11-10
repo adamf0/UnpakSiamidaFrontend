@@ -152,8 +152,11 @@ export default function ProkerV3TimelinePage() {
     const userLevel = String(user?.level || "")
       .toLowerCase()
       .trim();
+    // Role UPML diizinkan melihat nominal anggaran (tidak disensor)
+    if (normRole === "upml" || normLevel === "upml" || userLevel === "upml") {
+      return false;
+    }
     const verifierRoles = [
-      "upml",
       "upmf",
       "upms",
       "fakultas",
