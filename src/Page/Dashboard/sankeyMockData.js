@@ -2386,6 +2386,10 @@ export function transformMonitoringToSankeyData({
       }
 
       aktObj.sisa = Math.max(aktObj.pagu - aktObj.serapan, 0);
+      aktObj.persenSerapan =
+        aktObj.pagu > 0
+          ? Number(((aktObj.serapan / aktObj.pagu) * 100).toFixed(1))
+          : 0;
       aktivitas.push(aktObj);
       prokerObj.aktivitasIds.push(aktId);
       prokerObj.pagu += aktObj.pagu;
@@ -2430,6 +2434,7 @@ export function transformMonitoringToSankeyData({
     c.pagu = rel.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
     c.serapan = rel.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
     c.sisa = Math.max(c.pagu - c.serapan, 0);
+    c.persenSerapan = c.pagu > 0 ? Number(((c.serapan / c.pagu) * 100).toFixed(1)) : 0;
   });
 
   // Agregasi nilai ke Boundaries

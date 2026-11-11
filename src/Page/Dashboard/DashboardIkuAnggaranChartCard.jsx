@@ -3046,26 +3046,41 @@ export default function DashboardIkuAnggaranChartCard({
                       3. Sub-IKU (Khusus IKU 1)
                     </div>
                     <div className="space-y-3">
-                      {filteredSankeyData.childIkus.map((c) => (
-                        <div
-                          key={c.id}
-                          ref={(el) => (nodeRefs.current[c.id] = el)}
-                          onMouseEnter={() => setHoveredNodeId(c.id)}
-                          onMouseLeave={() => setHoveredNodeId(null)}
-                          onClick={() => handleToggleNodeFocus(c.id)}
-                          className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(c.id)}`}
-                        >
-                          <div className="text-xs font-bold text-purple-700">
-                            {c.kode}
+                      {filteredSankeyData.childIkus.map((c) => {
+                        const cPct =
+                          c.pagu > 0
+                            ? Number(
+                                ((c.serapan / c.pagu) * 100).toFixed(
+                                  c.serapan % c.pagu === 0 ? 0 : 1,
+                                ),
+                              )
+                            : c.persenSerapan || 0;
+                        return (
+                          <div
+                            key={c.id}
+                            ref={(el) => (nodeRefs.current[c.id] = el)}
+                            onMouseEnter={() => setHoveredNodeId(c.id)}
+                            onMouseLeave={() => setHoveredNodeId(null)}
+                            onClick={() => handleToggleNodeFocus(c.id)}
+                            className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(c.id)}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-purple-700">
+                                {c.kode}
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-medium">
+                                {cPct}%
+                              </span>
+                            </div>
+                            <div className="text-xs font-bold text-gray-900">
+                              {c.nama}
+                            </div>
+                            <div className="text-[11px] font-medium text-gray-500">
+                              {formatRupiah(c.serapan)} ({cPct}%)
+                            </div>
                           </div>
-                          <div className="text-xs font-bold text-gray-900">
-                            {c.nama}
-                          </div>
-                          <div className="text-[11px] font-medium text-gray-500">
-                            {formatRupiah(c.serapan)}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {filteredSankeyData.childIkus.length === 0 && (
                         <div className="p-4 rounded-xl border border-dashed border-gray-200 text-center text-xs text-gray-400 italic">
                           IKU terpilih langsung mengalir ke Indikator (tanpa
@@ -3081,46 +3096,61 @@ export default function DashboardIkuAnggaranChartCard({
                       4. Indikator ({filteredSankeyData.indikators.length})
                     </div>
                     <div className="space-y-3">
-                      {filteredSankeyData.indikators.map((ind) => (
-                        <div
-                          key={ind.id}
-                          ref={(el) => (nodeRefs.current[ind.id] = el)}
-                          onMouseEnter={() => setHoveredNodeId(ind.id)}
-                          onMouseLeave={() => setHoveredNodeId(null)}
-                          onClick={() => handleToggleNodeFocus(ind.id)}
-                          className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(ind.id)}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-sky-700">
-                              {ind.kode}
-                            </span>
-                            <span
-                              className="text-[10px] font-medium text-gray-400 truncate max-w-[100px]"
-                              title={ind.standar}
-                            >
-                              {ind.standar}
-                            </span>
-                          </div>
+                      {filteredSankeyData.indikators.map((ind) => {
+                        const indPct =
+                          ind.pagu > 0
+                            ? Number(
+                                ((ind.serapan / ind.pagu) * 100).toFixed(
+                                  ind.serapan % ind.pagu === 0 ? 0 : 1,
+                                ),
+                              )
+                            : ind.persenSerapan || 0;
+                        return (
                           <div
-                            className="text-xs font-bold text-gray-900 line-clamp-2"
-                            title={ind.nama}
+                            key={ind.id}
+                            ref={(el) => (nodeRefs.current[ind.id] = el)}
+                            onMouseEnter={() => setHoveredNodeId(ind.id)}
+                            onMouseLeave={() => setHoveredNodeId(null)}
+                            onClick={() => handleToggleNodeFocus(ind.id)}
+                            className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(ind.id)}`}
                           >
-                            {ind.nama}
-                          </div>
-                          <div className="pt-1.5 border-t border-gray-100 space-y-0.5 text-[11px]">
-                            <div className="flex justify-between text-gray-600">
-                              <span>Total Uang:</span>
-                              <span className="font-semibold text-gray-800">
-                                {formatRupiah(ind.pagu)}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-sky-700">
+                                {ind.kode}
                               </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span
+                                  className="text-[10px] font-medium text-gray-400 truncate max-w-[80px]"
+                                  title={ind.standar}
+                                >
+                                  {ind.standar}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-medium">
+                                  {indPct}%
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex justify-between text-emerald-700 font-semibold">
-                              <span>Realisasi:</span>
-                              <span>{formatRupiah(ind.serapan)}</span>
+                            <div
+                              className="text-xs font-bold text-gray-900 line-clamp-2"
+                              title={ind.nama}
+                            >
+                              {ind.nama}
+                            </div>
+                            <div className="pt-1.5 border-t border-gray-100 space-y-0.5 text-[11px]">
+                              <div className="flex justify-between text-gray-600">
+                                <span>Total Uang:</span>
+                                <span className="font-semibold text-gray-800">
+                                  {formatRupiah(ind.pagu)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-emerald-700 font-semibold">
+                                <span>Realisasi:</span>
+                                <span>{formatRupiah(ind.serapan)}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -3131,42 +3161,55 @@ export default function DashboardIkuAnggaranChartCard({
                       )
                     </div>
                     <div className="space-y-3">
-                      {filteredSankeyData.boundaries.map((b) => (
-                        <div
-                          key={b.id}
-                          ref={(el) => (nodeRefs.current[b.id] = el)}
-                          onMouseEnter={() => setHoveredNodeId(b.id)}
-                          onMouseLeave={() => setHoveredNodeId(null)}
-                          onClick={() => handleToggleNodeFocus(b.id)}
-                          className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(b.id)}`}
-                        >
-                          <div className="flex justify-between">
-                            <div
-                              className="text-xs font-bold text-gray-900"
-                              title={b.nama}
-                            >
-                              {b.nama}
-                            </div>
+                      {filteredSankeyData.boundaries.map((b) => {
+                        const bPct =
+                          b.pagu > 0
+                            ? Number(
+                                ((b.serapan / b.pagu) * 100).toFixed(
+                                  b.serapan % b.pagu === 0 ? 0 : 1,
+                                ),
+                              )
+                            : b.persenSerapan || 0;
+                        return (
+                          <div
+                            key={b.id}
+                            ref={(el) => (nodeRefs.current[b.id] = el)}
+                            onMouseEnter={() => setHoveredNodeId(b.id)}
+                            onMouseLeave={() => setHoveredNodeId(null)}
+                            onClick={() => handleToggleNodeFocus(b.id)}
+                            className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(b.id)}`}
+                          >
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase font-semibold">
-                                {b.type}
-                              </span>
+                              <div
+                                className="text-xs font-bold text-gray-900 truncate mr-1"
+                                title={b.nama}
+                              >
+                                {b.nama}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase font-semibold">
+                                  {b.type}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-medium">
+                                  {bPct}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="pt-1.5 border-t border-gray-100 space-y-0.5 text-[11px]">
+                              <div className="flex justify-between text-gray-600">
+                                <span>Total Uang:</span>
+                                <span className="font-semibold text-gray-800">
+                                  {formatRupiah(b.pagu)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-emerald-700 font-semibold">
+                                <span>Realisasi:</span>
+                                <span>{formatRupiah(b.serapan)}</span>
+                              </div>
                             </div>
                           </div>
-                          <div className="pt-1.5 border-t border-gray-100 space-y-0.5 text-[11px]">
-                            <div className="flex justify-between text-gray-600">
-                              <span>Total Uang:</span>
-                              <span className="font-semibold text-gray-800">
-                                {formatRupiah(b.pagu)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-emerald-700 font-semibold">
-                              <span>Realisasi:</span>
-                              <span>{formatRupiah(b.serapan)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -3176,35 +3219,50 @@ export default function DashboardIkuAnggaranChartCard({
                       6. Proker ({filteredSankeyData.prokers.length})
                     </div>
                     <div className="space-y-3">
-                      {filteredSankeyData.prokers.map((p) => (
-                        <div
-                          key={p.id}
-                          ref={(el) => (nodeRefs.current[p.id] = el)}
-                          onMouseEnter={() => setHoveredNodeId(p.id)}
-                          onMouseLeave={() => setHoveredNodeId(null)}
-                          onClick={() => handleToggleNodeFocus(p.id)}
-                          className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(p.id)}`}
-                        >
+                      {filteredSankeyData.prokers.map((p) => {
+                        const pPct =
+                          p.pagu > 0
+                            ? Number(
+                                ((p.serapan / p.pagu) * 100).toFixed(
+                                  p.serapan % p.pagu === 0 ? 0 : 1,
+                                ),
+                              )
+                            : p.persenSerapan || 0;
+                        return (
                           <div
-                            className="text-xs font-bold text-indigo-700 line-clamp-2"
-                            title={p.namaProker}
+                            key={p.id}
+                            ref={(el) => (nodeRefs.current[p.id] = el)}
+                            onMouseEnter={() => setHoveredNodeId(p.id)}
+                            onMouseLeave={() => setHoveredNodeId(null)}
+                            onClick={() => handleToggleNodeFocus(p.id)}
+                            className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(p.id)}`}
                           >
-                            {p.namaProker}
-                          </div>
-                          <div className="pt-1.5 border-t border-gray-100 space-y-0.5 text-[11px]">
-                            <div className="flex justify-between text-gray-600">
-                              <span>Total Uang:</span>
-                              <span className="font-semibold text-gray-800">
-                                {formatRupiah(p.pagu)}
+                            <div className="flex items-start justify-between gap-1.5">
+                              <div
+                                className="text-xs font-bold text-indigo-700 line-clamp-2"
+                                title={p.namaProker}
+                              >
+                                {p.namaProker}
+                              </div>
+                              <span className="text-[10px] text-gray-400 font-medium shrink-0 pt-0.5">
+                                {pPct}%
                               </span>
                             </div>
-                            <div className="flex justify-between text-emerald-700 font-semibold">
-                              <span>Realisasi:</span>
-                              <span>{formatRupiah(p.serapan)}</span>
+                            <div className="pt-1.5 border-t border-gray-100 space-y-0.5 text-[11px]">
+                              <div className="flex justify-between text-gray-600">
+                                <span>Total Uang:</span>
+                                <span className="font-semibold text-gray-800">
+                                  {formatRupiah(p.pagu)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-emerald-700 font-semibold">
+                                <span>Realisasi:</span>
+                                <span>{formatRupiah(p.serapan)}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -3214,45 +3272,60 @@ export default function DashboardIkuAnggaranChartCard({
                       7. Aktivitas ({filteredSankeyData.aktivitas.length})
                     </div>
                     <div className="space-y-3">
-                      {filteredSankeyData.aktivitas.map((a) => (
-                        <div
-                          key={a.id}
-                          ref={(el) => (nodeRefs.current[a.id] = el)}
-                          onMouseEnter={() => setHoveredNodeId(a.id)}
-                          onMouseLeave={() => setHoveredNodeId(null)}
-                          onClick={() => handleToggleNodeFocus(a.id)}
-                          className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(a.id)}`}
-                        >
+                      {filteredSankeyData.aktivitas.map((a) => {
+                        const aPct =
+                          a.pagu > 0
+                            ? Number(
+                                ((a.serapan / a.pagu) * 100).toFixed(
+                                  a.serapan % a.pagu === 0 ? 0 : 1,
+                                ),
+                              )
+                            : a.persenSerapan || 0;
+                        return (
                           <div
-                            className="text-xs font-bold text-violet-700 line-clamp-2"
-                            title={a.namaAktivitas}
+                            key={a.id}
+                            ref={(el) => (nodeRefs.current[a.id] = el)}
+                            onMouseEnter={() => setHoveredNodeId(a.id)}
+                            onMouseLeave={() => setHoveredNodeId(null)}
+                            onClick={() => handleToggleNodeFocus(a.id)}
+                            className={`p-3 bg-white rounded-xl border border-gray-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all space-y-1.5 ${getNodeFocusClass(a.id)}`}
                           >
-                            {a.namaAktivitas}
-                          </div>
-                          <div className="pt-1.5 border-t border-gray-100 space-y-0.5 text-[11px]">
-                            <div className="flex justify-between text-gray-600 items-baseline">
-                              <span>Total Uang:</span>
-                              <span className="font-semibold text-gray-800 text-right">
-                                {a.isAnggaranRevised && (
-                                  <span className="line-through text-gray-400 font-normal mr-1 text-[10px]">
-                                    {formatRupiah(a.anggaranPengajuan)}
-                                  </span>
-                                )}
-                                {formatRupiah(a.pagu)}
+                            <div className="flex items-start justify-between gap-1.5">
+                              <div
+                                className="text-xs font-bold text-violet-700 line-clamp-2"
+                                title={a.namaAktivitas}
+                              >
+                                {a.namaAktivitas}
+                              </div>
+                              <span className="text-[10px] text-gray-400 font-medium shrink-0 pt-0.5">
+                                {aPct}%
                               </span>
                             </div>
-                            <div className="flex justify-between text-emerald-700 font-semibold">
-                              <span>Realisasi:</span>
-                              <span>{formatRupiah(a.serapan)}</span>
+                            <div className="pt-1.5 border-t border-gray-100 space-y-0.5 text-[11px]">
+                              <div className="flex justify-between text-gray-600 items-baseline">
+                                <span>Total Uang:</span>
+                                <span className="font-semibold text-gray-800 text-right">
+                                  {a.isAnggaranRevised && (
+                                    <span className="line-through text-gray-400 font-normal mr-1 text-[10px]">
+                                      {formatRupiah(a.anggaranPengajuan)}
+                                    </span>
+                                  )}
+                                  {formatRupiah(a.pagu)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-emerald-700 font-semibold">
+                                <span>Realisasi:</span>
+                                <span>{formatRupiah(a.serapan)}</span>
+                              </div>
                             </div>
+                            {a.pic && (
+                              <div className="text-[10px] text-gray-400 truncate">
+                                PIC: {a.pic}
+                              </div>
+                            )}
                           </div>
-                          {a.pic && (
-                            <div className="text-[10px] text-gray-400 truncate">
-                              PIC: {a.pic}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
