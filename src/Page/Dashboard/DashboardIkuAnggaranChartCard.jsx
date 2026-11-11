@@ -13,6 +13,7 @@ import { apiClient } from "@/Common/api";
 import { useContent } from "@/Providers/ContentProvider";
 import {
   buildScopedSankeyData,
+  transformMonitoringToSankeyData,
   calculateSankeySummary,
   getCorrelationMatrix,
   getRootCauseAnalysis,
@@ -21,6 +22,7 @@ import {
   getSankeyConnectedNodeIds,
   V_FAKULTAS_UNIT_ROWS,
   MOCK_ALIASES,
+  SANKEY_DATA,
 } from "./sankeyMockData";
 import {
   filterUnitsForAccessScope,
@@ -370,10 +372,76 @@ export default function DashboardIkuAnggaranChartCard({
   const nodeRefs = useRef({});
   const [ribbonPaths, setRibbonPaths] = useState([]);
 
+  // Data Riil Database untuk Diagram Alir Sankey & Eksekutif Dashboard
+  const [dbSankeyDataset, setDbSankeyDataset] = useState(null);
+  const [isSankeyLoading, setIsSankeyLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function loadDatabaseSankey() {
+      setIsSankeyLoading(true);
+      try {
+        // Coba endpoint khusus backend jika tersedia
+        try {
+          const res = await apiClient.get("/dashboard/sankey", {
+            params: { tahun: selectedYear },
+          });
+          if (active && res?.data?.data && Array.isArray(res.data.data.kegiatans)) {
+            setDbSankeyDataset(res.data.data);
+            setIsSankeyLoading(false);
+            return;
+          }
+        } catch {
+          // Lanjut ke query endpoint data monitoring riil
+        }
+
+        // Ambil data riil monitoring program kerja & master_iku dari database
+        const [monitoringRes, masterIkuRes] = await Promise.allSettled([
+          apiClient.get("/proker_v3/dashboard_monitoring", {
+            params: { tahun: selectedYear },
+          }),
+          apiClient.get("/master_iku"),
+        ]);
+
+        const monitoringProkers =
+          monitoringRes.status === "fulfilled" && Array.isArray(monitoringRes.value?.data?.data)
+            ? monitoringRes.value.data.data
+            : [];
+
+        const masterIkus =
+          masterIkuRes.status === "fulfilled" && Array.isArray(masterIkuRes.value?.data)
+            ? masterIkuRes.value.data
+            : [];
+
+        if (active) {
+          const transformed = transformMonitoringToSankeyData({
+            monitoringData: monitoringProkers,
+            masterIkus,
+            fakultasUnits: realFakultasUnits,
+            selectedYear,
+          });
+
+          setDbSankeyDataset(transformed);
+        }
+      } catch (err) {
+        console.warn("Gagal memuat data riil database untuk Sankey:", err);
+      } finally {
+        if (active) setIsSankeyLoading(false);
+      }
+    }
+
+    loadDatabaseSankey();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedYear, realFakultasUnits]);
+
   // Dataset dan daftar unit/prodi sesuai cakupan akses user
+  const activeSankeySource = dbSankeyDataset || SANKEY_DATA;
   const scopedDataset = useMemo(
-    () => buildScopedSankeyData(effectiveAccessScope),
-    [effectiveAccessScope],
+    () => buildScopedSankeyData(effectiveAccessScope, activeSankeySource),
+    [effectiveAccessScope, activeSankeySource],
   );
 
   const allUnitsSource = useMemo(
@@ -1775,11 +1843,12 @@ export default function DashboardIkuAnggaranChartCard({
             </h4>
 
             {rootCauseData.chains.length > 0 ? (
-              rootCauseData.chains.map((chain) => (
-                <div
-                  key={chain.kegiatanId}
-                  className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs hover:border-indigo-300 transition-all space-y-4"
-                >
+              <div className="max-h-[600px] overflow-y-auto space-y-4 pr-1">
+                {rootCauseData.chains.map((chain) => (
+                  <div
+                    key={chain.kegiatanId}
+                    className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs hover:border-indigo-300 transition-all space-y-4"
+                  >
                   {/* Step breadcrumb trail */}
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
                     <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
@@ -1862,7 +1931,8 @@ export default function DashboardIkuAnggaranChartCard({
                     </div>
                   </div>
                 </div>
-              ))
+              ))}
+              </div>
             ) : rootCauseData.totalKegiatan === 0 ? (
               <div className="text-center py-12 bg-slate-50/80 rounded-2xl border border-gray-200 px-6">
                 <Building2 className="w-10 h-10 text-gray-400 mx-auto mb-2" />
@@ -1933,7 +2003,7 @@ export default function DashboardIkuAnggaranChartCard({
           </div>
 
           {/* Boundary Accordion Tree */}
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[650px] overflow-y-auto pr-1">
             {displayBoundaries.length === 0 ? (
               <div className="text-center py-12 bg-slate-50/80 rounded-2xl border border-gray-200 px-6">
                 <Building2 className="w-10 h-10 text-gray-400 mx-auto mb-2" />
@@ -2344,23 +2414,39 @@ export default function DashboardIkuAnggaranChartCard({
               </div>
             </div>
 
-            {/* Reset Filter Button */}
-            {(selectedIkuFilter !== "all" ||
-              selectedFakultasProdiFilter !== "all" ||
-              selectedKegiatanStatusFilter !== "all") && (
-              <button
-                onClick={() => {
-                  setSelectedIkuFilter("all");
-                  setSelectedFakultasProdiFilter("all");
-                  setSelectedKegiatanStatusFilter("all");
-                }}
-                className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 self-end sm:self-auto"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Reset Filter
-              </button>
-            )}
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Data Database ({selectedYear})
+              </span>
+
+              {/* Reset Filter Button */}
+              {(selectedIkuFilter !== "all" ||
+                selectedFakultasProdiFilter !== "all" ||
+                selectedKegiatanStatusFilter !== "all") && (
+                <button
+                  onClick={() => {
+                    setSelectedIkuFilter("all");
+                    setSelectedFakultasProdiFilter("all");
+                    setSelectedKegiatanStatusFilter("all");
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset Filter
+                </button>
+              )}
+            </div>
           </div>
+
+          {isSankeyLoading && (
+            <div className="py-3 px-4 bg-indigo-50/70 border border-indigo-200 rounded-xl flex items-center justify-between text-xs text-indigo-800">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin" />
+                <span>Memuat data alokasi anggaran riil dari database SIAMIDA...</span>
+              </div>
+            </div>
+          )}
 
           {/* Banner Fokus Jalur Terkunci (saat user mengklik node kolom 1-7) */}
           {activePathId && (

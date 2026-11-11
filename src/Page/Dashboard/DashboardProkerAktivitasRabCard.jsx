@@ -439,7 +439,7 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
       </div>
 
       {/* CONTENT BODY: PROKER & NESTED AKTIVITAS + RAB */}
-      <div className="p-5 sm:p-6 space-y-4">
+      <div className="p-5 sm:p-6 space-y-4 max-h-[650px] overflow-y-auto">
         {loading ? (
           <div className="py-12 flex flex-col items-center justify-center text-center">
             <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin mb-3" />

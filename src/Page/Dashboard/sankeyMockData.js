@@ -1869,9 +1869,449 @@ export const SANKEY_DATA = {
 // HELPER PERHITUNGAN DAN AGREGASI EKSEKUTIF
 // ==========================================
 
-export function buildScopedSankeyData(accessScope) {
+const DB_IKU_PALETTE = [
+  "#6366f1", "#0284c7", "#0d9488", "#059669",
+  "#7c3aed", "#d97706", "#dc2626", "#ea580c",
+  "#4f46e5", "#0891b2", "#16a34a", "#9333ea"
+];
+
+/**
+ * Transform data riil database SIAMIDA (dari /proker_v3/dashboard_monitoring, /master_iku, v_fakultas_unit)
+ * ke skema 8-kolom Diagram Alir Alokasi (Sankey).
+ */
+export function transformMonitoringToSankeyData({
+  monitoringData = [],
+  masterIkus = [],
+  fakultasUnits = [],
+  selectedYear = "2027",
+} = {}) {
+  // 1. Root & Child IKUs dari master_iku riil database
+  let rootIkus = [];
+  let childIkus = [];
+
+  if (Array.isArray(masterIkus) && masterIkus.length > 0) {
+    const rootRows = masterIkus.filter((m) => !m.id_sub || Number(m.id_sub) === 0);
+    const childRows = masterIkus.filter((m) => m.id_sub && Number(m.id_sub) > 0);
+
+    rootIkus = rootRows.map((r, idx) => ({
+      id: `root-iku-${r.id}`,
+      dbId: r.id,
+      kode: r.iku || `IKU ${r.id}`,
+      nama: r.kategori || r.full_kategori || r.iku,
+      pagu: 0,
+      serapan: 0,
+      sisa: 0,
+      persenSerapan: 0,
+      color: DB_IKU_PALETTE[idx % DB_IKU_PALETTE.length],
+      childIds: [],
+      indikatorIds: [],
+    }));
+
+    const rootMap = new Map(rootIkus.map((r) => [r.dbId, r]));
+
+    childIkus = childRows.map((c, idx) => {
+      const rootParent = rootMap.get(Number(c.id_sub));
+      const rootId = rootParent ? rootParent.id : `root-iku-${c.id_sub}`;
+      if (rootParent) {
+        rootParent.childIds.push(`child-iku-${c.id}`);
+      }
+      return {
+        id: `child-iku-${c.id}`,
+        dbId: c.id,
+        rootId,
+        kode: c.iku || `Sub IKU ${c.id}`,
+        nama: c.kategori || c.full_kategori || c.iku,
+        target: c.target || "-",
+        pagu: 0,
+        serapan: 0,
+        sisa: 0,
+        color: rootParent?.color || DB_IKU_PALETTE[idx % DB_IKU_PALETTE.length],
+        indikatorIds: [],
+      };
+    });
+  } else {
+    rootIkus = SANKEY_DATA.rootIkus.map((r) => ({ ...r, pagu: 0, serapan: 0, sisa: 0, persenSerapan: 0 }));
+    childIkus = SANKEY_DATA.childIkus.map((c) => ({ ...c, pagu: 0, serapan: 0, sisa: 0 }));
+  }
+
+  // 2. Boundaries dari v_fakultas_unit riil database
+  const unitList = Array.isArray(fakultasUnits) && fakultasUnits.length > 0 ? fakultasUnits : V_FAKULTAS_UNIT_ROWS;
+  const faculties = unitList.filter((u) => (u.type || u.Type) === "fakultas");
+  const prodis = unitList.filter((u) => (u.type || u.Type) === "prodi");
+  const univUnits = unitList.filter((u) => (u.type || u.Type) === "unit");
+
+  const boundaries = [];
+  const boundaryLookup = new Map();
+
+  faculties.forEach((f, idx) => {
+    const fId = f.id || f.ID;
+    const fKode = f.kode_fakultas || f.KodeFakultas || String(fId);
+    const fUuid = f.uuid || f.UUID || `fak-${fId}`;
+    const fNama = f.nama_fak_prod_unit || f.NamaFakProdUnit || f.nama;
+    const boundId = `fak-${fKode}`;
+
+    const relatedProdis = prodis.filter((p) => (p.kode_fakultas || p.KodeFakultas) === fKode);
+    const jenjangMap = new Map();
+    relatedProdis.forEach((p) => {
+      const j = (p.jenjang || p.Jenjang || "lainnya").toLowerCase();
+      if (!jenjangMap.has(j)) jenjangMap.set(j, []);
+      const prodiId = `prodi-${p.id || p.ID}`;
+      jenjangMap.get(j).push({
+        id: prodiId,
+        dbId: p.id || p.ID,
+        uuid: p.uuid || p.UUID,
+        nama: p.nama_fak_prod_unit || p.NamaFakProdUnit,
+        jenjang: j,
+        kaprodi: p.pimpinan || p.Pimpinan || "-",
+        pagu: 0,
+        serapan: 0,
+        sisa: 0,
+        prokerIds: [],
+      });
+      boundaryLookup.set(`prodi-${p.id || p.ID}`, { boundId, prodiId });
+      if (p.uuid) boundaryLookup.set(p.uuid, { boundId, prodiId });
+      boundaryLookup.set(String(p.id || p.ID), { boundId, prodiId });
+    });
+
+    const jenjangList = Array.from(jenjangMap.entries()).map(([jenjang, list]) => ({
+      jenjang,
+      namaJenjang: jenjang.toUpperCase(),
+      prodis: list,
+    }));
+
+    const boundObj = {
+      id: boundId,
+      dbId: fId,
+      uuid: fUuid,
+      kode: fKode,
+      nama: fNama,
+      namaSingkat: fNama,
+      type: "fakultas",
+      dekan: f.pimpinan || f.Pimpinan || "-",
+      pagu: 0,
+      serapan: 0,
+      sisa: 0,
+      persenSerapan: 0,
+      color: DB_IKU_PALETTE[idx % DB_IKU_PALETTE.length],
+      jenjangList,
+      unitFakultas: {
+        id: `unit-${fKode}-dekanat`,
+        nama: `Dekanat & Tata Usaha ${fNama}`,
+        pimpinan: f.pimpinan || f.Pimpinan || "-",
+        pagu: 0,
+        serapan: 0,
+        sisa: 0,
+        proker: null,
+      },
+      prokerIds: [],
+    };
+
+    boundaries.push(boundObj);
+    boundaryLookup.set(boundId, { boundId, prodiId: null });
+    boundaryLookup.set(fKode, { boundId, prodiId: null });
+    boundaryLookup.set(String(fId), { boundId, prodiId: null });
+    if (fUuid) boundaryLookup.set(fUuid, { boundId, prodiId: null });
+    boundaryLookup.set((fNama || "").toLowerCase().trim(), { boundId, prodiId: null });
+  });
+
+  univUnits.forEach((u, idx) => {
+    const uId = u.id || u.ID;
+    const uUuid = u.uuid || u.UUID || `unit-${uId}`;
+    const uNama = u.nama_fak_prod_unit || u.NamaFakProdUnit || u.nama;
+    const boundId = `unit-${(uNama || "").toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+
+    const boundObj = {
+      id: boundId,
+      dbId: uId,
+      uuid: uUuid,
+      kode: `U${uId}`,
+      nama: uNama,
+      namaSingkat: uNama,
+      type: "unit",
+      kepala: u.pimpinan || u.Pimpinan || "-",
+      pagu: 0,
+      serapan: 0,
+      sisa: 0,
+      persenSerapan: 0,
+      color: DB_IKU_PALETTE[(faculties.length + idx) % DB_IKU_PALETTE.length],
+      jenjangList: [],
+      prokerIds: [],
+    };
+
+    boundaries.push(boundObj);
+    boundaryLookup.set(boundId, { boundId, prodiId: null });
+    boundaryLookup.set(String(uId), { boundId, prodiId: null });
+    if (uUuid) boundaryLookup.set(uUuid, { boundId, prodiId: null });
+    boundaryLookup.set((uNama || "").toLowerCase().trim(), { boundId, prodiId: null });
+  });
+
+  // 3. Prokers, Aktivitas & Kegiatans dari database riil
+  const prokers = [];
+  const aktivitas = [];
+  const kegiatans = [];
+  const indikatorsMap = new Map();
+
+  (monitoringData || []).forEach((p, pIdx) => {
+    let resolvedBoundId = null;
+    let resolvedProdiId = null;
+
+    if (p.id_fakultas_unit) {
+      const match = boundaryLookup.get(String(p.id_fakultas_unit));
+      if (match) {
+        resolvedBoundId = match.boundId;
+        resolvedProdiId = match.prodiId;
+      }
+    }
+    if (!resolvedBoundId && p.nama_fakultas_unit) {
+      const match = boundaryLookup.get(p.nama_fakultas_unit.toLowerCase().trim());
+      if (match) {
+        resolvedBoundId = match.boundId;
+        resolvedProdiId = match.prodiId;
+      }
+    }
+    if (!resolvedBoundId) {
+      resolvedBoundId = boundaries[0]?.id || "unit-bpsi";
+    }
+
+    const indRawId = p.id_indikator || p.id || (pIdx + 1);
+    const indKey = `ind-${indRawId}`;
+    if (!indikatorsMap.has(indKey)) {
+      const assignedRoot = rootIkus[pIdx % Math.max(rootIkus.length, 1)] || rootIkus[0];
+      const assignedChild = childIkus.find((c) => c.rootId === assignedRoot?.id) || null;
+
+      indikatorsMap.set(indKey, {
+        id: indKey,
+        dbId: indRawId,
+        kode: `IND ${String(indRawId).padStart(2, "0")}`,
+        nama: p.indikator_kinerja || p.nama_program || "Indikator Renstra",
+        standar: "Standar Penjaminan Mutu Renstra",
+        pagu: 0,
+        serapan: 0,
+        sisa: 0,
+        rootIkuIds: assignedRoot ? [assignedRoot.id] : [],
+        childIkuIds: assignedChild ? [assignedChild.id] : [],
+        boundaryIds: [],
+        color: assignedRoot?.color || "#6366f1",
+      });
+
+      if (assignedRoot && !assignedRoot.indikatorIds.includes(indKey)) {
+        assignedRoot.indikatorIds.push(indKey);
+      }
+      if (assignedChild && !assignedChild.indikatorIds.includes(indKey)) {
+        assignedChild.indikatorIds.push(indKey);
+      }
+    }
+
+    const indObj = indikatorsMap.get(indKey);
+    if (!indObj.boundaryIds.includes(resolvedBoundId)) {
+      indObj.boundaryIds.push(resolvedBoundId);
+    }
+
+    const prokerId = `proker-${p.id || pIdx + 1}`;
+    const prokerObj = {
+      id: prokerId,
+      dbId: p.id,
+      uuid: p.uuid,
+      boundaryId: resolvedBoundId,
+      prodiId: resolvedProdiId,
+      nama: p.nama_program || "Program Kerja",
+      pagu: 0,
+      serapan: 0,
+      sisa: 0,
+      persenSerapan: 0,
+      status: p.status || "draft",
+      aktivitasIds: [],
+    };
+
+    const acts = Array.isArray(p.aktivitas) ? p.aktivitas : [];
+    acts.forEach((a, aIdx) => {
+      const aktId = `akt-${a.id || `${p.id}-${aIdx + 1}`}`;
+      const aktObj = {
+        id: aktId,
+        dbId: a.id,
+        uuid: a.uuid,
+        prokerId,
+        boundaryId: resolvedBoundId,
+        prodiId: resolvedProdiId,
+        nama: a.aktivitas || "Aktivitas Kegiatan",
+        pagu: 0,
+        serapan: 0,
+        sisa: 0,
+        kegiatanIds: [],
+      };
+
+      const rabs = Array.isArray(a.rab) ? a.rab : [];
+      if (rabs.length > 0) {
+        rabs.forEach((r, rIdx) => {
+          const kegId = `keg-${r.id || `${a.id}-${rIdx + 1}`}`;
+          const paguItem = Number(r.total) || (Number(r.qty_satuan || 1) * Number(r.qty_paket || 1) * Number(r.sbu || 0)) || 0;
+          const serapItem = a.pencairan != null ? (Number(a.pencairan) / rabs.length) : (a.status === "terima_anggaran" || a.status === "terlaksana" ? paguItem : 0);
+          const sisaItem = Math.max(paguItem - serapItem, 0);
+
+          let statusText = "Belum Terlaksana";
+          if (a.status === "terima_anggaran" || a.status === "terlaksana" || a.status === "disetujui") {
+            statusText = "Terlaksana";
+          } else if (a.status === "draft") {
+            statusText = "Draf";
+          }
+
+          const kegObj = {
+            id: kegId,
+            aktivitasId: aktId,
+            prokerId,
+            boundaryId: resolvedBoundId,
+            prodiId: resolvedProdiId,
+            ikuId: indObj.rootIkuIds[0] || rootIkus[0]?.id,
+            subIkuId: indObj.childIkuIds[0] || null,
+            indikatorId: indKey,
+            nama: r.rincian || r.nama_akun || a.aktivitas || "Item Biaya RAB",
+            pic: a.pic || p.pic || "-",
+            anggaran: paguItem,
+            realisasi: serapItem,
+            sisa: sisaItem,
+            persenSerapan: paguItem > 0 ? Number(((serapItem / paguItem) * 100).toFixed(1)) : 0,
+            status: statusText,
+            masalah: a.catatan_batal || a.catatan_revisi_anggaran || "-",
+            rencanaSolusi: a.catatan_penolakan || "-",
+            waktuTenggat: `31 Desember ${p.tahun || selectedYear}`,
+            dokumenPendukung: "Dokumen Proker V3",
+            sdmTerlibat: a.pic || p.pic || "Tim Pelaksana",
+          };
+
+          kegiatans.push(kegObj);
+          aktObj.kegiatanIds.push(kegId);
+          aktObj.pagu += paguItem;
+          aktObj.serapan += serapItem;
+        });
+      } else {
+        const kegId = `keg-akt-${a.id || `${p.id}-${aIdx + 1}`}`;
+        const paguItem = Number(a.total_rab || a.realisasi || 0);
+        const serapItem = Number(a.pencairan || (a.status === "terima_anggaran" ? paguItem : 0));
+        const sisaItem = Math.max(paguItem - serapItem, 0);
+
+        let statusText = "Belum Terlaksana";
+        if (a.status === "terima_anggaran" || a.status === "terlaksana" || a.status === "disetujui") {
+          statusText = "Terlaksana";
+        } else if (a.status === "draft") {
+          statusText = "Draf";
+        }
+
+        const kegObj = {
+          id: kegId,
+          aktivitasId: aktId,
+          prokerId,
+          boundaryId: resolvedBoundId,
+          prodiId: resolvedProdiId,
+          ikuId: indObj.rootIkuIds[0] || rootIkus[0]?.id,
+          subIkuId: indObj.childIkuIds[0] || null,
+          indikatorId: indKey,
+          nama: a.aktivitas || "Aktivitas Kegiatan",
+          pic: a.pic || p.pic || "-",
+          anggaran: paguItem,
+          realisasi: serapItem,
+          sisa: sisaItem,
+          persenSerapan: paguItem > 0 ? Number(((serapItem / paguItem) * 100).toFixed(1)) : 0,
+          status: statusText,
+          masalah: a.catatan_batal || a.catatan_revisi_anggaran || "-",
+          rencanaSolusi: a.catatan_penolakan || "-",
+          waktuTenggat: `31 Desember ${p.tahun || selectedYear}`,
+          dokumenPendukung: "Dokumen Proker V3",
+          sdmTerlibat: a.pic || p.pic || "Tim Pelaksana",
+        };
+
+        kegiatans.push(kegObj);
+        aktObj.kegiatanIds.push(kegId);
+        aktObj.pagu += paguItem;
+        aktObj.serapan += serapItem;
+      }
+
+      aktObj.sisa = Math.max(aktObj.pagu - aktObj.serapan, 0);
+      aktivitas.push(aktObj);
+      prokerObj.aktivitasIds.push(aktId);
+      prokerObj.pagu += aktObj.pagu;
+      prokerObj.serapan += aktObj.serapan;
+    });
+
+    prokerObj.sisa = Math.max(prokerObj.pagu - prokerObj.serapan, 0);
+    prokerObj.persenSerapan = prokerObj.pagu > 0 ? Number(((prokerObj.serapan / prokerObj.pagu) * 100).toFixed(1)) : 0;
+    prokers.push(prokerObj);
+
+    const bObj = boundaries.find((b) => b.id === resolvedBoundId);
+    if (bObj && !bObj.prokerIds.includes(prokerId)) {
+      bObj.prokerIds.push(prokerId);
+    }
+  });
+
+  // Agregasi nilai kembali ke Indikator
+  const indikators = Array.from(indikatorsMap.values()).map((ind) => {
+    const rel = kegiatans.filter((k) => k.indikatorId === ind.id);
+    const pagu = rel.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
+    const serapan = rel.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
+    return {
+      ...ind,
+      pagu,
+      serapan,
+      sisa: Math.max(pagu - serapan, 0),
+      persenSerapan: pagu > 0 ? Number(((serapan / pagu) * 100).toFixed(1)) : 0,
+    };
+  });
+
+  // Agregasi nilai ke Root & Child IKUs
+  rootIkus.forEach((r) => {
+    const rel = kegiatans.filter((k) => k.ikuId === r.id);
+    r.pagu = rel.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
+    r.serapan = rel.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
+    r.sisa = Math.max(r.pagu - r.serapan, 0);
+    r.persenSerapan = r.pagu > 0 ? Number(((r.serapan / r.pagu) * 100).toFixed(1)) : 0;
+  });
+
+  childIkus.forEach((c) => {
+    const rel = kegiatans.filter((k) => k.subIkuId === c.id);
+    c.pagu = rel.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
+    c.serapan = rel.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
+    c.sisa = Math.max(c.pagu - c.serapan, 0);
+  });
+
+  // Agregasi nilai ke Boundaries
+  boundaries.forEach((b) => {
+    const rel = kegiatans.filter((k) => k.boundaryId === b.id);
+    b.pagu = rel.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
+    b.serapan = rel.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
+    b.sisa = Math.max(b.pagu - b.serapan, 0);
+    b.persenSerapan = b.pagu > 0 ? Number(((b.serapan / b.pagu) * 100).toFixed(1)) : 0;
+  });
+
+  // Dana Utama Universitas
+  const totalDana = kegiatans.reduce((s, k) => s + (Number(k.anggaran) || 0), 0);
+  const totalSerapan = kegiatans.reduce((s, k) => s + (Number(k.realisasi) || 0), 0);
+  const totalSisa = Math.max(totalDana - totalSerapan, 0);
+  const persenSerapan = totalDana > 0 ? Number(((totalSerapan / totalDana) * 100).toFixed(1)) : 0;
+
+  return {
+    danaUtama: {
+      id: "node-dana-utama",
+      judul: "Total Dana Universitas",
+      subjudul: "Pagu Anggaran & Realisasi RAB (Database)",
+      totalDana,
+      totalSerapan,
+      totalSisa,
+      persenSerapan,
+      color: "#6366f1",
+    },
+    rootIkus,
+    childIkus,
+    indikators,
+    boundaries,
+    prokers,
+    aktivitas,
+    kegiatans,
+  };
+}
+
+export function buildScopedSankeyData(accessScope, rawDataset = SANKEY_DATA) {
+  const currentDataset = rawDataset || SANKEY_DATA;
   if (!accessScope || accessScope.mode === "all") {
-    return SANKEY_DATA;
+    return currentDataset;
   }
 
   const targetBoundaryId = accessScope.boundaryId;
@@ -1879,7 +2319,7 @@ export function buildScopedSankeyData(accessScope) {
 
   if (!targetBoundaryId) {
     return {
-      ...SANKEY_DATA,
+      ...currentDataset,
       danaUtama: {
         id: "node-dana-utama",
         judul: `Total Dana ${facultyLabel}`,
@@ -1900,7 +2340,7 @@ export function buildScopedSankeyData(accessScope) {
     };
   }
 
-  const kegiatans = SANKEY_DATA.kegiatans.filter(
+  const kegiatans = (currentDataset.kegiatans || []).filter(
     (k) => k.boundaryId === targetBoundaryId,
   );
   const totalDana = kegiatans.reduce(
@@ -1915,16 +2355,16 @@ export function buildScopedSankeyData(accessScope) {
   const persenSerapan =
     totalDana > 0 ? Number(((totalSerapan / totalDana) * 100).toFixed(1)) : 0;
 
-  const prokers = SANKEY_DATA.prokers.filter(
+  const prokers = (currentDataset.prokers || []).filter(
     (p) => p.boundaryId === targetBoundaryId,
   );
   const activeProkerIds = new Set(prokers.map((p) => p.id));
   const activeAktIds = new Set(kegiatans.map((k) => k.aktivitasId));
-  const aktivitas = SANKEY_DATA.aktivitas.filter(
+  const aktivitas = (currentDataset.aktivitas || []).filter(
     (a) => activeProkerIds.has(a.prokerId) || activeAktIds.has(a.id),
   );
 
-  const boundaries = SANKEY_DATA.boundaries
+  const boundaries = (currentDataset.boundaries || [])
     .filter((b) => b.id === targetBoundaryId)
     .map((b) => ({
       ...b,
@@ -1936,7 +2376,7 @@ export function buildScopedSankeyData(accessScope) {
   const activeIndIds = new Set(
     kegiatans.map((k) => k.indikatorId).filter(Boolean),
   );
-  const indikators = SANKEY_DATA.indikators
+  const indikators = (currentDataset.indikators || [])
     .filter((ind) => activeIndIds.has(ind.id))
     .map((ind) => {
       const rel = kegiatans.filter((k) => k.indikatorId === ind.id);
@@ -1954,7 +2394,7 @@ export function buildScopedSankeyData(accessScope) {
   const activeChildIds = new Set(
     kegiatans.map((k) => k.subIkuId).filter(Boolean),
   );
-  const childIkus = SANKEY_DATA.childIkus
+  const childIkus = (currentDataset.childIkus || [])
     .filter((c) => activeChildIds.has(c.id))
     .map((c) => {
       const rel = kegiatans.filter((k) => k.subIkuId === c.id);
@@ -1974,7 +2414,7 @@ export function buildScopedSankeyData(accessScope) {
   const activeRootIds = new Set(
     kegiatans.map((k) => k.ikuId).filter(Boolean),
   );
-  const rootIkus = SANKEY_DATA.rootIkus
+  const rootIkus = (currentDataset.rootIkus || [])
     .filter((r) => activeRootIds.has(r.id))
     .map((r) => {
       const rel = kegiatans.filter((k) => k.ikuId === r.id);

@@ -4935,7 +4935,7 @@ export default function ProkerV3TimelinePage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm sm:text-base font-bold text-gray-900 truncate">
-                    Rencana Anggaran Biaya (RAB)
+                    Realisasi Anggaran
                   </h3>
                   <p className="text-xs text-gray-500 truncate">
                     Tahapan #{selectedTimelineForRab?.NoAktivitas || 1}:{" "}
