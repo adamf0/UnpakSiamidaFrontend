@@ -2940,6 +2940,13 @@ export default function ProkerV3AktivitasPage() {
                                           getRealisasiAnggaran(act),
                                         )}
                                       </span>
+                                      {getRealisasiAnggaran(act) !== null &&
+                                        Number(getRealisasiAnggaran(act)) < Number(act.Anggaran) && (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-300 mt-0.5">
+                                            <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                            Diluar Budget
+                                          </span>
+                                        )}
                                     </div>
                                   ) : (
                                     <span className="font-bold text-emerald-700 group-hover/rab:text-purple-700 transition">

@@ -148,6 +148,59 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
     return found?.nama || `Unit #${selectedUnit}`;
   }, [unitOptions, selectedUnit]);
 
+  const computedSummary = useMemo(() => {
+    let totProker = data.length;
+    let totAkt = 0;
+    let totAnggaranApproved = 0;
+    let totAnggaranPengajuan = 0;
+    let totPencairan = 0;
+
+    data.forEach((p) => {
+      if (p.is_batal) return;
+      let pApproved = 0;
+      let pPengajuan = 0;
+      let pCair = 0;
+
+      if (Array.isArray(p.aktivitas) && p.aktivitas.length > 0) {
+        totAkt += p.aktivitas.length;
+        p.aktivitas.forEach((akt) => {
+          if (akt.is_batal) return;
+          const rabTot = Number(akt.total_rab || 0);
+          const hasReal =
+            akt.realisasi !== null &&
+            akt.realisasi !== undefined &&
+            !isNaN(Number(akt.realisasi)) &&
+            Number(akt.realisasi) >= 0;
+          const realTot = hasReal ? Number(akt.realisasi) : rabTot;
+          pPengajuan += rabTot;
+          pApproved += realTot;
+          if (akt.pencairan != null && !isNaN(Number(akt.pencairan))) {
+            pCair += Number(akt.pencairan);
+          }
+        });
+      } else {
+        pApproved = Number(p.total_anggaran || 0);
+        pPengajuan = Number(p.total_anggaran || 0);
+        pCair = Number(p.total_pencairan || 0);
+      }
+
+      totAnggaranApproved += pApproved;
+      totAnggaranPengajuan += pPengajuan;
+      totPencairan += pCair;
+    });
+
+    return {
+      total_proker: totProker,
+      total_aktivitas: totAkt || summary?.total_aktivitas || 0,
+      total_anggaran: totAnggaranApproved || summary?.total_anggaran || 0,
+      total_anggaran_pengajuan: totAnggaranPengajuan,
+      total_pencairan: totPencairan || summary?.total_pencairan || 0,
+      is_revised:
+        totAnggaranPengajuan !== totAnggaranApproved &&
+        totAnggaranPengajuan > 0,
+    };
+  }, [data, summary]);
+
   if (!allowed && !loading) {
     return null; // Gracefully hidden for users not in executive / faculty tier
   }
@@ -401,7 +454,7 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                 <span>Total Proker</span>
               </div>
               <div className="text-xl font-bold text-gray-900 mt-1">
-                {summary.total_proker}
+                {computedSummary.total_proker}
               </div>
             </div>
 
@@ -411,7 +464,7 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                 <span>Total Aktivitas</span>
               </div>
               <div className="text-xl font-bold text-purple-700 mt-1">
-                {summary.total_aktivitas}
+                {computedSummary.total_aktivitas}
               </div>
             </div>
 
@@ -420,8 +473,15 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                 <Wallet className="w-4 h-4 text-emerald-500" />
                 <span>Total Anggaran (RAB)</span>
               </div>
-              <div className="text-sm sm:text-base font-bold text-emerald-700 mt-1 truncate">
-                {formatRupiah(summary.total_anggaran || 0)}
+              <div className="mt-1 truncate">
+                {computedSummary.is_revised && (
+                  <span className="text-xs text-gray-400 line-through decoration-rose-500 mr-1.5 font-mono">
+                    {formatRupiah(computedSummary.total_anggaran_pengajuan)}
+                  </span>
+                )}
+                <span className="text-sm sm:text-base font-bold text-emerald-700 font-mono">
+                  {formatRupiah(computedSummary.total_anggaran || 0)}
+                </span>
               </div>
             </div>
 
@@ -431,7 +491,7 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                 <span>Total Pencairan</span>
               </div>
               <div className="text-sm sm:text-base font-bold text-blue-700 mt-1 truncate">
-                {formatRupiah(summary.total_pencairan || 0)}
+                {formatRupiah(computedSummary.total_pencairan || 0)}
               </div>
             </div>
           </div>
@@ -470,6 +530,40 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
           <div className="space-y-4">
             {data.map((proker, index) => {
               const isExpanded = Boolean(expandedProker[proker.id]);
+
+              let totalAnggaranApproved = 0;
+              let totalAnggaranPengajuan = 0;
+              let isProkerAnggaranRevised = false;
+
+              if (
+                Array.isArray(proker.aktivitas) &&
+                proker.aktivitas.length > 0
+              ) {
+                proker.aktivitas.forEach((akt) => {
+                  if (akt.is_batal) return;
+                  const rabTot = Number(akt.total_rab || 0);
+                  const hasReal =
+                    akt.realisasi !== null &&
+                    akt.realisasi !== undefined &&
+                    !isNaN(Number(akt.realisasi)) &&
+                    Number(akt.realisasi) >= 0;
+                  const realTot = hasReal ? Number(akt.realisasi) : rabTot;
+
+                  if (hasReal && Number(akt.realisasi) !== rabTot) {
+                    isProkerAnggaranRevised = true;
+                  }
+                  totalAnggaranPengajuan += rabTot;
+                  totalAnggaranApproved += realTot;
+                });
+              } else {
+                totalAnggaranApproved = Number(proker.total_anggaran || 0);
+                totalAnggaranPengajuan = Number(
+                  proker.total_anggaran_pengajuan ||
+                    proker.total_anggaran ||
+                    0,
+                );
+                isProkerAnggaranRevised = Boolean(proker.is_anggaran_revised);
+              }
               return (
                 <div
                   key={proker.id}
@@ -502,6 +596,12 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                             {proker.nama_fakultas_unit || "Unit"}
                           </span>
                           {getStatusBadge(proker.status_anggaran || proker.status, proker.is_batal)}
+                          {isProkerAnggaranRevised && totalAnggaranApproved < totalAnggaranPengajuan && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
+                              <AlertTriangle className="w-3 h-3 text-rose-600" />
+                              Diluar Budget
+                            </span>
+                          )}
                         </div>
 
                         <h3 className="text-sm sm:text-base font-bold text-gray-900 leading-snug">
@@ -537,9 +637,28 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                         <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
                           Total Anggaran RAB
                         </p>
-                        <p className="text-sm sm:text-base font-extrabold text-emerald-700 font-mono">
-                          {formatRupiah(proker.total_anggaran || 0)}
-                        </p>
+                        {isProkerAnggaranRevised ? (
+                          <div>
+                            <p className="text-xs text-gray-400 line-through decoration-rose-500 font-mono">
+                              {formatRupiah(totalAnggaranPengajuan)}
+                            </p>
+                            <p className="text-sm sm:text-base font-extrabold text-emerald-700 font-mono">
+                              {formatRupiah(totalAnggaranApproved)}
+                            </p>
+                            {totalAnggaranApproved < totalAnggaranPengajuan && (
+                              <div className="mt-0.5">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300 rounded">
+                                  <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                  Diluar Budget
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm sm:text-base font-extrabold text-emerald-700 font-mono">
+                            {formatRupiah(totalAnggaranApproved)}
+                          </p>
+                        )}
                       </div>
 
                       <div className="text-left lg:text-right pl-3 border-l border-gray-200">
@@ -612,6 +731,14 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                                     </span>
                                     {getStatusBadge(akt.status_anggaran || akt.status, akt.is_batal)}
                                     {getPencairanBadge(akt.status_pencairan, akt.pencairan)}
+                                    {akt.realisasi !== null &&
+                                      akt.realisasi !== undefined &&
+                                      Number(akt.realisasi) < Number(akt.total_rab || 0) && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
+                                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                          Diluar Budget
+                                        </span>
+                                      )}
                                   </div>
                                   <div className="text-[11px] text-gray-500 mt-1 flex items-center gap-3">
                                     <span>
@@ -666,6 +793,14 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                                       <p className="text-sm font-extrabold text-emerald-700 font-mono">
                                         {formatRupiah(akt.realisasi)}
                                       </p>
+                                      {Number(akt.realisasi) < Number(akt.total_rab || 0) && (
+                                        <div className="mt-0.5">
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300 rounded">
+                                            <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                            Diluar Budget
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
                                   ) : (
                                     <p className="text-sm font-extrabold text-emerald-700 font-mono">
@@ -688,7 +823,7 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                               <div>
                                 <h5 className="text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-2 flex items-center gap-1">
                                   <Wallet className="w-3 h-3 text-emerald-600" />
-                                  Rincian Item Belanja (aktivitasv2_rab)
+                                  Rincian Item Belanja
                                 </h5>
 
                                 {akt.rab.length === 0 ? (
@@ -730,7 +865,17 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                                               {formatRupiah(item.sbu || 0)}
                                             </td>
                                             <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono whitespace-nowrap">
-                                              {formatRupiah(item.total || 0)}
+                                              <div className="flex flex-col items-end">
+                                                <span>{formatRupiah(item.total || 0)}</span>
+                                                {akt.realisasi !== null &&
+                                                  akt.realisasi !== undefined &&
+                                                  Number(item.total || 0) > Number(akt.realisasi) && (
+                                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-300 mt-0.5">
+                                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                                      Diluar Budget
+                                                    </span>
+                                                  )}
+                                              </div>
                                             </td>
                                             <td className="py-2 px-3 text-gray-500 text-[11px] max-w-xs truncate">
                                               {item.keterangan || "-"}
@@ -744,7 +889,17 @@ export default function DashboardProkerAktivitasRabCard({ currentYear }) {
                                             Total Biaya RAB:
                                           </td>
                                           <td className="py-2 px-3 text-right text-emerald-800 font-mono font-extrabold">
-                                            {formatRupiah(akt.total_rab || 0)}
+                                            <div className="flex flex-col items-end">
+                                              <span>{formatRupiah(akt.total_rab || 0)}</span>
+                                              {akt.realisasi !== null &&
+                                                akt.realisasi !== undefined &&
+                                                Number(akt.total_rab || 0) > Number(akt.realisasi) && (
+                                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300 mt-0.5">
+                                                    <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                                    Diluar Budget
+                                                  </span>
+                                                )}
+                                            </div>
                                           </td>
                                           <td></td>
                                         </tr>

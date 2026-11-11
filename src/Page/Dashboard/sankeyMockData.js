@@ -626,7 +626,7 @@ export const SANKEY_DATA = {
     },
     {
       id: "unit-bpsi",
-      kode: "U1",
+      kode: "Unit Pusat",
       nama: "BPSI",
       namaSingkat: "BPSI",
       namaLengkap: "Badan Pengembangan Sistem Informasi",
@@ -640,7 +640,7 @@ export const SANKEY_DATA = {
     },
     {
       id: "unit-tracer",
-      kode: "U6",
+      kode: "Unit Pusat",
       nama: "Tracer Study & Karir",
       namaSingkat: "Tracer Karir",
       namaLengkap: "Kantor Pengembangan Karir dan Tracer Study",
@@ -654,7 +654,7 @@ export const SANKEY_DATA = {
     },
     {
       id: "unit-lppm",
-      kode: "U8",
+      kode: "Unit Pusat",
       nama: "LPPM",
       namaSingkat: "LPPM",
       namaLengkap: "Lembaga Penelitian dan Pengabdian kepada Masyarakat",
@@ -1945,22 +1945,53 @@ export function transformMonitoringToSankeyData({
 
   faculties.forEach((f, idx) => {
     const fId = f.id || f.ID;
-    const fKode = f.kode_fakultas || f.KodeFakultas || String(fId);
+    const fKode =
+      f.kode_fakultas ||
+      f.KodeFakultas ||
+      (typeof getUnitKodeFakultas === "function" ? getUnitKodeFakultas(f) : "") ||
+      String(fId);
     const fUuid = f.uuid || f.UUID || `fak-${fId}`;
-    const fNama = f.nama_fak_prod_unit || f.NamaFakProdUnit || f.nama;
+    const fNama =
+      f.nama ||
+      f.label ||
+      f.pureName ||
+      f.nama_fak_prod_unit ||
+      f.NamaFakProdUnit ||
+      f.Nama;
     const boundId = `fak-${fKode}`;
 
-    const relatedProdis = prodis.filter((p) => (p.kode_fakultas || p.KodeFakultas) === fKode);
+    const relatedProdis = prodis.filter((p) => {
+      const pKodeFak =
+        p.kode_fakultas ||
+        p.KodeFakultas ||
+        (typeof getUnitKodeFakultas === "function"
+          ? getUnitKodeFakultas(p)
+          : "");
+      return (
+        pKodeFak === fKode ||
+        (f.kode_fakultas && pKodeFak === f.kode_fakultas) ||
+        String(p.fakultasId || p.FakultasId || "") === String(fId)
+      );
+    });
     const jenjangMap = new Map();
     relatedProdis.forEach((p) => {
       const j = (p.jenjang || p.Jenjang || "lainnya").toLowerCase();
       if (!jenjangMap.has(j)) jenjangMap.set(j, []);
       const prodiId = `prodi-${p.id || p.ID}`;
+      const pNama =
+        p.nama ||
+        p.label ||
+        p.pureName ||
+        p.nama_fak_prod_unit ||
+        p.NamaFakProdUnit ||
+        p.Nama ||
+        (typeof getUnitName === "function" ? getUnitName(p) : "") ||
+        "Program Studi";
       jenjangMap.get(j).push({
         id: prodiId,
         dbId: p.id || p.ID,
         uuid: p.uuid || p.UUID,
-        nama: p.nama_fak_prod_unit || p.NamaFakProdUnit,
+        nama: pNama,
         jenjang: j,
         kaprodi: p.pimpinan || p.Pimpinan || "-",
         pagu: 0,
@@ -2024,7 +2055,7 @@ export function transformMonitoringToSankeyData({
       id: boundId,
       dbId: uId,
       uuid: uUuid,
-      kode: `U${uId}`,
+      kode: "Unit Pusat",
       nama: uNama,
       namaSingkat: uNama,
       type: "unit",
@@ -2108,13 +2139,15 @@ export function transformMonitoringToSankeyData({
     }
 
     const prokerId = `proker-${p.id || pIdx + 1}`;
+    const prokerName = p.nama_program || "Program Kerja";
     const prokerObj = {
       id: prokerId,
       dbId: p.id,
       uuid: p.uuid,
       boundaryId: resolvedBoundId,
       prodiId: resolvedProdiId,
-      nama: p.nama_program || "Program Kerja",
+      nama: prokerName,
+      namaProker: prokerName,
       pagu: 0,
       serapan: 0,
       sisa: 0,
@@ -2126,6 +2159,7 @@ export function transformMonitoringToSankeyData({
     const acts = Array.isArray(p.aktivitas) ? p.aktivitas : [];
     acts.forEach((a, aIdx) => {
       const aktId = `akt-${a.id || `${p.id}-${aIdx + 1}`}`;
+      const aktName = a.aktivitas || "Aktivitas Kegiatan";
       const aktObj = {
         id: aktId,
         dbId: a.id,
@@ -2133,27 +2167,101 @@ export function transformMonitoringToSankeyData({
         prokerId,
         boundaryId: resolvedBoundId,
         prodiId: resolvedProdiId,
-        nama: a.aktivitas || "Aktivitas Kegiatan",
+        nama: aktName,
+        namaAktivitas: aktName,
         pagu: 0,
         serapan: 0,
         sisa: 0,
         kegiatanIds: [],
+        timelines: Array.isArray(a.timelines) ? a.timelines : [],
+        aktivitasUuid: a.uuid || null,
+        capaian: a.capaian || null,
+        masalah: a.masalah || a.catatan_batal || a.catatan_revisi_anggaran || "-",
+        pemecahan_masalah: a.pemecahan_masalah || a.catatan_penolakan || "-",
       };
 
       const rabs = Array.isArray(a.rab) ? a.rab : [];
+      const hasReal =
+        a.realisasi != null &&
+        a.realisasi !== "" &&
+        !isNaN(Number(a.realisasi)) &&
+        Number(a.realisasi) > 0;
+      const totalReal = hasReal ? Number(a.realisasi) : null;
+      const rawPencairan =
+        a.pencairan != null &&
+        a.pencairan !== "" &&
+        !isNaN(Number(a.pencairan))
+          ? Number(a.pencairan)
+          : 0;
+
       if (rabs.length > 0) {
+        const totalRab = rabs.reduce(
+          (acc, r) =>
+            acc +
+            (Number(r.total) ||
+              Number(r.qty_satuan || 1) *
+                Number(r.qty_paket || 1) *
+                Number(r.sbu || 0) ||
+              0),
+          0,
+        );
+
+        aktObj.anggaranPengajuan = totalRab;
+        aktObj.isAnggaranRevised = totalReal !== null && totalReal !== totalRab;
+
         rabs.forEach((r, rIdx) => {
           const kegId = `keg-${r.id || `${a.id}-${rIdx + 1}`}`;
-          const paguItem = Number(r.total) || (Number(r.qty_satuan || 1) * Number(r.qty_paket || 1) * Number(r.sbu || 0)) || 0;
-          const serapItem = a.pencairan != null ? (Number(a.pencairan) / rabs.length) : (a.status === "terima_anggaran" || a.status === "terlaksana" ? paguItem : 0);
+          const rawItemTotal =
+            Number(r.total) ||
+            Number(r.qty_satuan || 1) *
+              Number(r.qty_paket || 1) *
+              Number(r.sbu || 0) ||
+            0;
+
+          // Pagu anggaran: gunakan realisasi jika ada revisi anggaran dari tim anggaran
+          const paguItem =
+            totalReal !== null && totalRab > 0
+              ? Number(((rawItemTotal / totalRab) * totalReal).toFixed(0))
+              : totalReal !== null && rabs.length === 1
+              ? totalReal
+              : rawItemTotal;
+
+          // Serapan HANYA jika pencairan riil > 0 (bukan otomatis terserap karena status terima_anggaran)
+          const serapItem =
+            rawPencairan > 0 ? rawPencairan / rabs.length : 0;
           const sisaItem = Math.max(paguItem - serapItem, 0);
 
           let statusText = "Belum Terlaksana";
-          if (a.status === "terima_anggaran" || a.status === "terlaksana" || a.status === "disetujui") {
-            statusText = "Terlaksana";
+          if (a.is_batal || p.is_batal) {
+            statusText = "Batal";
           } else if (a.status === "draft") {
             statusText = "Draf";
+          } else if (
+            rawPencairan > 0 &&
+            (a.status === "terlaksana" || (a.capaian && a.capaian.trim()))
+          ) {
+            statusText = "Terlaksana";
+          } else if (rawPencairan > 0) {
+            statusText = "Terlaksana";
+          } else {
+            statusText = "Belum Terlaksana";
           }
+
+          const statusPencairanLabel =
+            rawPencairan > 0
+              ? rawPencairan >= paguItem
+                ? "Cair Penuh"
+                : "Cair Sebagian"
+              : "Belum Dicairkan";
+
+          // Nama Utama adalah Nama Aktivitas (a.aktivitas), bukan nama akun rekening pembukuan
+          const kegName = a.aktivitas || "Aktivitas Kegiatan";
+          const rincianName =
+            r.rincian &&
+            r.rincian.trim() &&
+            r.rincian.trim().toLowerCase() !== kegName.toLowerCase()
+              ? r.rincian.trim()
+              : null;
 
           const kegObj = {
             id: kegId,
@@ -2164,14 +2272,29 @@ export function transformMonitoringToSankeyData({
             ikuId: indObj.rootIkuIds[0] || rootIkus[0]?.id,
             subIkuId: indObj.childIkuIds[0] || null,
             indikatorId: indKey,
-            nama: r.rincian || r.nama_akun || a.aktivitas || "Item Biaya RAB",
+            nama: kegName,
+            namaKegiatan: kegName,
+            namaAktivitas: aktName,
+            namaProker: prokerName,
+            rincian: rincianName,
+            nama_akun: r.nama_akun || null,
             pic: a.pic || p.pic || "-",
             anggaran: paguItem,
+            anggaranPengajuan: rawItemTotal,
+            isAnggaranRevised: totalReal !== null && totalReal !== totalRab,
             realisasi: serapItem,
             sisa: sisaItem,
-            persenSerapan: paguItem > 0 ? Number(((serapItem / paguItem) * 100).toFixed(1)) : 0,
+            persenSerapan:
+              paguItem > 0
+                ? Number(((serapItem / paguItem) * 100).toFixed(1))
+                : 0,
             status: statusText,
-            masalah: a.catatan_batal || a.catatan_revisi_anggaran || "-",
+            statusPencairan: statusPencairanLabel,
+            timelines: Array.isArray(a.timelines) ? a.timelines : [],
+            aktivitasUuid: a.uuid || null,
+            capaian: a.capaian || null,
+            masalah: a.masalah || a.catatan_batal || a.catatan_revisi_anggaran || "-",
+            pemecahan_masalah: a.pemecahan_masalah || a.catatan_penolakan || "-",
             rencanaSolusi: a.catatan_penolakan || "-",
             waktuTenggat: `31 Desember ${p.tahun || selectedYear}`,
             dokumenPendukung: "Dokumen Proker V3",
@@ -2185,17 +2308,39 @@ export function transformMonitoringToSankeyData({
         });
       } else {
         const kegId = `keg-akt-${a.id || `${p.id}-${aIdx + 1}`}`;
-        const paguItem = Number(a.total_rab || a.realisasi || 0);
-        const serapItem = Number(a.pencairan || (a.status === "terima_anggaran" ? paguItem : 0));
+        const rawRabTotal = Number(a.total_rab || a.anggaran || 0);
+        const paguItem = hasReal ? Number(a.realisasi) : rawRabTotal;
+
+        aktObj.anggaranPengajuan = rawRabTotal;
+        aktObj.isAnggaranRevised = hasReal && Number(a.realisasi) !== rawRabTotal;
+
+        const serapItem = rawPencairan > 0 ? rawPencairan : 0;
         const sisaItem = Math.max(paguItem - serapItem, 0);
 
         let statusText = "Belum Terlaksana";
-        if (a.status === "terima_anggaran" || a.status === "terlaksana" || a.status === "disetujui") {
-          statusText = "Terlaksana";
+        if (a.is_batal || p.is_batal) {
+          statusText = "Batal";
         } else if (a.status === "draft") {
           statusText = "Draf";
+        } else if (
+          rawPencairan > 0 &&
+          (a.status === "terlaksana" || (a.capaian && a.capaian.trim()))
+        ) {
+          statusText = "Terlaksana";
+        } else if (rawPencairan > 0) {
+          statusText = "Terlaksana";
+        } else {
+          statusText = "Belum Terlaksana";
         }
 
+        const statusPencairanLabel =
+          rawPencairan > 0
+            ? rawPencairan >= paguItem
+              ? "Cair Penuh"
+              : "Cair Sebagian"
+            : "Belum Dicairkan";
+
+        const kegName = a.aktivitas || "Aktivitas Kegiatan";
         const kegObj = {
           id: kegId,
           aktivitasId: aktId,
@@ -2205,14 +2350,29 @@ export function transformMonitoringToSankeyData({
           ikuId: indObj.rootIkuIds[0] || rootIkus[0]?.id,
           subIkuId: indObj.childIkuIds[0] || null,
           indikatorId: indKey,
-          nama: a.aktivitas || "Aktivitas Kegiatan",
+          nama: kegName,
+          namaKegiatan: kegName,
+          namaAktivitas: aktName,
+          namaProker: prokerName,
+          rincian: null,
+          nama_akun: null,
           pic: a.pic || p.pic || "-",
           anggaran: paguItem,
+          anggaranPengajuan: rawRabTotal,
+          isAnggaranRevised: hasReal && Number(a.realisasi) !== rawRabTotal,
           realisasi: serapItem,
           sisa: sisaItem,
-          persenSerapan: paguItem > 0 ? Number(((serapItem / paguItem) * 100).toFixed(1)) : 0,
+          persenSerapan:
+            paguItem > 0
+              ? Number(((serapItem / paguItem) * 100).toFixed(1))
+              : 0,
           status: statusText,
-          masalah: a.catatan_batal || a.catatan_revisi_anggaran || "-",
+          statusPencairan: statusPencairanLabel,
+          timelines: Array.isArray(a.timelines) ? a.timelines : [],
+          aktivitasUuid: a.uuid || null,
+          capaian: a.capaian || null,
+          masalah: a.masalah || a.catatan_batal || a.catatan_revisi_anggaran || "-",
+          pemecahan_masalah: a.pemecahan_masalah || a.catatan_penolakan || "-",
           rencanaSolusi: a.catatan_penolakan || "-",
           waktuTenggat: `31 Desember ${p.tahun || selectedYear}`,
           dokumenPendukung: "Dokumen Proker V3",
@@ -2633,9 +2793,15 @@ export function getCorrelationMatrix(level = "iku", dataset = SANKEY_DATA) {
 
       const q = classifyQuadrant(persenSerap, persenKerja);
 
+      const isUnit =
+        b.type === "unit" ||
+        String(b.kode || "").startsWith("U") ||
+        String(b.kode || "").length > 4 ||
+        String(b.kode || "").toLowerCase() === "unit pusat";
+
       return {
         id: b.id,
-        kode: b.kode || b.namaSingkat,
+        kode: isUnit ? "Unit Pusat" : (b.kode || b.namaSingkat),
         nama: b.nama,
         type: b.type,
         level: "boundary",
@@ -2691,10 +2857,39 @@ export function getCorrelationMatrix(level = "iku", dataset = SANKEY_DATA) {
 
           const q = classifyQuadrant(persenSerap, persenKerja);
 
+          const rawProdiName =
+            (p &&
+              (p.nama ||
+                p.label ||
+                p.pureName ||
+                p.Nama ||
+                p.nama_fak_prod_unit ||
+                p.NamaFakProdUnit ||
+                (typeof getUnitName === "function" ? getUnitName(p) : ""))) ||
+            "";
+          const prodiName =
+            rawProdiName && rawProdiName !== "undefined"
+              ? String(rawProdiName).replace(/^undefined\s*/i, "").trim()
+              : j && j.namaJenjang
+                ? `${j.namaJenjang} Program Studi`
+                : "Program Studi";
+
+          const fakultasLabel = b.namaSingkat || b.nama || "";
+          const displayNama =
+            fakultasLabel &&
+            !prodiName.toLowerCase().includes(fakultasLabel.toLowerCase())
+              ? `${prodiName} (${fakultasLabel})`
+              : prodiName;
+
           prodiItems.push({
             id: p.id,
-            kode: j.namaJenjang,
-            nama: `${p.nama} (${b.namaSingkat})`,
+            kode:
+              j.namaJenjang ||
+              j.jenjang?.toUpperCase() ||
+              p.jenjang?.toUpperCase() ||
+              "PRODI",
+            nama: displayNama,
+            prodiNama: prodiName,
             fakultasNama: b.nama,
             jenjangNama: j.namaJenjang,
             level: "prodi",
@@ -3075,18 +3270,39 @@ export function getRootCauseAnalysis(
 
     return {
       kegiatanId: keg.id,
-      namaKegiatan: keg.namaKegiatan,
+      namaKegiatan:
+        keg.namaKegiatan ||
+        keg.nama ||
+        akt?.namaAktivitas ||
+        akt?.nama ||
+        "Kegiatan",
       pic: keg.pic,
       anggaran: keg.anggaran,
+      anggaranPengajuan: keg.anggaranPengajuan || keg.anggaran,
+      isAnggaranRevised: Boolean(keg.isAnggaranRevised),
       realisasi: keg.realisasi,
       sisa: keg.sisa,
       persenSerapan: keg.persenSerapan,
       status: keg.status,
+      statusPencairan: keg.statusPencairan || null,
+      rincian: keg.rincian || null,
+      timelines: keg.timelines || akt?.timelines || [],
+      aktivitasUuid: keg.aktivitasUuid || akt?.uuid || null,
       capaian: keg.capaian,
       masalah: keg.masalah,
       pemecahan_masalah: keg.pemecahan_masalah,
-      aktivitasNama: akt?.namaAktivitas || "Aktivitas Terkait",
-      prokerNama: proker?.namaProker || "Program Kerja Terkait",
+      aktivitasNama:
+        akt?.namaAktivitas ||
+        akt?.nama ||
+        keg.namaAktivitas ||
+        keg.namaKegiatan ||
+        keg.nama ||
+        "Aktivitas Terkait",
+      prokerNama:
+        proker?.namaProker ||
+        proker?.nama ||
+        keg.namaProker ||
+        "Program Kerja Terkait",
       boundaryNama: bound?.nama || "Unit Pelaksana",
       prodiNama,
       indikatorKode: ind?.kode || "IND",

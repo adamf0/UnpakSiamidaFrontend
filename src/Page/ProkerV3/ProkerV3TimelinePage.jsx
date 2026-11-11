@@ -54,6 +54,7 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   FolderOpen,
   Info,
   Check,
@@ -2440,6 +2441,15 @@ export default function ProkerV3TimelinePage() {
                   )
                 )}
               </span>
+              {isAnggaranRevised(aktivitas) &&
+                getRealisasiAnggaran(aktivitas) !== null &&
+                Number(getRealisasiAnggaran(aktivitas)) <
+                  Number(aktivitas.Anggaran) && (
+                  <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                    Diluar Budget
+                  </span>
+                )}
             </div>
           </div>
 

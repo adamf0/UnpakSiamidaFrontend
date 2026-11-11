@@ -481,7 +481,14 @@ export function buildStructuralBoundaryFromUnits(accessScope, scopedUnits = []) 
     if (!byJenjang.has(j)) byJenjang.set(j, []);
     byJenjang.get(j).push({
       id: p.uuid || String(p.id || getUnitRawId(p)),
-      nama: p.label || getUnitName(p),
+      nama:
+        p.nama ||
+        p.label ||
+        getUnitName(p) ||
+        p.pureName ||
+        p.nama_fak_prod_unit ||
+        p.Nama ||
+        "Program Studi",
       jenjang: j,
       kaprodi: "-",
       pagu: 0,
