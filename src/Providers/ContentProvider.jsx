@@ -160,12 +160,14 @@ export const ContentProvider = ({ children }) => {
       .map((m) => String(m.role ?? m.Role).toLowerCase())
       .filter((r) => ["auditee", "auditor1", "auditor2"].includes(r));
 
-    // Jika pada tahun aktif (>= 2024) belum ada penugasan spesifik tetapi user adalah auditor/auditee,
-    // tetap sertakan role audit tersebut agar menu Auditing dan hak akses audit tetap aktif di semua tahun nav >= 2024
+    // Jika pada tahun aktif V2 (2024-2026) belum ada penugasan spesifik tetapi user adalah auditor/auditee,
+    // tetap sertakan role audit tersebut agar menu Auditing dan hak akses audit tetap aktif di semua tahun nav V2.
+    // Pada V3 (>= 2027), fokus utama adalah Proker/SWOT/Risiko berbasis unit dasar ("user").
+    const isV3Year = parseInt(positionYear, 10) >= 2027;
     const effectiveRoles =
       matchingRoles.length > 0
         ? matchingRoles
-        : parseInt(positionYear, 10) >= 2024 && auditRolesAllYears.length > 0
+        : !isV3Year && parseInt(positionYear, 10) >= 2024 && auditRolesAllYears.length > 0
         ? [auditRolesAllYears[0]]
         : [];
 

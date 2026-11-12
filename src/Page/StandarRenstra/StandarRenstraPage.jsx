@@ -12,6 +12,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const StandarRenstraPage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -55,6 +56,7 @@ const StandarRenstraPage = () => {
     openChangeLevel,
     setOpenChangeLevel,
   } = useContent();
+  const canShowActions = useFeatureActionVisibility();
 
   return (
     <>
@@ -89,19 +91,20 @@ const StandarRenstraPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              <button 
-                type="button"
-                className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer" 
-                onClick={()=>openNew()}
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tambah Standar</span>
-              </button>
+              canShowActions ? (
+                <button 
+                  type="button"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer" 
+                  onClick={()=>openNew()}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Standar</span>
+                </button>
+              ) : null
             }
             listcolumns={[
               { key: "Nama", label: "Nama Standar", searchable: true },
             ]}
-
             renderAction={({ row, close }) => (
               <div className="flex flex-col gap-0.5">
                 <button

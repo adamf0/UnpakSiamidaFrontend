@@ -13,6 +13,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty, renderLabelFakultasUnit, formatProdiWithJenjang } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const LEVEL_BADGES = {
   admin: "bg-purple-100 text-purple-800 border-purple-200",
@@ -103,6 +104,7 @@ export default function AccountUserPage() {
     openChangeLevel,
     setOpenChangeLevel,
   } = useContent();
+  const canShowActions = useFeatureActionVisibility();
 
   const openNew = () => {
     setModalMode("new");
@@ -180,16 +182,18 @@ export default function AccountUserPage() {
                     </button>
                   </Tooltip>
 
-                  <Tooltip content="Tambah Akun User">
-                    <button
-                      type="button"
-                      className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
-                      onClick={openNew}
-                      aria-label="Tambah Akun User"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </Tooltip>
+                  {canShowActions && (
+                    <Tooltip content="Tambah Akun User">
+                      <button
+                        type="button"
+                        className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
+                        onClick={openNew}
+                        aria-label="Tambah Akun User"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+                    </Tooltip>
+                  )}
                 </div>
               }
               listcolumns={[

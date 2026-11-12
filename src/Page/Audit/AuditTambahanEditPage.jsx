@@ -6,12 +6,14 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { BsChevronLeft, BsChevronRight } from "react-icons/bs";
 import { useToast } from "@/Providers/ToastProvider";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { delay, isEmpty } from "@/Common/Utils";
 import TextInput from "@/Components/TextInput";
 import { useForm } from "react-hook-form";
 import RadioButton from "@/Components/RadioButton";
 import InfoAuditCard from "@/Components/InfoAuditCard";
+import PageDisabledBanner from "@/Components/PageDisabledBanner";
+import { shouldHideNonV3Actions } from "@/Common/versionConfig";
 import { apiClient, API_BASE_URL } from "@/Common/api";
 import { FileText } from "lucide-react";
 
@@ -21,10 +23,15 @@ const AuditTambahanEditPage = ({
   hideNavbar = false,
 } = {}) => {
   const params = useParams();
+  const location = useLocation();
   const uuidRenstra = propUuidRenstra || params.uuidRenstra;
   const { addToast } = useToast();
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel, positionYear } = useContent();
   const { getValidToken } = useAuth();
+
+  const isDirectAccess = location.pathname.startsWith("/audit/tambahan");
+  const isPageDisabled = shouldHideNonV3Actions() && isDirectAccess && !hideNavbar;
+  const effectiveReadOnly = readOnly || isPageDisabled;
 
   const [dataAudit, setDataAudit] = useState([]);
   const [dataTemplate, setDataTemplate] = useState([]);
@@ -68,7 +75,7 @@ const AuditTambahanEditPage = ({
   };
 
   const onSubmit = async (data) => {
-    if (readOnly) return;
+    if (effectiveReadOnly) return;
     if (isEmpty(getValidToken())) return;
     let audit = (dataAudit ?? []).find((item) => item.TemplateDokumenTambahanUUID === activeQuestion);
 
@@ -358,10 +365,17 @@ const AuditTambahanEditPage = ({
           )}
         />
       )}
+      {!hideNavbar && isPageDisabled && (
+        <div className="px-3 sm:px-4 pt-3 sm:pt-4 bg-white">
+          <PageDisabledBanner />
+        </div>
+      )}
       <div
         className={`p-3 sm:p-4 bg-white flex flex-col md:flex-row w-full gap-4 ${
           hideNavbar
             ? "md:h-[calc(100vh-230px)] md:min-h-[500px]"
+            : isPageDisabled
+            ? "md:h-[calc(100vh-160px)] md:min-h-[500px]"
             : "md:h-[calc(100vh-80px)] md:min-h-[550px]"
         }`}
       >
@@ -505,7 +519,7 @@ const AuditTambahanEditPage = ({
                     )}
                   </div>
 
-                  {level === "auditee" && !readOnly ? (
+                  {level === "auditee" && !effectiveReadOnly ? (
                     <TextInput
                       type="text"
                       label="Link Berkas"
@@ -535,7 +549,7 @@ const AuditTambahanEditPage = ({
                     </div>
                   )}
 
-                  {(level === "auditor1" || level === "auditor2" || readOnly) && (
+                  {(level === "auditor1" || level === "auditor2" || effectiveReadOnly) && (
                     <div className="space-y-4 pt-2 border-t border-gray-150">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -548,9 +562,9 @@ const AuditTambahanEditPage = ({
                               value={v}
                               text={v === "1" ? "Ya" : "Tidak"}
                               checked={watch("capaian_auditor") === v}
-                              disabled={readOnly}
+                              disabled={effectiveReadOnly}
                               onChange={() => {
-                                if (!readOnly) {
+                                if (!effectiveReadOnly) {
                                   setValue("capaian_auditor", v, {
                                     shouldValidate: true,
                                     shouldDirty: true,
@@ -573,17 +587,17 @@ const AuditTambahanEditPage = ({
                             Catatan
                           </label>
                           <textarea
-                            {...(!readOnly
+                            {...(!effectiveReadOnly
                               ? register("catatan_auditor", {
                                   required: "Catatan wajib diisi jika capaian tidak",
                                 })
                               : { value: watch("catatan_auditor") })}
                             placeholder="Tulis catatan kenapa tidak tercapai..."
                             className={`w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 ${
-                              readOnly ? "bg-gray-50 text-gray-700 cursor-not-allowed" : "focus:border-transparent"
+                              effectiveReadOnly ? "bg-gray-50 text-gray-700 cursor-not-allowed" : "focus:border-transparent"
                             }`}
                             rows={4}
-                            disabled={readOnly}
+                            disabled={effectiveReadOnly}
                           />
                           {errors.catatan_auditor && (
                             <p className="text-red-500 text-xs mt-1">
@@ -596,9 +610,11 @@ const AuditTambahanEditPage = ({
                   )}
 
                   <div className="pt-2">
-                    {readOnly ? (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-medium text-center">
-                        Mode Riwayat Audit (Hanya Lihat - Input Dinonaktifkan)
+                    {effectiveReadOnly ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold text-center">
+                        {isPageDisabled
+                          ? "halaman ini di matikan oleh developer"
+                          : "Mode Riwayat Audit (Hanya Lihat - Input Dinonaktifkan)"}
                       </div>
                     ) : (
                       <button

@@ -9,6 +9,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { apiClient } from "@/Common/api";
 import { renderLabelFakultasUnit } from "@/Common/Utils";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import UserAssignmentModal from "./UserAssignmentModal";
 import {
@@ -37,6 +38,7 @@ export default function UserAssignmentPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { userUuid } = useParams();
+  const canShowActions = useFeatureActionVisibility();
 
   // Target User state from route state or param
   const targetUserFromState = location.state?.user || null;
@@ -356,14 +358,16 @@ export default function UserAssignmentPage() {
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               </button>
 
-              <button
-                type="button"
-                onClick={openNew}
-                className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tambah Penugasan</span>
-              </button>
+              {canShowActions && (
+                <button
+                  type="button"
+                  onClick={openNew}
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Penugasan</span>
+                </button>
+              )}
             </div>
           }
         />
@@ -501,13 +505,13 @@ export default function UserAssignmentPage() {
                   <th className="px-4 py-3.5 text-center">Role Penugasan</th>
                   <th className="px-4 py-3.5 text-center">Status Akses</th>
                   <th className="px-4 py-3.5">Terakhir Diperbarui</th>
-                  <th className="px-4 py-3.5 text-right w-28">Aksi</th>
+                  {canShowActions && <th className="px-4 py-3.5 text-right w-28">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={targetUser ? 7 : 8} className="text-center py-12 text-gray-400">
+                    <td colSpan={(targetUser ? 6 : 7) + (canShowActions ? 1 : 0)} className="text-center py-12 text-gray-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                         <span className="text-xs font-medium">Memuat data penugasan role...</span>
@@ -516,7 +520,7 @@ export default function UserAssignmentPage() {
                   </tr>
                 ) : filteredAssignments.length === 0 ? (
                   <tr>
-                    <td colSpan={targetUser ? 7 : 8} className="text-center py-12 text-gray-400">
+                    <td colSpan={(targetUser ? 6 : 7) + (canShowActions ? 1 : 0)} className="text-center py-12 text-gray-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-400">
                           <UserCheck size={24} />
@@ -528,17 +532,19 @@ export default function UserAssignmentPage() {
                         </p>
                         <p className="text-xs text-gray-400 max-w-sm">
                           {targetUser
-                            ? "Pengguna ini belum ditugaskan ke UPML, UPMF, atau UPMS. Klik tombol Tambah Penugasan untuk membuat penugasan baru."
-                            : "Klik tombol 'Tambah Penugasan' untuk menugaskan pengguna ke UPML, UPMF, atau UPMS"}
+                            ? (canShowActions ? "Pengguna ini belum ditugaskan ke UPML, UPMF, atau UPMS. Klik tombol Tambah Penugasan untuk membuat penugasan baru." : "Pengguna ini belum ditugaskan ke UPML, UPMF, atau UPMS.")
+                            : (canShowActions ? "Klik tombol 'Tambah Penugasan' untuk menugaskan pengguna ke UPML, UPMF, atau UPMS" : "Tidak ada data penugasan role.")}
                         </p>
-                        <button
-                          type="button"
-                          onClick={openNew}
-                          className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
-                        >
-                          <Plus size={14} />
-                          <span>Tambah Penugasan Sekarang</span>
-                        </button>
+                        {canShowActions && (
+                          <button
+                            type="button"
+                            onClick={openNew}
+                            className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
+                          >
+                            <Plus size={14} />
+                            <span>Tambah Penugasan Sekarang</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -657,32 +663,34 @@ export default function UserAssignmentPage() {
                         </td>
 
                         {/* Aksi */}
-                        <td className="px-4 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Tooltip content="Edit Penugasan">
-                              <button
-                                type="button"
-                                onClick={() => openEdit(item)}
-                                className="w-7 h-7 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg flex items-center justify-center transition cursor-pointer"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                            </Tooltip>
+                        {canShowActions && (
+                          <td className="px-4 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Tooltip content="Edit Penugasan">
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(item)}
+                                  className="w-7 h-7 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg flex items-center justify-center transition cursor-pointer"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                              </Tooltip>
 
-                            <Tooltip content="Hapus Penugasan">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setItemToDelete(item);
-                                  setDeleteDialogOpen(true);
-                                }}
-                                className="w-7 h-7 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center transition cursor-pointer"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </Tooltip>
-                          </div>
-                        </td>
+                              <Tooltip content="Hapus Penugasan">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setItemToDelete(item);
+                                    setDeleteDialogOpen(true);
+                                  }}
+                                  className="w-7 h-7 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center transition cursor-pointer"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </Tooltip>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })

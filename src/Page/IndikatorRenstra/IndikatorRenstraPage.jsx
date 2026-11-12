@@ -25,8 +25,10 @@ import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 import SearchSelect from "@/Components/SearchSelect";
 import MultiSearchSelect from "@/Components/MultiSearchSelect";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const IndikatorRenstraPage = () => {
+  const canShowActions = useFeatureActionVisibility();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const tableRef = useRef(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -423,16 +425,18 @@ const IndikatorRenstraPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              <Tooltip content="Tambah Indikator Renstra">
-                <button
-                  type="button"
-                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
-                  onClick={() => openNew()}
-                  aria-label="Tambah Indikator Renstra"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </Tooltip>
+              canShowActions ? (
+                <Tooltip content="Tambah Indikator Renstra">
+                  <button
+                    type="button"
+                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
+                    onClick={() => openNew()}
+                    aria-label="Tambah Indikator Renstra"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </Tooltip>
+              ) : null
             }
             listcolumns={listcolumns}
             renderAction={({ row, close }) => (

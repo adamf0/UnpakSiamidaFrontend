@@ -7,7 +7,13 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { renderLabelFakultasUnit } from "@/Common/Utils";
-import { FileSpreadsheet, FileText, Trash2, History, ShieldCheck } from "lucide-react";
+import {
+  FileSpreadsheet,
+  FileText,
+  Trash2,
+  History,
+  ShieldCheck,
+} from "lucide-react";
 import PageHeader from "@/Components/PageHeader";
 
 const AuditPage = () => {
@@ -18,16 +24,17 @@ const AuditPage = () => {
   const [jadwalRow, setJadwalRow] = useState(null);
   const { positionYear, activeYear } = useContent();
 
-  useEffect(()=>{
-    if(!positionYear) return;
+  useEffect(() => {
+    if (!positionYear) return;
 
-    if(positionYear){
+    if (positionYear) {
       setTahun(positionYear);
     }
-  },[positionYear]);
+  }, [positionYear]);
 
-  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
-  const {getValidToken} = useAuth()
+  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } =
+    useContent();
+  const { getValidToken } = useAuth();
 
   return (
     <>
@@ -53,8 +60,7 @@ const AuditPage = () => {
         />
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-          {
-            tahun>0 && 
+          {tahun > 0 && (
             <RemoteTable
               ref={tableRef}
               endpoint={`/renstra/audit/${tahun}`}
@@ -63,39 +69,67 @@ const AuditPage = () => {
               adapter={AuditAdapter}
               listcolumns={[
                 { key: "Tahun", label: "Tahun", searchable: true },
-                { key: "FakultasUnit", label: "Target Audit", searchable: true, renderKey: (row) => renderLabelFakultasUnit(row)},
+                {
+                  key: "FakultasUnit",
+                  label: "Target Audit",
+                  searchable: true,
+                  renderKey: (row) => renderLabelFakultasUnit(row),
+                },
                 { key: "Fakultas", label: "Fakultas", searchable: true },
-                { key: "Auditor1", label: "Auditor 1", searchable: true, renderKey: (row) => row.Auditor1 || "-" },
-                { key: "Auditor2", label: "Auditor 2", searchable: true, renderKey: (row) => row.Auditor2 || "-" },
-                { key: "Auditee", label: "Auditee", searchable: true, renderKey: (row) => row.Auditee || "-" },
-                { key: "PeriodeUploadDokumenMulai", label: "Status Jadwal", className: "w-64", renderKey: (row) => {
-                  let styleBadge = "bg-gray-50 text-gray-700 border-gray-200";
+                {
+                  key: "Auditor1",
+                  label: "Auditor 1",
+                  searchable: true,
+                  renderKey: (row) => row.Auditor1 || "-",
+                },
+                {
+                  key: "Auditor2",
+                  label: "Auditor 2",
+                  searchable: true,
+                  renderKey: (row) => row.Auditor2 || "-",
+                },
+                {
+                  key: "Auditee",
+                  label: "Auditee",
+                  searchable: true,
+                  renderKey: (row) => row.Auditee || "-",
+                },
+                {
+                  key: "PeriodeUploadDokumenMulai",
+                  label: "Status Jadwal",
+                  className: "w-64",
+                  renderKey: (row) => {
+                    let styleBadge = "bg-gray-50 text-gray-700 border-gray-200";
 
-                  if (row.StatusJadwal === "jadwal bentrok") {
-                    styleBadge = "bg-amber-50 text-amber-800 border-amber-200";
-                  } else if (row.StatusJadwal === "upload dokumen") {
-                    styleBadge = "bg-emerald-50 text-emerald-800 border-emerald-200";
-                  } else if (row.StatusJadwal === "assesment dokumen") {
-                    styleBadge = "bg-sky-50 text-sky-800 border-sky-200";
-                  } else if (row.StatusJadwal === "assesment lapangan") {
-                    styleBadge = "bg-purple-50 text-purple-800 border-purple-200";
-                  } else if (row.StatusJadwal === "audit telah berakhir") {
-                    styleBadge = "bg-rose-50 text-rose-800 border-rose-200";
-                  }
+                    if (row.StatusJadwal === "jadwal bentrok") {
+                      styleBadge =
+                        "bg-amber-50 text-amber-800 border-amber-200";
+                    } else if (row.StatusJadwal === "upload dokumen") {
+                      styleBadge =
+                        "bg-emerald-50 text-emerald-800 border-emerald-200";
+                    } else if (row.StatusJadwal === "assesment dokumen") {
+                      styleBadge = "bg-sky-50 text-sky-800 border-sky-200";
+                    } else if (row.StatusJadwal === "assesment lapangan") {
+                      styleBadge =
+                        "bg-purple-50 text-purple-800 border-purple-200";
+                    } else if (row.StatusJadwal === "audit telah berakhir") {
+                      styleBadge = "bg-rose-50 text-rose-800 border-rose-200";
+                    }
 
-                  return (
-                    <span
-                      onClick={() => {
-                        setJadwalOpen(true);
-                        setJadwalRow(row);
-                      }}
-                      className={`${styleBadge} px-2.5 py-1 text-xs font-semibold rounded-full border block max-w-[16rem] truncate cursor-pointer hover:shadow-2xs transition`}
-                    >
-                      {row.StatusJadwal}
-                    </span>
-                  );
-
-                }, searchable: false},
+                    return (
+                      <span
+                        onClick={() => {
+                          setJadwalOpen(true);
+                          setJadwalRow(row);
+                        }}
+                        className={`${styleBadge} px-2.5 py-1 text-xs font-semibold rounded-full border block max-w-[16rem] truncate cursor-pointer hover:shadow-2xs transition`}
+                      >
+                        {row.StatusJadwal}
+                      </span>
+                    );
+                  },
+                  searchable: false,
+                },
               ]}
               renderAction={({ row, close }) => {
                 const hasRenstra = parseInt(row?.TotalRenstra || "0", 10) > 0;
@@ -120,7 +154,9 @@ const AuditPage = () => {
                     >
                       <FileSpreadsheet
                         className={`w-4 h-4 shrink-0 transition-transform ${
-                          hasRenstra ? "text-indigo-600 group-hover:scale-110" : "text-gray-400"
+                          hasRenstra
+                            ? "text-indigo-600 group-hover:scale-110"
+                            : "text-gray-400"
                         }`}
                       />
                       <span>Renstra</span>
@@ -129,7 +165,11 @@ const AuditPage = () => {
                     <button
                       type="button"
                       disabled={!hasDokumen}
-                      title={hasDokumen ? "Dokumen Tambahan" : "Data dokumen tambahan kosong"}
+                      title={
+                        hasDokumen
+                          ? "Dokumen Tambahan"
+                          : "Data dokumen tambahan kosong"
+                      }
                       className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-all text-left group ${
                         hasDokumen
                           ? "text-gray-700 hover:text-sky-700 hover:bg-sky-50/80 cursor-pointer"
@@ -143,54 +183,47 @@ const AuditPage = () => {
                     >
                       <FileText
                         className={`w-4 h-4 shrink-0 transition-transform ${
-                          hasDokumen ? "text-sky-600 group-hover:scale-110" : "text-gray-400"
+                          hasDokumen
+                            ? "text-sky-600 group-hover:scale-110"
+                            : "text-gray-400"
                         }`}
                       />
                       <span>Dokumen Tambahan</span>
                     </button>
 
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-emerald-700 hover:bg-emerald-50/80 rounded-xl transition-all cursor-pointer text-left group"
-                    onClick={() => {
-                      navigate(`/kts/${row.Tahun}/${row.FakultasUnitUuid}/${row.UUID}`);
-                      close();
-                    }}
-                  >
-                    <FileText className="w-4 h-4 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
-                    <span>KTS</span>
-                  </button>
+                    <div className="my-1 border-t border-gray-150" />
 
-                  <button
-                    type="button"
-                    title="Lihat riwayat audit tahun sebelumnya"
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-purple-700 hover:text-purple-800 hover:bg-purple-50/80 rounded-xl transition-all cursor-pointer text-left group"
-                    onClick={() => {
-                      navigate(`/audit/history/${row.UUID}`);
-                      close();
-                    }}
-                  >
-                    <History className="w-4 h-4 text-purple-600 shrink-0 group-hover:scale-110 transition-transform" />
-                    <span className="font-semibold">Riwayat</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-emerald-700 hover:bg-emerald-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                      onClick={() => {
+                        navigate(
+                          `/kts/${row.Tahun}/${row.FakultasUnitUuid}/${row.UUID}`,
+                        );
+                        close();
+                      }}
+                    >
+                      <FileText className="w-4 h-4 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
+                      <span>KTS</span>
+                    </button>
 
-                  <div className="my-1 border-t border-gray-150" />
-
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition-all cursor-pointer text-left group"
-                    onClick={() => {
-                      close();
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
-                    <span>Hapus</span>
-                  </button>
-                </div>
-              );
-            }}
+                    <button
+                      type="button"
+                      title="Lihat riwayat audit tahun sebelumnya"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-purple-700 hover:text-purple-800 hover:bg-purple-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                      onClick={() => {
+                        navigate(`/audit/history/${row.UUID}`);
+                        close();
+                      }}
+                    >
+                      <History className="w-4 h-4 text-purple-600 shrink-0 group-hover:scale-110 transition-transform" />
+                      <span className="font-semibold">Riwayat</span>
+                    </button>
+                  </div>
+                );
+              }}
             />
-          }
+          )}
         </div>
 
         {jadwalRow && (
@@ -222,8 +255,9 @@ export const AuditAdapter = (rows = []) => {
 
   const overlap = (aStart, aEnd, bStart, bEnd) => {
     if (!aStart || !aEnd || !bStart || !bEnd) return false;
-    return new Date(aStart) <= new Date(bEnd) &&
-           new Date(bStart) <= new Date(aEnd);
+    return (
+      new Date(aStart) <= new Date(bEnd) && new Date(bStart) <= new Date(aEnd)
+    );
   };
 
   const formatDate = (d) => {
@@ -236,19 +270,16 @@ export const AuditAdapter = (rows = []) => {
   };
 
   return rows.map((r) => {
-    const uploadRange = inRange(
-      r.PeriodeUploadMulai,
-      r.PeriodeUploadAkhir
-    );
+    const uploadRange = inRange(r.PeriodeUploadMulai, r.PeriodeUploadAkhir);
 
     const dokumenRange = inRange(
       r.PeriodeAssesmentDokumenMulai,
-      r.PeriodeAssesmentDokumenAkhir
+      r.PeriodeAssesmentDokumenAkhir,
     );
 
     const lapanganRange = inRange(
       r.PeriodeAssesmentLapanganMulai,
-      r.PeriodeAssesmentLapanganAkhir
+      r.PeriodeAssesmentLapanganAkhir,
     );
 
     const isOutRangeAl = outRange(r.PeriodeAssesmentLapanganAkhir);
@@ -258,19 +289,19 @@ export const AuditAdapter = (rows = []) => {
         r.PeriodeUploadMulai,
         r.PeriodeUploadAkhir,
         r.PeriodeAssesmentDokumenMulai,
-        r.PeriodeAssesmentDokumenAkhir
+        r.PeriodeAssesmentDokumenAkhir,
       ) ||
       overlap(
         r.PeriodeUploadMulai,
         r.PeriodeUploadAkhir,
         r.PeriodeAssesmentLapanganMulai,
-        r.PeriodeAssesmentLapanganAkhir
+        r.PeriodeAssesmentLapanganAkhir,
       ) ||
       overlap(
         r.PeriodeAssesmentDokumenMulai,
         r.PeriodeAssesmentDokumenAkhir,
         r.PeriodeAssesmentLapanganMulai,
-        r.PeriodeAssesmentLapanganAkhir
+        r.PeriodeAssesmentLapanganAkhir,
       );
 
     let StatusJadwal = "belum mulai audit";
@@ -283,7 +314,7 @@ export const AuditAdapter = (rows = []) => {
       StatusJadwal = "assesment dokumen";
     } else if (lapanganRange) {
       StatusJadwal = "assesment lapangan";
-    } else if(isOutRangeAl){
+    } else if (isOutRangeAl) {
       StatusJadwal = "audit telah berakhir";
     }
 
@@ -296,17 +327,17 @@ export const AuditAdapter = (rows = []) => {
       PeriodeUploadAkhirFmt: formatDate(r.PeriodeUploadAkhir),
 
       PeriodeAssesmentDokumenMulaiFmt: formatDate(
-        r.PeriodeAssesmentDokumenMulai
+        r.PeriodeAssesmentDokumenMulai,
       ),
       PeriodeAssesmentDokumenAkhirFmt: formatDate(
-        r.PeriodeAssesmentDokumenAkhir
+        r.PeriodeAssesmentDokumenAkhir,
       ),
 
       PeriodeAssesmentLapanganMulaiFmt: formatDate(
-        r.PeriodeAssesmentLapanganMulai
+        r.PeriodeAssesmentLapanganMulai,
       ),
       PeriodeAssesmentLapanganAkhirFmt: formatDate(
-        r.PeriodeAssesmentLapanganAkhir
+        r.PeriodeAssesmentLapanganAkhir,
       ),
     };
   });
@@ -316,11 +347,12 @@ export function JadwalModal({ open, onClose, row }) {
   if (!open) return null;
 
   function getRangeStatus(start, end) {
-    if (!start || !end) return {
-      active: false,
-      label: "Belum dijadwalkan",
-      color: "bg-gray-400",
-    };
+    if (!start || !end)
+      return {
+        active: false,
+        label: "Belum dijadwalkan",
+        color: "bg-gray-400",
+      };
 
     const now = new Date();
     const s = new Date(start);
@@ -337,19 +369,16 @@ export function JadwalModal({ open, onClose, row }) {
     return { active: true, label: "Sedang berjalan", color: "bg-green-600" };
   }
 
-  const upload = getRangeStatus(
-    row.PeriodeUploadMulai,
-    row.PeriodeUploadAkhir
-  );
+  const upload = getRangeStatus(row.PeriodeUploadMulai, row.PeriodeUploadAkhir);
 
   const dokumen = getRangeStatus(
     row.PeriodeAssesmentDokumenMulai,
-    row.PeriodeAssesmentDokumenAkhir
+    row.PeriodeAssesmentDokumenAkhir,
   );
 
   const lapangan = getRangeStatus(
     row.PeriodeAssesmentLapanganMulai,
-    row.PeriodeAssesmentLapanganAkhir
+    row.PeriodeAssesmentLapanganAkhir,
   );
 
   return (
@@ -368,10 +397,27 @@ export function JadwalModal({ open, onClose, row }) {
         <div className="space-y-4 text-sm">
           {(row?.Auditor1 || row?.Auditor2 || row?.Auditee) && (
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs space-y-1.5">
-              <div className="text-gray-500 font-semibold mb-1 uppercase tracking-wider text-[10px]">Petugas Yang Bertugas</div>
-              <div className="flex justify-between items-center"><span className="text-gray-600">Auditor 1:</span> <span className="font-semibold text-gray-900">{row.Auditor1 || "-"}</span></div>
-              <div className="flex justify-between items-center"><span className="text-gray-600">Auditor 2:</span> <span className="font-semibold text-gray-900">{row.Auditor2 || "-"}</span></div>
-              <div className="flex justify-between items-center"><span className="text-gray-600">Auditee:</span> <span className="font-semibold text-gray-900">{row.Auditee || "-"}</span></div>
+              <div className="text-gray-500 font-semibold mb-1 uppercase tracking-wider text-[10px]">
+                Petugas Yang Bertugas
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Auditor 1:</span>{" "}
+                <span className="font-semibold text-gray-900">
+                  {row.Auditor1 || "-"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Auditor 2:</span>{" "}
+                <span className="font-semibold text-gray-900">
+                  {row.Auditor2 || "-"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Auditee:</span>{" "}
+                <span className="font-semibold text-gray-900">
+                  {row.Auditee || "-"}
+                </span>
+              </div>
             </div>
           )}
 
@@ -413,9 +459,7 @@ function JadwalItem({ title, start, end, status }) {
       </div>
 
       <div className="text-gray-600 text-xs">
-        {start && end
-          ? `${start} – ${end}`
-          : "Tanggal belum ditentukan"}
+        {start && end ? `${start} – ${end}` : "Tanggal belum ditentukan"}
       </div>
     </div>
   );

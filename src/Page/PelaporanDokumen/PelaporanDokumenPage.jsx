@@ -16,6 +16,7 @@ import {
   renderLabelFakultasUnit,
 } from "@/Common/Utils";
 import { apiClient, API_BASE_URL } from "@/Common/api";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const PelaporanDokumenPage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -42,6 +43,7 @@ const PelaporanDokumenPage = () => {
 
   const canManage = !isAdmin && !isFakultas;
   const canVerify = isAdmin || isFakultas;
+  const canShowActions = useFeatureActionVisibility();
 
   const isAuditee =
     level === "auditee" ||
@@ -144,7 +146,7 @@ const PelaporanDokumenPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              canManage ? (
+              canShowActions && canManage ? (
                 <Tooltip content="Tambah Pelaporan Dokumen">
                   <button
                     type="button"
@@ -235,46 +237,50 @@ const PelaporanDokumenPage = () => {
                 searchable: true,
                 renderKey: (row) => row.Catatan || "-",
               },
-              {
-                key: "Aksi",
-                label: "Aksi",
-                searchable: false,
-                renderKey: (row) => (
-                  <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    {canVerify && (
-                      <button
-                        type="button"
-                        onClick={() => openVerifikasi(row)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition shadow-xs"
-                      >
-                        <CheckSquare className="w-3.5 h-3.5" />
-                        Verifikasi
-                      </button>
-                    )}
-                    {canManage && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => openEdit(row)}
-                          className="px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedRow(row);
-                            setConfirmDelete(true);
-                          }}
-                          className="px-2.5 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition"
-                        >
-                          Hapus
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ),
-              },
+              ...(canShowActions
+                ? [
+                    {
+                      key: "Aksi",
+                      label: "Aksi",
+                      searchable: false,
+                      renderKey: (row) => (
+                        <div className="flex items-center gap-1.5 whitespace-nowrap">
+                          {canVerify && (
+                            <button
+                              type="button"
+                              onClick={() => openVerifikasi(row)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition shadow-xs"
+                            >
+                              <CheckSquare className="w-3.5 h-3.5" />
+                              Verifikasi
+                            </button>
+                          )}
+                          {canManage && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEdit(row)}
+                                className="px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRow(row);
+                                  setConfirmDelete(true);
+                                }}
+                                className="px-2.5 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition"
+                              >
+                                Hapus
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
         </div>

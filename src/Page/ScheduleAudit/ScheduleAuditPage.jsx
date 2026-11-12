@@ -26,6 +26,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty, renderLabelFakultasUnit } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 import ScheduleAuditFilterDrawer, {
   initialAuditFilters,
 } from "./ScheduleAuditFilterDrawer";
@@ -541,6 +542,7 @@ const renderKtsColumn = (row, navigate) => {
 
 const ScheduleAuditPage = () => {
   const navigate = useNavigate();
+  const canShowActions = useFeatureActionVisibility();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const tableRef = useRef(null);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -955,14 +957,15 @@ const ScheduleAuditPage = () => {
             token={getValidToken()}
             adapter={ScheduleAuditAdapter}
             filterFn={filterFn}
-            selectable={true}
-            selectedRows={selectedRows}
+            selectable={canShowActions}
+            selectedRows={canShowActions ? selectedRows : []}
             onSelectionChange={setSelectedRows}
             rowKey="UUID"
             onError={(err) => {
               console.error("TABLE ERROR:", err);
             }}
             renderBulkAction={
+              canShowActions &&
               selectedRows.length > 0 && (
                 <div className="mb-4 p-3.5 rounded-xl bg-purple-50/80 border border-purple-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-150">
                   <div className="flex items-center gap-2.5 flex-wrap">
@@ -1018,14 +1021,16 @@ const ScheduleAuditPage = () => {
                       <span>Kirim Email</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setConfirmBulkDelete(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Hapus Bulk</span>
-                    </button>
+                    {canShowActions && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmBulkDelete(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus Bulk</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -1052,16 +1057,18 @@ const ScheduleAuditPage = () => {
                   </button>
                 </Tooltip>
 
-                <Tooltip content="Tambah Jadwal Audit">
-                  <button
-                    type="button"
-                    className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
-                    onClick={() => navigate("/schedule_audit/new")}
-                    aria-label="Tambah Jadwal Audit"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </Tooltip>
+                {canShowActions && (
+                  <Tooltip content="Tambah Jadwal Audit">
+                    <button
+                      type="button"
+                      className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
+                      onClick={() => navigate("/schedule_audit/new")}
+                      aria-label="Tambah Jadwal Audit"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </Tooltip>
+                )}
               </div>
             }
             listcolumns={[

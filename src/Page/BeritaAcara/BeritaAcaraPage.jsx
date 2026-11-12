@@ -14,6 +14,7 @@ import { Plus, Filter, ScrollText } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import PageHeader from "@/Components/PageHeader";
 import { apiClient, API_BASE_URL } from "@/Common/api";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 //[pr] belum tambah pengecekan penugasan audit di tahun & unit yg dicari pada list group
 const BeritaAcaraPage = () => {
@@ -26,6 +27,7 @@ const BeritaAcaraPage = () => {
   const [infoTarget, setInfoTarget] = useState(null);
   const { positionYear, level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } =
     useContent();
+  const canShowActions = useFeatureActionVisibility();
 
   const [loading, setLoading] = useState(false);
   const [datas, setDatas] = useState([]);
@@ -286,16 +288,18 @@ const BeritaAcaraPage = () => {
               </ol>
             </nav>
 
-            <Tooltip content="Tambah Berita Acara">
-              <button
-                type="button"
-                className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
-                onClick={() => openNew()}
-                aria-label="Tambah Berita Acara"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
-            </Tooltip>
+            {canShowActions && (
+              <Tooltip content="Tambah Berita Acara">
+                <button
+                  type="button"
+                  className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0"
+                  onClick={() => openNew()}
+                  aria-label="Tambah Berita Acara"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </Tooltip>
+            )}
           </div>
         )}
 

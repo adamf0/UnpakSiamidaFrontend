@@ -12,6 +12,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { renderLabelFakultasUnit } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const MataProgramPage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -105,6 +106,7 @@ const MataProgramPage = () => {
   ];
   const canAdd = hasTarget && !excludedAddRoles.includes(curRole);
   const canManage = canAdd || isAdmin;
+  const canShowActions = useFeatureActionVisibility();
 
   const isUnrestrictedData =
     curRole === "anggaran" ||
@@ -161,7 +163,7 @@ const MataProgramPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              canAdd ? (
+              canShowActions && canAdd ? (
                 <button
                   type="button"
                   className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"

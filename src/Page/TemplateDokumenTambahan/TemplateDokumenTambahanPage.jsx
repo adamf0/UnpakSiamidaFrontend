@@ -8,9 +8,11 @@ import { Plus, Eye, Pencil, Trash2, FolderPlus } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/Components/PageHeader";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const TemplateDokumenTambahanPage = () => {
   const navigate = useNavigate();
+  const canShowActions = useFeatureActionVisibility();
   const [_, setOpenAction] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTitle, setDrawerTitle] = useState("");
@@ -59,24 +61,26 @@ const TemplateDokumenTambahanPage = () => {
             adapter={templateDokumenTambahanAdapter}
             token={getValidToken()}
             renderAddAction={
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition shadow-2xs cursor-pointer"
-                  onClick={() => navigate("/template_dokumen_tambahan/preview")}
-                >
-                  <Eye className="w-4 h-4 text-gray-500" />
-                  <span>Pratinjau</span>
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition shadow-2xs cursor-pointer"
-                  onClick={() => navigate("/template_dokumen_tambahan/new")}
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambah Template</span>
-                </button>
-              </div>
+              canShowActions ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition shadow-2xs cursor-pointer"
+                    onClick={() => navigate("/template_dokumen_tambahan/preview")}
+                  >
+                    <Eye className="w-4 h-4 text-gray-500" />
+                    <span>Pratinjau</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition shadow-2xs cursor-pointer"
+                    onClick={() => navigate("/template_dokumen_tambahan/new")}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Template</span>
+                  </button>
+                </div>
+              ) : null
             }
             listcolumns={[
               {

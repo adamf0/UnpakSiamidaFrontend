@@ -2,11 +2,13 @@ import React from "react";
 import { MoreVertical, Calendar } from "lucide-react";
 import { InfoRow } from "@/Components/InfoAuditCard";
 import { formatTanggalIndo } from "@/Common/Utils";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 export default function BeritaAcaraCard({
   row,
   onOpenAction,
 }) {
+  const canShowActions = useFeatureActionVisibility("/berita_acara");
   return (
     <div
       className="relative rounded-xl border border-gray-200/90 p-4 hover:shadow-md hover:border-purple-300 transition-all duration-150 bg-white shadow-2xs"
@@ -18,23 +20,25 @@ export default function BeritaAcaraCard({
           Periode {row?.Tahun ?? "-"}
         </span>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
+        {canShowActions && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
 
-            const rect = e.currentTarget.getBoundingClientRect();
+              const rect = e.currentTarget.getBoundingClientRect();
 
-            onOpenAction({
-              row,
-              rect,
-            });
-          }}
-          className="p-1 text-gray-400 hover:text-purple-700 rounded-lg hover:bg-purple-50 transition cursor-pointer"
-          title="Menu Aksi"
-        >
-          <MoreVertical className="w-4 h-4" />
-        </button>
+              onOpenAction({
+                row,
+                rect,
+              });
+            }}
+            className="p-1 text-gray-400 hover:text-purple-700 rounded-lg hover:bg-purple-50 transition cursor-pointer"
+            title="Menu Aksi"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Content */}

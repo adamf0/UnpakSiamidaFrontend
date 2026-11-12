@@ -6,13 +6,15 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { cn, isEmpty, isNumeric } from "@/Common/Utils";
 import ErrorImg from "@/assets/data-breach.png";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { BsThreeDotsVertical } from "react-icons/bs";
 import { useForm } from "react-hook-form";
 import RestrictedCkEditor from "@/Components/RestrictedCkEditor";
 import TextInput from "@/Components/TextInput";
 import Choice from "@/Components/Choice";
 import InfoAuditCard from "@/Components/InfoAuditCard";
+import PageDisabledBanner from "@/Components/PageDisabledBanner";
+import { shouldHideNonV3Actions } from "@/Common/versionConfig";
 import { apiClient, API_BASE_URL, ktsApi } from "@/Common/api";
 import {
   Download,
@@ -156,6 +158,7 @@ const KtsPage = ({
   hideNavbar = false,
 } = {}) => {
   const params = useParams();
+  const location = useLocation();
   const tahun = propTahun || params.tahun;
   const target = propTarget || params.target;
   const uuidaudit = propUuidaudit || params.uuidaudit;
@@ -170,6 +173,10 @@ const KtsPage = ({
     setOpenChangeLevel,
   } = useContent();
 
+  const isDirectAccess = location.pathname.startsWith("/kts");
+  const isPageDisabled = shouldHideNonV3Actions() && isDirectAccess && !hideNavbar;
+  const effectiveReadOnly = readOnly || isPageDisabled;
+
   const [data, setData] = useState([]);
   const [info, setInfo] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -182,8 +189,8 @@ const KtsPage = ({
   // popper action
   const [activeActionId, setActiveActionId] = useState(null);
   const [onlyAllowed, setOnlyAllowed] = useState(false);
-  const filteredData = (!readOnly && onlyAllowed)
-    ? data.filter((row) => ruleAllowAccess(row, level, info, user, readOnly))
+  const filteredData = (!effectiveReadOnly && onlyAllowed)
+    ? data.filter((row) => ruleAllowAccess(row, level, info, user, effectiveReadOnly))
     : data;
 
   useEffect(() => {
@@ -281,11 +288,12 @@ const KtsPage = ({
     if (!selectedRow) return null;
 
     // Mode read-only (Riwayat Audit) atau KTS yang sudah selesai/tutup: Tampilkan SELURUH field input
-    if (readOnly || selectedRow.Status === "tutup_kts") {
+    if (effectiveReadOnly || selectedRow.Status === "tutup_kts") {
       return (
         <KtsFullDetailForm
           data={selectedRow}
           readOnly={true}
+          isPageDisabled={isPageDisabled}
           onDownload={() => downloadHandler(selectedRow)}
         />
       );
@@ -311,11 +319,11 @@ const KtsPage = ({
     const Component = statusMap[selectedRow?.Status] || KtsForm1;
     if (!Component) return null;
 
-    if (isAvailableEdit && isUbahTindakan && !readOnly) {
-      return <KtsForm2 data={selectedRow} isUbahTindakan={isUbahTindakan} readOnly={readOnly} />;
+    if (isAvailableEdit && isUbahTindakan && !effectiveReadOnly) {
+      return <KtsForm2 data={selectedRow} isUbahTindakan={isUbahTindakan} readOnly={effectiveReadOnly} />;
     }
 
-    return <Component data={selectedRow} readOnly={readOnly} />;
+    return <Component data={selectedRow} readOnly={effectiveReadOnly} />;
   }
 
   const downloadHandler = async (row) => {
@@ -363,6 +371,11 @@ const KtsPage = ({
       )}
 
       <div className="p-4 bg-white">
+        {!hideNavbar && isPageDisabled && (
+          <div className="mb-4">
+            <PageDisabledBanner />
+          </div>
+        )}
         <h2 className="text-lg font-semibold mb-4">KTS Audit</h2>
 
         {loading && <div className="text-gray-500">Loading...</div>}
@@ -455,12 +468,12 @@ const KtsPage = ({
                   level={level}
                   user={user}
                   info={info}
-                  readOnly={readOnly}
+                  readOnly={effectiveReadOnly}
                   activeActionId={activeActionId}
                   setActiveActionId={setActiveActionId}
                   onEdit={(row) => setSelectedRow(row)}
                   onChangePosition={(status, ubahTindakan) => {
-                    if (readOnly) return;
+                    if (effectiveReadOnly) return;
                     console.log(status, ubahTindakan);
                     setPositionStatus(status);
                     setIsUbahTindakan(ubahTindakan);
@@ -665,7 +678,7 @@ function ActionItem({ label, onClick, danger }) {
    sehingga pengguna melihat seluruh isi temuan, tanggapan, dan penutupan,
    tidak stuck hanya pada form PLOR.
 ========================================================================= */
-export function KtsFullDetailForm({ data, readOnly = true, onDownload }) {
+export function KtsFullDetailForm({ data, readOnly = true, isPageDisabled = false, onDownload }) {
   const { control, reset, watch } = useForm({
     defaultValues: {
       NomorLaporan: "",
@@ -1009,7 +1022,9 @@ export function KtsFullDetailForm({ data, readOnly = true, onDownload }) {
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
           <span>
-            {readOnly
+            {isPageDisabled
+              ? "halaman ini di matikan oleh developer"
+              : readOnly
               ? "Mode Riwayat Audit KTS: Seluruh 5 Bagian Input Ditampilkan Secara Lengkap (Hanya Lihat)."
               : "KTS Selesai (Tutup KTS): Seluruh 5 Bagian Input Ditampilkan Secara Lengkap."}
           </span>

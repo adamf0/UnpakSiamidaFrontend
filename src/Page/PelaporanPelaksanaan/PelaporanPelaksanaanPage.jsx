@@ -16,6 +16,7 @@ import {
   renderLabelFakultasUnit,
 } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const isValidDateVal = (val) => {
   if (!val) return false;
@@ -50,6 +51,7 @@ const PelaporanPelaksanaanPage = () => {
 
   const canManage = !isAdmin && !isFakultas;
   const canVerify = isAdmin || isFakultas;
+  const canShowActions = useFeatureActionVisibility();
 
   const isAuditee =
     level === "auditee" ||
@@ -238,35 +240,39 @@ const PelaporanPelaksanaanPage = () => {
                 searchable: true,
                 renderKey: (row) => row.Detail || "-",
               },
-              {
-                key: "Aksi",
-                label: "Aksi",
-                searchable: false,
-                renderKey: (row) => (
-                  <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    {canVerify && (
-                      <button
-                        type="button"
-                        onClick={() => openVerifikasi(row)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition shadow-xs"
-                      >
-                        <CheckSquare className="w-3.5 h-3.5" />
-                        Verifikasi / Detail
-                      </button>
-                    )}
-                    {canManage && (
-                      <button
-                        type="button"
-                        onClick={() => openLaporkan(row)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded transition shadow-xs"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        Laporkan Pelaksanaan
-                      </button>
-                    )}
-                  </div>
-                ),
-              },
+              ...(canShowActions
+                ? [
+                    {
+                      key: "Aksi",
+                      label: "Aksi",
+                      searchable: false,
+                      renderKey: (row) => (
+                        <div className="flex items-center gap-1.5 whitespace-nowrap">
+                          {canVerify && (
+                            <button
+                              type="button"
+                              onClick={() => openVerifikasi(row)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition shadow-xs"
+                            >
+                              <CheckSquare className="w-3.5 h-3.5" />
+                              Verifikasi / Detail
+                            </button>
+                          )}
+                          {canManage && (
+                            <button
+                              type="button"
+                              onClick={() => openLaporkan(row)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded transition shadow-xs"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              Laporkan Pelaksanaan
+                            </button>
+                          )}
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
             ]}
           />
         </div>

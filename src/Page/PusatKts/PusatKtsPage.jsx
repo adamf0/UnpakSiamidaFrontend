@@ -6,6 +6,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { ktsApi } from "@/Common/api";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 import {
   ArrowLeft,
   ChevronDown,
@@ -96,6 +97,7 @@ const PusatKtsPage = () => {
     openChangeLevel,
     setOpenChangeLevel,
   } = useContent();
+  const canShowActions = useFeatureActionVisibility();
 
   const [renstraInfo, setRenstraInfo] = useState(null);
   const [temuanList, setTemuanList] = useState([]);
@@ -699,7 +701,7 @@ const PusatKtsPage = () => {
                     <th className="py-2.5 px-3 w-24 text-center">Klasifikasi</th>
                     <th className="py-2.5 px-3 w-24">Keterangan</th>
                     <th className="py-2.5 px-3 w-44">Keterangan Tolak Auditee</th>
-                    <th className="py-2.5 px-3 w-36 text-center">Aksi</th>
+                    {canShowActions && <th className="py-2.5 px-3 w-36 text-center">Aksi</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -802,7 +804,8 @@ const PusatKtsPage = () => {
                         </td>
 
                         {/* 9. AKSI */}
-                        <td className="py-2.5 px-3 text-center">
+                        {canShowActions && (
+                          <td className="py-2.5 px-3 text-center">
                           <div className="flex flex-wrap items-center justify-center gap-1.5">
                             {/* BELUM DIBUAT -> TOMBOL BUAT KTS */}
                             {item.Status === "belum_dibuat" && (
@@ -940,6 +943,7 @@ const PusatKtsPage = () => {
                             )}
                           </div>
                         </td>
+                      )}
                       </tr>
                     );
                   })}

@@ -8,6 +8,7 @@ import { Plus, Eye, Pencil, Trash2, LayoutTemplate, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/Components/PageHeader";
 import { apiClient } from "@/Common/api";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const FIXED_TARGET_GROUPS = [
   {
@@ -346,6 +347,7 @@ const TemplateRenstraPage = () => {
   };
 
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+  const canShowActions = useFeatureActionVisibility();
 
   return (
     <>
@@ -505,24 +507,26 @@ const TemplateRenstraPage = () => {
             token={getValidToken()}
             filterFn={filterTableRow}
             renderAddAction={
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition shadow-2xs cursor-pointer"
-                  onClick={() => navigate("/template_renstra/preview")}
-                >
-                  <Eye className="w-4 h-4 text-gray-500" />
-                  <span>Pratinjau</span>
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition shadow-2xs cursor-pointer"
-                  onClick={() => navigate("/template_renstra/new")}
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambah Template</span>
-                </button>
-              </div>
+              canShowActions ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition shadow-2xs cursor-pointer"
+                    onClick={() => navigate("/template_renstra/preview")}
+                  >
+                    <Eye className="w-4 h-4 text-gray-500" />
+                    <span>Pratinjau</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition shadow-2xs cursor-pointer"
+                    onClick={() => navigate("/template_renstra/new")}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Template</span>
+                  </button>
+                </div>
+              ) : null
             }
             adapter={handleAdapter}
             listcolumns={[

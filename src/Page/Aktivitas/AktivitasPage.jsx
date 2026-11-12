@@ -16,6 +16,7 @@ import {
   renderLabelFakultasUnit,
 } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const AktivitasPage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -37,6 +38,7 @@ const AktivitasPage = () => {
   const isAdmin = level === "admin" || user?.level === "admin" || user?.Level === "admin";
   const userFakultasUnit = user?.fakultas_unit || user?.FakultasUnit;
   const canManage = !isAdmin;
+  const canShowActions = useFeatureActionVisibility();
 
   const isAuditee =
     level === "auditee" ||
@@ -137,7 +139,7 @@ const AktivitasPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              canManage ? (
+              canShowActions && canManage ? (
                 <button
                   type="button"
                   className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"

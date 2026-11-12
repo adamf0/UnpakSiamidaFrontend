@@ -6,12 +6,14 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import { useAuth } from "@/Providers/AuthProvider";
 import { BsChevronLeft, BsChevronRight } from "react-icons/bs";
 import { useToast } from "@/Providers/ToastProvider";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { delay, isEmpty } from "@/Common/Utils";
 import TextInput from "@/Components/TextInput";
 import { useForm } from "react-hook-form";
 import SearchSelect from "@/Components/SearchSelect";
 import InfoAuditCard from "@/Components/InfoAuditCard";
+import PageDisabledBanner from "@/Components/PageDisabledBanner";
+import { shouldHideNonV3Actions } from "@/Common/versionConfig";
 import { apiClient, API_BASE_URL } from "@/Common/api";
 import { FileText } from "lucide-react";
 
@@ -21,6 +23,7 @@ const AuditRenstraEditPage = ({
   hideNavbar = false,
 } = {}) => {
   const params = useParams();
+  const location = useLocation();
   const uuidRenstra = propUuidRenstra || params.uuidRenstra;
   const { addToast } = useToast();
   const {
@@ -32,6 +35,10 @@ const AuditRenstraEditPage = ({
     positionYear,
   } = useContent();
   const { getValidToken } = useAuth();
+
+  const isDirectAccess = location.pathname.startsWith("/audit/renstra");
+  const isPageDisabled = shouldHideNonV3Actions() && isDirectAccess && !hideNavbar;
+  const effectiveReadOnly = readOnly || isPageDisabled;
 
   const [dataAudit, setDataAudit] = useState([]);
   const [dataTemplate, setDataTemplate] = useState([]);
@@ -85,7 +92,7 @@ const AuditRenstraEditPage = ({
   };
 
   const onSubmit = async (data) => {
-    if (readOnly) return;
+    if (effectiveReadOnly) return;
     if (isEmpty(getValidToken())) return;
     let audit = (dataAudit ?? []).find(
       (item) => item.TemplateRenstraUUID === activeQuestion
@@ -398,7 +405,7 @@ const AuditRenstraEditPage = ({
   //[pr] belum di disable berdasarkan dataRenstra range
   const renderInputCapaian = (dataAudit) => {
     if (dataAudit.Kategori == "kategori") {
-      return (level == "auditee" && !readOnly) ? (
+      return (level == "auditee" && !effectiveReadOnly) ? (
         <SearchSelect
           label="Isi Capaian"
           options={
@@ -440,7 +447,7 @@ const AuditRenstraEditPage = ({
         />
       );
     } else if (dataAudit.Kategori == "range") {
-      return (level == "auditee" && !readOnly) ? (
+      return (level == "auditee" && !effectiveReadOnly) ? (
         <TextInput
           type="number"
           step="0.0001"
@@ -466,7 +473,7 @@ const AuditRenstraEditPage = ({
         />
       );
     } else {
-      return (level == "auditee" && !readOnly) ? (
+      return (level == "auditee" && !effectiveReadOnly) ? (
         <TextInput
           type={dataAudit.Kategori == "numerik" ? "number" : "text"}
           label="Isi Capaian"
@@ -507,9 +514,9 @@ const AuditRenstraEditPage = ({
           }
           placeholder="Pilih capaiannya"
           value={watch("capaian_auditor")}
-          disabled={readOnly}
+          disabled={effectiveReadOnly}
           onChange={(item) => {
-            if (!readOnly) {
+            if (!effectiveReadOnly) {
               setValue("capaian_auditor", item, {
                 shouldValidate: true,
               });
@@ -527,8 +534,8 @@ const AuditRenstraEditPage = ({
           max={dataAudit?.TargetMax ?? 0}
           placeholder="masukkan nilai capaiannya"
           error={errors.capaian_auditor?.message}
-          disabled={readOnly}
-          {...(!readOnly
+          disabled={effectiveReadOnly}
+          {...(!effectiveReadOnly
             ? register("capaian_auditor", {
                 required: "Isi Capaian wajib diisi",
               })
@@ -542,8 +549,8 @@ const AuditRenstraEditPage = ({
           label="Isi Capaian Auditor"
           placeholder="masukkan capaiannya"
           error={errors.capaian_auditor?.message}
-          disabled={readOnly}
-          {...(!readOnly
+          disabled={effectiveReadOnly}
+          {...(!effectiveReadOnly
             ? register("capaian_auditor", {
                 required: "Isi Capaian wajib diisi",
               })
@@ -571,10 +578,17 @@ const AuditRenstraEditPage = ({
           )}
         />
       )}
+      {!hideNavbar && isPageDisabled && (
+        <div className="px-3 sm:px-4 pt-3 sm:pt-4 bg-white">
+          <PageDisabledBanner />
+        </div>
+      )}
       <div
         className={`p-3 sm:p-4 bg-white flex flex-col md:flex-row w-full gap-4 ${
           hideNavbar
             ? "md:h-[calc(100vh-230px)] md:min-h-[500px]"
+            : isPageDisabled
+            ? "md:h-[calc(100vh-160px)] md:min-h-[500px]"
             : "md:h-[calc(100vh-80px)] md:min-h-[550px]"
         }`}
       >
@@ -751,7 +765,7 @@ const AuditRenstraEditPage = ({
                     <label className="block text-sm font-medium mb-1">
                       Catatan Auditee
                     </label>
-                    {level === "auditee" && !readOnly ? (
+                    {level === "auditee" && !effectiveReadOnly ? (
                       <textarea
                         value={watch("catatan")}
                         {...register("catatan")}
@@ -763,14 +777,14 @@ const AuditRenstraEditPage = ({
                       <textarea
                         value={watch("catatan")}
                         placeholder="Tulis catatan..."
-                        className="w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 bg-gray-50 text-gray-700"
+                        className="w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 bg-gray-50 text-gray-700 cursor-not-allowed"
                         rows={5}
                         disabled
                       />
                     )}
                   </div>
 
-                  {level === "auditee" && !readOnly ? (
+                  {level === "auditee" && !effectiveReadOnly ? (
                     <TextInput
                       type="text"
                       label="Link Bukti"
@@ -800,7 +814,7 @@ const AuditRenstraEditPage = ({
                     </div>
                   )}
 
-                  {(level === "auditor1" || level === "auditor2" || readOnly) && (
+                  {(level === "auditor1" || level === "auditor2" || effectiveReadOnly) && (
                     <div className="space-y-4 pt-2 border-t border-gray-150">
                       {renderInputCapaianAuditor(itemData)}
 
@@ -810,22 +824,24 @@ const AuditRenstraEditPage = ({
                         </label>
                         <textarea
                           value={watch("catatan_auditor")}
-                          {...(!readOnly ? register("catatan_auditor") : {})}
+                          {...(!effectiveReadOnly ? register("catatan_auditor") : {})}
                           placeholder="Tulis catatan..."
                           className={`w-full text-sm p-2.5 rounded-xl border outline-none transition border-gray-300 focus:ring-2 focus:ring-purple-600 ${
-                            readOnly ? "bg-gray-50 text-gray-700 cursor-not-allowed" : "focus:border-transparent"
+                            effectiveReadOnly ? "bg-gray-50 text-gray-700 cursor-not-allowed" : "focus:border-transparent"
                           }`}
                           rows={4}
-                          disabled={readOnly}
+                          disabled={effectiveReadOnly}
                         />
                       </div>
                     </div>
                   )}
 
                   <div className="pt-2">
-                    {readOnly ? (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-medium text-center">
-                        Mode Riwayat Audit (Hanya Lihat - Input Dinonaktifkan)
+                    {effectiveReadOnly ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold text-center">
+                        {isPageDisabled
+                          ? "halaman ini di matikan oleh developer"
+                          : "Mode Riwayat Audit (Hanya Lihat - Input Dinonaktifkan)"}
                       </div>
                     ) : (
                       <button

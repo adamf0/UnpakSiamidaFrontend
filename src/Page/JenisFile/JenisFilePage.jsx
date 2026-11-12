@@ -12,6 +12,7 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
+import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const JenisFilePage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -49,6 +50,7 @@ const JenisFilePage = () => {
   };
 
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+  const canShowActions = useFeatureActionVisibility();
 
   return (
     <>
@@ -80,14 +82,16 @@ const JenisFilePage = () => {
               mode="paging"
               token={getValidToken()}
               renderAddAction={
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
-                  onClick={() => openNew()}
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambah Jenis File</span>
-                </button>
+                canShowActions ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
+                    onClick={() => openNew()}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Jenis File</span>
+                  </button>
+                ) : null
               }
               listcolumns={[
                 { key: "Nama", label: "Jenis File", searchable: true },

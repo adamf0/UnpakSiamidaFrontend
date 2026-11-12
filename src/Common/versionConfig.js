@@ -1,3 +1,5 @@
+import { useLocation } from "react-router-dom";
+
 /**
  * Konfigurasi Versioning Aplikasi Unpak Siamida
  * - v1 (maintenance, audit 2023)
@@ -78,11 +80,49 @@ export const V3_FEATURE_PATHS = [
   "/analisis_resiko",
   "/analisis_risiko",
   "/proker_v3",
+  "/proker",
   "/jadwal_proker",
 ];
 
 export const isV3FeaturePath = (path) => {
-  return V3_FEATURE_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
+  const cleanPath = String(path || "").toLowerCase().trim();
+  return V3_FEATURE_PATHS.some((p) => cleanPath === p || cleanPath.startsWith(`${p}/`));
+};
+
+/**
+ * Menentukan apakah aksi tabel dan tombol tambah pada fitur selain V3 harus disembunyikan.
+ * Diatur melalui variabel environment:
+ * - VITE_HIDE_NON_V3_ACTIONS=true (default: true)
+ */
+export const shouldHideNonV3Actions = () => {
+  const hideEnv = import.meta.env?.VITE_HIDE_NON_V3_ACTIONS;
+  if (hideEnv !== undefined && hideEnv !== null && hideEnv !== "") {
+    return String(hideEnv).toLowerCase() === "true" || hideEnv === true || hideEnv === "1";
+  }
+
+  // Default: true (disembunyikan sesuai permintaan jika env belum disetel)
+  return true;
+};
+
+/**
+ * Memeriksa apakah fitur pada path tertentu diperbolehkan menampilkan tombol tambah dan aksi tabel.
+ * Fitur V3 SELALU diperbolehkan.
+ * Fitur non-V3 hanya diperbolehkan jika tidak disembunyikan oleh .env.
+ */
+export const canShowFeatureActions = (path = "") => {
+  if (isV3FeaturePath(path)) {
+    return true;
+  }
+  return !shouldHideNonV3Actions();
+};
+
+/**
+ * Hook untuk mengecek visibilitas tombol tambah dan aksi tabel di komponen React.
+ */
+export const useFeatureActionVisibility = (overridePath = null) => {
+  const location = useLocation();
+  const targetPath = overridePath || location?.pathname || "";
+  return canShowFeatureActions(targetPath);
 };
 
 export const getVersionConfig = (versionId = "v2") => {

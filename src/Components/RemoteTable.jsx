@@ -2,6 +2,7 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { createPortal } from "react-dom";
 import { FiMoreVertical, FiSearch } from "react-icons/fi";
 import { API_BASE_URL } from "../Common/api";
+import { useFeatureActionVisibility } from "../Common/versionConfig";
 
 /* =========================
    UTILS
@@ -42,6 +43,10 @@ const RemoteTable = forwardRef(function RemoteTable(
 ) {
   const isManual = Array.isArray(listdata);
   const isStreaming = mode === "sse" || mode === "ndjson";
+  const canShowActions = useFeatureActionVisibility();
+  const effectiveSelectable = canShowActions ? selectable : false;
+  const effectiveRenderAction = canShowActions ? renderAction : null;
+  const effectiveRenderBulkAction = canShowActions ? renderBulkAction : null;
   const [error, setError] = useState(null);
   const [rows, setRows] = useState([]);        // data yg dirender
   const [allRows, setAllRows] = useState([]);  // data mentah (SSE/NDJSON)
@@ -69,8 +74,8 @@ const RemoteTable = forwardRef(function RemoteTable(
     return selectedRows.some((item) => (typeof item === "object" && item !== null ? getRowId(item) : item) === id);
   };
 
-  const allPageSelected = selectable && rows.length > 0 && rows.every((r, idx) => isRowSelected(r, idx));
-  const somePageSelected = selectable && rows.some((r, idx) => isRowSelected(r, idx)) && !allPageSelected;
+  const allPageSelected = effectiveSelectable && rows.length > 0 && rows.every((r, idx) => isRowSelected(r, idx));
+  const somePageSelected = effectiveSelectable && rows.some((r, idx) => isRowSelected(r, idx)) && !allPageSelected;
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -430,14 +435,14 @@ const RemoteTable = forwardRef(function RemoteTable(
         {renderAddAction}
       </div>
 
-      {renderBulkAction}
+      {effectiveRenderBulkAction}
 
       {/* TABLE */}
       {/*table-fixed*/}
       <div className="overflow-x-auto w-full max-w-full scroll-custom">
         <table className="w-full">
           <colgroup>
-            {selectable && <col style={{ width: "44px" }} />}
+            {effectiveSelectable && <col style={{ width: "44px" }} />}
             {listcolumns.map((c, i) => (
               <col
                 key={c.key ? `${c.key}-${i}` : i}
@@ -450,12 +455,12 @@ const RemoteTable = forwardRef(function RemoteTable(
                 }}
               />
             ))}
-            {typeof renderAction === "function" && <col style={{ width: "60px" }} />}
+            {typeof effectiveRenderAction === "function" && <col style={{ width: "60px" }} />}
           </colgroup>
 
           <thead className="bg-gray-50/90 border-b border-gray-200/80">
             <tr>
-              {selectable && (
+              {effectiveSelectable && (
                 <th className="px-3 py-2.5 text-center align-top w-11">
                   <div className="flex items-center justify-center pt-0.5">
                     <input
@@ -541,7 +546,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                   </th>
                 );
               })}
-              {typeof renderAction === "function" && (
+              {typeof effectiveRenderAction === "function" && (
                 <th className="px-4 py-2.5 text-sm font-semibold text-gray-800 text-center whitespace-nowrap">Aksi</th>
               )}
             </tr>
@@ -550,7 +555,7 @@ const RemoteTable = forwardRef(function RemoteTable(
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={listcolumns.length + (typeof renderAction === "function" ? 1 : 0) + (selectable ? 1 : 0)} className="py-6 text-center">
+                <td colSpan={listcolumns.length + (typeof effectiveRenderAction === "function" ? 1 : 0) + (effectiveSelectable ? 1 : 0)} className="py-6 text-center">
                   Loading...
                 </td>
               </tr>
@@ -558,7 +563,7 @@ const RemoteTable = forwardRef(function RemoteTable(
 
             {!loading && (() => {
               const renderTableRow = (r, idx) => {
-                const checked = selectable && isRowSelected(r, idx);
+                const checked = effectiveSelectable && isRowSelected(r, idx);
                 return (
                 <tr
                   key={r.id || r.UUID || r.uuid || idx}
@@ -566,7 +571,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                     checked ? "bg-purple-50/50 hover:bg-purple-50/75" : "hover:bg-purple-50/30"
                   }`}
                 >
-                  {selectable && (
+                  {effectiveSelectable && (
                     <td className="px-3 py-3.5 text-center w-11">
                       <input
                         type="checkbox"
@@ -597,7 +602,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                       </td>
                     );
                   })}
-                  {typeof renderAction === "function" && (
+                  {typeof effectiveRenderAction === "function" && (
                     <td className="px-4 py-3.5 text-right relative">
                       <button
                         type="button"
@@ -630,7 +635,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                             className="z-50 min-w-[175px] max-w-[220px] bg-white border border-gray-200/90 rounded-2xl shadow-xl ring-1 ring-black/5 p-1.5 animate-in fade-in zoom-in-95 duration-100 text-left [&_button]:text-left [&_button]:rounded-lg [&_button]:transition-colors"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {renderAction({
+                            {effectiveRenderAction({
                               row: openAction.row,
                               close: () => setOpenAction(null),
                             })}
@@ -660,7 +665,7 @@ const RemoteTable = forwardRef(function RemoteTable(
                 groupMap.get(key).items.push(r);
               });
 
-              const colSpan = listcolumns.length + (typeof renderAction === "function" ? 1 : 0) + (selectable ? 1 : 0);
+              const colSpan = listcolumns.length + (typeof effectiveRenderAction === "function" ? 1 : 0) + (effectiveSelectable ? 1 : 0);
 
               return groups.map((g, gIdx) => (
                 <React.Fragment key={`grp-${g.key || gIdx}`}>
@@ -673,7 +678,7 @@ const RemoteTable = forwardRef(function RemoteTable(
             {!loading && rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={listcolumns.length + (typeof renderAction === "function" ? 1 : 0) + (selectable ? 1 : 0)}
+                  colSpan={listcolumns.length + (typeof effectiveRenderAction === "function" ? 1 : 0) + (effectiveSelectable ? 1 : 0)}
                   className="py-6 text-center text-gray-500"
                 >
                   Data tidak ditemukan

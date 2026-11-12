@@ -78,11 +78,11 @@ const SwotPage = () => {
   } = useContent();
 
   const curRole = String(
-    localStorage.getItem("activeLevel") || level || user?.level || ""
+    level || localStorage.getItem("activeLevel") || user?.level || ""
   ).toLowerCase().trim();
   const isLevelUser = curRole === "user";
   const isAdmin = curRole === "admin";
-  const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
+  const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator") || curRole === "anggaran" || curRole === "keuangan";
   const canFilterUnit = isAdmin || isEvaluator;
 
   // Filter States
@@ -118,20 +118,17 @@ const SwotPage = () => {
       return true;
     }
     if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
-      const posYear = localStorage.getItem("positionYear") || positionYear;
       return user.extra_role.some((r) => {
-        const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
-        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
         const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
-        const yearOk = !posYear || !rYear || rYear === String(posYear);
-        return yearOk && (rRole === "user" || !rRole) && Boolean(uId);
+        return Boolean(uId);
       });
     }
     return false;
-  }, [user, userUnitData, positionYear]);
+  }, [user, userUnitData]);
 
-  // Tombol tambah, edit, hapus hanya muncul jika level user yang memiliki fakultas_unit
-  const canManage = isLevelUser && hasFakultasUnit;
+  // Tombol tambah, edit, hapus muncul untuk Admin atau level unit pengguna (user, auditee, pengelola unit)
+  const isUnitManager = (isLevelUser || curRole === "auditee" || curRole === "fakultas" || !isEvaluator) && hasFakultasUnit;
+  const canManage = isAdmin || isUnitManager;
 
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
@@ -168,17 +165,15 @@ const SwotPage = () => {
           const posYear = localStorage.getItem("positionYear") || positionYear;
           const matchYear = user.extra_role.find((r) => {
             const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
-            const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
             const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
-            return (!posYear || rYear === String(posYear)) && (rRole === "user" || !rRole) && Boolean(uId);
+            return (!posYear || rYear === String(posYear)) && Boolean(uId);
           });
           if (matchYear) {
             myFuId = matchYear.id_fakultas_unit ?? matchYear.IdFakultasUnit ?? matchYear.uuid_fakultas_unit;
           } else {
             const anyMatch = user.extra_role.find((r) => {
-              const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
               const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
-              return (rRole === "user" || !rRole) && Boolean(uId);
+              return Boolean(uId);
             });
             if (anyMatch) {
               myFuId = anyMatch.id_fakultas_unit ?? anyMatch.IdFakultasUnit ?? anyMatch.uuid_fakultas_unit;
@@ -431,6 +426,10 @@ const SwotPage = () => {
             currentLevel={level}
             onSubmit={(val) => {
               setLevel(val);
+              localStorage.setItem("activeLevel", val);
+              if (positionYear) {
+                localStorage.setItem("activeLevelYear", String(positionYear));
+              }
               setOpenChangeLevel(false);
             }}
           />
@@ -477,12 +476,14 @@ const SwotPage = () => {
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-gray-700 font-medium mt-0.5">
-                {canFilterUnit
-                  ? "Menampilkan seluruh data analisis SWOT universitas. Anda dapat memfilter per fakultas/unit."
+                {isAdmin
+                  ? "Menampilkan seluruh data analisis SWOT universitas. Sebagai admin, Anda dapat menambah, mengubah, dan memfilter per fakultas/unit."
+                  : isEvaluator
+                  ? "Menampilkan seluruh data analisis SWOT universitas dalam mode evaluator (lihat saja). Anda dapat memfilter per fakultas/unit."
                   : canManage
                   ? `Tabel secara otomatis menampilkan data khusus unit Anda (${
                       userUnitData?.nama || user?.nama_fakultas_unit || user?.fakultas_unit || "Unit Terdaftar"
-                    }).`
+                    }). Anda dapat menambah, mengubah, dan menghapus data SWOT unit Anda.`
                   : "Anda dalam mode lihat saja (hanya level user yang memiliki fakultas/unit yang dapat menambah, mengubah, atau menghapus data)."}
               </p>
             </div>
