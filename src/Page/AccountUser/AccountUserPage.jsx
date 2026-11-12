@@ -7,10 +7,25 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
-import { Plus, Users, User, Pencil, Trash2, GitMerge, UserCheck, Building, GraduationCap, School } from "lucide-react";
+import {
+  Plus,
+  Users,
+  User,
+  Pencil,
+  Trash2,
+  GitMerge,
+  UserCheck,
+  Building,
+  GraduationCap,
+  School,
+} from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
-import { isEmpty, renderLabelFakultasUnit, formatProdiWithJenjang } from "@/Common/Utils";
+import {
+  isEmpty,
+  renderLabelFakultasUnit,
+  formatProdiWithJenjang,
+} from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 import { useFeatureActionVisibility } from "@/Common/versionConfig";
@@ -42,17 +57,23 @@ export default function AccountUserPage() {
       try {
         const res = await apiClient.get("/fakultasunits?mode=all");
         const list = res?.data ?? res ?? [];
-        const safe = Array.isArray(list) ? list : (list.data || []);
+        const safe = Array.isArray(list) ? list : list.data || [];
         const map = {};
         safe.forEach((fu) => {
           const id = String(fu.ID || fu.id || "");
           const uuid = String(fu.UUID || fu.uuid || "");
-          const nama = String(fu.Nama || fu.nama_fak_prod_unit || fu.nama || "").trim();
+          const nama = String(
+            fu.Nama || fu.nama_fak_prod_unit || fu.nama || "",
+          ).trim();
           const jenjang = String(fu.Jenjang || fu.jenjang || "").toUpperCase();
           const type = String(fu.Type || fu.type || "").toLowerCase();
 
           let formatted = nama;
-          if ((type === "prodi" || jenjang) && jenjang && !nama.toLowerCase().includes(jenjang.toLowerCase())) {
+          if (
+            (type === "prodi" || jenjang) &&
+            jenjang &&
+            !nama.toLowerCase().includes(jenjang.toLowerCase())
+          ) {
             formatted = `${nama} (${jenjang})`;
           }
 
@@ -73,7 +94,7 @@ export default function AccountUserPage() {
     try {
       const res = await apiClient.get("/user-abac");
       const list = res?.data ?? res ?? [];
-      const safe = Array.isArray(list) ? list : (list.data || []);
+      const safe = Array.isArray(list) ? list : list.data || [];
       const map = {};
       for (const item of safe) {
         const uId = item.IdUser || item.id_user;
@@ -97,13 +118,8 @@ export default function AccountUserPage() {
     fetchAbacMap();
   }, []);
 
-  const {
-    level,
-    listLevel,
-    setLevel,
-    openChangeLevel,
-    setOpenChangeLevel,
-  } = useContent();
+  const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } =
+    useContent();
   const canShowActions = useFeatureActionVisibility();
 
   const openNew = () => {
@@ -182,18 +198,16 @@ export default function AccountUserPage() {
                     </button>
                   </Tooltip>
 
-                  {canShowActions && (
-                    <Tooltip content="Tambah Akun User">
-                      <button
-                        type="button"
-                        className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
-                        onClick={openNew}
-                        aria-label="Tambah Akun User"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
-                    </Tooltip>
-                  )}
+                  <Tooltip content="Tambah Akun User">
+                    <button
+                      type="button"
+                      className="w-9 h-9 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center transition shadow-xs shrink-0 cursor-pointer"
+                      onClick={openNew}
+                      aria-label="Tambah Akun User"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </Tooltip>
                 </div>
               }
               listcolumns={[
@@ -234,9 +248,12 @@ export default function AccountUserPage() {
                   label: "Level Role",
                   searchable: true,
                   renderKey: (row) => {
-                    const lvl = String(row?.Level || row?.level || "user").toLowerCase();
+                    const lvl = String(
+                      row?.Level || row?.level || "user",
+                    ).toLowerCase();
                     const badgeClass =
-                      LEVEL_BADGES[lvl] || "bg-gray-100 text-gray-700 border-gray-200";
+                      LEVEL_BADGES[lvl] ||
+                      "bg-gray-100 text-gray-700 border-gray-200";
                     return (
                       <span
                         className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider border ${badgeClass}`}
@@ -251,13 +268,18 @@ export default function AccountUserPage() {
                   label: "Fakultas / Unit",
                   searchable: true,
                   renderKey: (row) => {
-                    const rawUnitName = row?.NamaFakultasUnit || row?.nama_fak_prod_unit;
+                    const rawUnitName =
+                      row?.NamaFakultasUnit || row?.nama_fak_prod_unit;
                     if (!rawUnitName) {
                       return <span className="text-gray-400 text-xs">-</span>;
                     }
 
-                    const fuId = String(row?.FakultasUnit || row?.fakultas_unit || "");
-                    const fuUuid = String(row?.UuidFakultasUnit || row?.uuid_fakultas_unit || "");
+                    const fuId = String(
+                      row?.FakultasUnit || row?.fakultas_unit || "",
+                    );
+                    const fuUuid = String(
+                      row?.UuidFakultasUnit || row?.uuid_fakultas_unit || "",
+                    );
                     const foundFu =
                       fakultasMap[fuId] ||
                       fakultasMap[fuUuid] ||
@@ -269,10 +291,7 @@ export default function AccountUserPage() {
                       foundFu?.jenjang ||
                       foundFu?.Jenjang;
                     const type =
-                      row?.Type ||
-                      row?.type ||
-                      foundFu?.type ||
-                      foundFu?.Type;
+                      row?.Type || row?.type || foundFu?.type || foundFu?.Type;
 
                     const formattedName =
                       foundFu?.formatted ||
@@ -309,7 +328,9 @@ export default function AccountUserPage() {
                     });
 
                     if (!abacs || abacs.length === 0) {
-                      return <span className="text-gray-400 text-xs italic">-</span>;
+                      return (
+                        <span className="text-gray-400 text-xs italic">-</span>
+                      );
                     }
 
                     return (
@@ -323,9 +344,17 @@ export default function AccountUserPage() {
                             "upm"
                           ).toUpperCase();
                           const rawUnit =
-                            item.NamaFakultasUnit || item.nama_fakultas_unit || "";
-                          const fuId = String(item.IdFakultasUnit || item.id_fakultas_unit || "");
-                          const fuUuid = String(item.UuidFakultasUnit || item.uuid_fakultas_unit || "");
+                            item.NamaFakultasUnit ||
+                            item.nama_fakultas_unit ||
+                            "";
+                          const fuId = String(
+                            item.IdFakultasUnit || item.id_fakultas_unit || "",
+                          );
+                          const fuUuid = String(
+                            item.UuidFakultasUnit ||
+                              item.uuid_fakultas_unit ||
+                              "",
+                          );
                           const foundFu =
                             fakultasMap[fuId] ||
                             fakultasMap[fuUuid] ||
@@ -335,7 +364,7 @@ export default function AccountUserPage() {
                             formatProdiWithJenjang(
                               rawUnit,
                               item.JenjangFakultasUnit || foundFu?.jenjang,
-                              item.TypeFakultasUnit || foundFu?.type
+                              item.TypeFakultasUnit || foundFu?.type,
                             );
                           const tahun = item.Tahun || item.tahun || "";
                           const status = (
@@ -375,7 +404,7 @@ export default function AccountUserPage() {
                                     : "/users/abac",
                                   {
                                     state: { user: row },
-                                  }
+                                  },
                                 );
                               }}
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold border ${badgeColor} shadow-2xs cursor-pointer transition ${
@@ -410,7 +439,8 @@ export default function AccountUserPage() {
                   searchable: false,
                   renderKey: (row) => {
                     const mergeId = row?.IdUserMerge || row?.id_user_merge;
-                    const mergeName = row?.NamaUserMerge || row?.nama_user_merge;
+                    const mergeName =
+                      row?.NamaUserMerge || row?.nama_user_merge;
                     if (mergeId) {
                       return (
                         <div className="flex flex-col gap-0.5">
@@ -420,7 +450,11 @@ export default function AccountUserPage() {
                           </span>
                           <span
                             className="text-[11px] text-gray-500 truncate max-w-[170px]"
-                            title={mergeName ? `Ke: ${mergeName} (#${mergeId})` : `Ke ID #${mergeId}`}
+                            title={
+                              mergeName
+                                ? `Ke: ${mergeName} (#${mergeId})`
+                                : `Ke ID #${mergeId}`
+                            }
                           >
                             Ke: {mergeName ? mergeName : `#${mergeId}`}
                           </span>
