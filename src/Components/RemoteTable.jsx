@@ -38,12 +38,13 @@ const RemoteTable = forwardRef(function RemoteTable(
     onDataLoaded,
     groupBy,
     renderGroupHeader,
+    forceShowActions = false,
   },
   ref
 ) {
   const isManual = Array.isArray(listdata);
   const isStreaming = mode === "sse" || mode === "ndjson";
-  const canShowActions = useFeatureActionVisibility();
+  const canShowActions = forceShowActions || useFeatureActionVisibility();
   const effectiveSelectable = canShowActions ? selectable : false;
   const effectiveRenderAction = canShowActions ? renderAction : null;
   const effectiveRenderBulkAction = canShowActions ? renderBulkAction : null;

@@ -82,11 +82,27 @@ export const V3_FEATURE_PATHS = [
   "/proker_v3",
   "/proker",
   "/jadwal_proker",
+  "/users",
+  "/account_user",
 ];
 
 export const isV3FeaturePath = (path) => {
   const cleanPath = String(path || "").toLowerCase().trim();
   return V3_FEATURE_PATHS.some((p) => cleanPath === p || cleanPath.startsWith(`${p}/`));
+};
+
+/**
+ * Daftar path pengelolaan user/akun (berjalan pada database usersv3/userv3_abac)
+ * di mana aksi tabel dan penugasan selalu aktif di V3.
+ */
+export const USER_FEATURE_PATHS = [
+  "/users",
+  "/account_user",
+];
+
+export const isUserFeaturePath = (path) => {
+  const cleanPath = String(path || "").toLowerCase().trim();
+  return USER_FEATURE_PATHS.some((p) => cleanPath === p || cleanPath.startsWith(`${p}/`));
 };
 
 /**
@@ -106,11 +122,11 @@ export const shouldHideNonV3Actions = () => {
 
 /**
  * Memeriksa apakah fitur pada path tertentu diperbolehkan menampilkan tombol tambah dan aksi tabel.
- * Fitur V3 SELALU diperbolehkan.
+ * Fitur V3 dan User Management (usersv3) SELALU diperbolehkan.
  * Fitur non-V3 hanya diperbolehkan jika tidak disembunyikan oleh .env.
  */
 export const canShowFeatureActions = (path = "") => {
-  if (isV3FeaturePath(path)) {
+  if (isV3FeaturePath(path) || isUserFeaturePath(path)) {
     return true;
   }
   return !shouldHideNonV3Actions();

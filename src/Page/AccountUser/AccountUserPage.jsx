@@ -181,6 +181,7 @@ export default function AccountUserPage() {
               ref={tableRef}
               endpoint="/users"
               mode="paging"
+              forceShowActions={true}
               token={getValidToken()}
               onError={(err) => {
                 console.error("USER TABLE ERROR:", err);
