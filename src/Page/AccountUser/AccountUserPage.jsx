@@ -2,6 +2,7 @@ import RemoteTable from "@/Components/RemoteTable";
 import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AccountUserFormModal from "./AccountUserFormModal";
+import UserRoleModal from "./UserRoleModal";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
@@ -18,6 +19,7 @@ import {
   Building,
   GraduationCap,
   School,
+  ShieldCheck,
 } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
@@ -32,11 +34,16 @@ import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const LEVEL_BADGES = {
   admin: "bg-purple-100 text-purple-800 border-purple-200",
-  fakultas: "bg-blue-100 text-blue-800 border-blue-200",
-  auditee: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  fakultas: "bg-amber-100 text-amber-800 border-amber-200",
+  evaluator: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  anggaran: "bg-teal-100 text-teal-800 border-teal-200",
+  user: "bg-blue-100 text-blue-800 border-blue-200",
+  auditee: "bg-indigo-100 text-indigo-800 border-indigo-200",
   auditor1: "bg-amber-100 text-amber-800 border-amber-200",
   auditor2: "bg-orange-100 text-orange-800 border-orange-200",
-  user: "bg-gray-100 text-gray-700 border-gray-200",
+  upml: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  upmf: "bg-amber-100 text-amber-800 border-amber-200",
+  upms: "bg-sky-100 text-sky-800 border-sky-200",
 };
 
 export default function AccountUserPage() {
@@ -46,6 +53,8 @@ export default function AccountUserPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("new");
   const [selectedRow, setSelectedRow] = useState(null);
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [selectedUserForRole, setSelectedUserForRole] = useState(null);
   const { addToast } = useToast();
   const { getValidToken } = useAuth();
 
@@ -249,6 +258,51 @@ export default function AccountUserPage() {
                   label: "Level Role",
                   searchable: true,
                   renderKey: (row) => {
+                    const userRoles = Array.isArray(row?.UserRoles)
+                      ? row.UserRoles
+                      : [];
+                    if (userRoles.length > 0) {
+                      return (
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                          {userRoles.map((ur, idx) => {
+                            const lvl = String(
+                              ur.Level || ur.level || "user",
+                            ).toLowerCase();
+                            const badgeClass =
+                              LEVEL_BADGES[lvl] ||
+                              "bg-gray-100 text-gray-700 border-gray-200";
+                            const isActive =
+                              String(
+                                ur.Status || ur.status || "active",
+                              ).toLowerCase() === "active";
+                            const tahun = ur.Tahun || ur.tahun || "";
+
+                            return (
+                              <span
+                                key={ur.UUID || ur.uuid || idx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedUserForRole(row);
+                                  setRoleModalOpen(true);
+                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider border ${badgeClass} cursor-pointer hover:shadow-xs transition ${
+                                  !isActive ? "opacity-50 line-through" : ""
+                                }`}
+                                title={`${lvl.toUpperCase()} (${tahun}) - Klik untuk kelola role`}
+                              >
+                                <span>{lvl}</span>
+                                {tahun && (
+                                  <span className="text-[10px] font-mono opacity-70 normal-case font-normal">
+                                    ({tahun})
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+
                     const lvl = String(
                       row?.Level || row?.level || "user",
                     ).toLowerCase();
@@ -257,7 +311,13 @@ export default function AccountUserPage() {
                       "bg-gray-100 text-gray-700 border-gray-200";
                     return (
                       <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider border ${badgeClass}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedUserForRole(row);
+                          setRoleModalOpen(true);
+                        }}
+                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider border ${badgeClass} cursor-pointer hover:shadow-xs transition`}
+                        title="Klik untuk kelola role"
                       >
                         {lvl}
                       </span>
@@ -269,6 +329,35 @@ export default function AccountUserPage() {
                   label: "Fakultas / Unit",
                   searchable: true,
                   renderKey: (row) => {
+                    const userRoles = Array.isArray(row?.UserRoles)
+                      ? row.UserRoles
+                      : [];
+                    if (userRoles.length > 0) {
+                      const units = [];
+                      userRoles.forEach((ur) => {
+                        const uNama =
+                          ur.NamaFakultasUnit || ur.nama_fakultas_unit;
+                        if (uNama && !units.includes(uNama)) {
+                          units.push(uNama);
+                        }
+                      });
+
+                      if (units.length > 0) {
+                        return (
+                          <div className="flex flex-wrap gap-1 items-center max-w-xs">
+                            {units.map((u, i) => (
+                              <span
+                                key={i}
+                                className="inline-block truncate text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded"
+                              >
+                                {u}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      }
+                    }
+
                     const rawUnitName =
                       row?.NamaFakultasUnit || row?.nama_fak_prod_unit;
                     if (!rawUnitName) {
@@ -474,6 +563,19 @@ export default function AccountUserPage() {
                 <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-purple-700 hover:text-purple-800 hover:bg-purple-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                    onClick={() => {
+                      setSelectedUserForRole(row);
+                      setRoleModalOpen(true);
+                      close();
+                    }}
+                  >
+                    <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span>Kelola Role</span>
+                  </button>
+
+                  <button
+                    type="button"
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50/80 rounded-xl transition-all cursor-pointer text-left group"
                     onClick={() => {
                       const uUuid = row?.UUID || row?.uuid;
@@ -488,7 +590,7 @@ export default function AccountUserPage() {
                     }}
                   >
                     <UserCheck className="w-4 h-4 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
-                    <span>Tugaskan</span>
+                    <span>Tugaskan (ABAC)</span>
                   </button>
 
                   <div className="my-1 border-t border-gray-150" />
@@ -530,6 +632,16 @@ export default function AccountUserPage() {
         mode={modalMode}
         data={selectedRow}
         onClose={() => setModalOpen(false)}
+        onSuccess={() => {
+          tableRef.current?.reload?.({ resetPage: false });
+        }}
+      />
+
+      {/* ROLE MODAL */}
+      <UserRoleModal
+        open={roleModalOpen}
+        user={selectedUserForRole}
+        onClose={() => setRoleModalOpen(false)}
         onSuccess={() => {
           tableRef.current?.reload?.({ resetPage: false });
         }}

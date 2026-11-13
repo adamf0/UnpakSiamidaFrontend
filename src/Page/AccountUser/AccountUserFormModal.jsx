@@ -2,23 +2,11 @@ import { Dialog, Transition } from "@headlessui/react";
 import { Fragment, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import TextInput from "@/Components/TextInput";
-import SearchSelect from "@/Components/SearchSelect";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
-import { isEmpty, fetchFakultasUnits } from "@/Common/Utils";
+import { isEmpty } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
-import { Eye, EyeOff, Shield, Building2, User, KeyRound, Mail, X } from "lucide-react";
-
-const LEVEL_OPTIONS = [
-  { value: "admin", label: "Admin (Administrator Sistem / LPM)" },
-  { value: "fakultas", label: "Fakultas (Verifikator Fakultas)" },
-  // { value: "auditee", label: "Auditee (Target Audit / Unit / Prodi)" },
-  // { value: "auditor1", label: "Auditor 1" },
-  // { value: "auditor2", label: "Auditor 2" },
-  { value: "anggaran", label: "Anggaran (Verifikator Form 13)" },
-  { value: "evaluator", label: "Evaluator (Verifikator Form Proker)" },
-  { value: "user", label: "User (Pengguna Standar)" },
-];
+import { Eye, EyeOff, User, Mail, KeyRound, X } from "lucide-react";
 
 export default function AccountUserFormModal({
   open,
@@ -31,122 +19,42 @@ export default function AccountUserFormModal({
   const { getValidToken } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
-  const [loadingFakultas, setLoadingFakultas] = useState(false);
-  const [fakultasOptions, setFakultasOptions] = useState([]);
-  const [selectedFakultasUnit, setSelectedFakultasUnit] = useState(null);
-  const [fakultasError, setFakultasError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
     handleSubmit,
     reset,
-    watch,
     formState: { errors },
   } = useForm({
     defaultValues: {
       username: "",
       name: "",
       email: "",
-      level: "user",
       password: "",
     },
   });
 
-  const watchLevel = watch("level");
-
-  // Fetch daftar Fakultas / Unit menggunakan fungsi tunggal terpadu
-  useEffect(() => {
-    let isMounted = true;
-    const loadFakultas = async () => {
-      try {
-        setLoadingFakultas(true);
-        const opts = await fetchFakultasUnits();
-        if (isMounted) {
-          setFakultasOptions(opts);
-        }
-      } catch (err) {
-        console.error("Error fetching fakultas units:", err);
-      } finally {
-        if (isMounted) setLoadingFakultas(false);
-      }
-    };
-
-    if (open) {
-      loadFakultas();
-    }
-    return () => {
-      isMounted = false;
-    };
-  }, [open]);
-
-  // Auto clear fakultas unit if level is admin
-  useEffect(() => {
-    if (watchLevel === "admin") {
-      setSelectedFakultasUnit(null);
-      setFakultasError("");
-    }
-  }, [watchLevel]);
-
   // Sync data saat modal dibuka atau mode berubah
   useEffect(() => {
     setShowPassword(false);
-    setFakultasError("");
 
     if (mode === "edit" && data) {
-      let rawLvl = String(data.Level || data.level || "user").toLowerCase();
-      if (rawLvl === "users") rawLvl = "user";
-
       reset({
         username: data.Username || data.nidn_username || "",
         name: data.Name || data.name || "",
         email: data.Email || data.email || "",
-        level: rawLvl,
         password: "",
       });
-
-      // Match selected fakultas unit
-      const fuUuid = data.UuidFakultasUnit || data.uuid_fakultas_unit;
-      const fuNama = data.NamaFakultasUnit || data.nama_fak_prod_unit;
-
-      if (fuUuid) {
-        const found = fakultasOptions.find(
-          (f) => String(f.uuid || f.id) === String(fuUuid)
-        );
-        setSelectedFakultasUnit(
-          found || {
-            id: fuUuid,
-            uuid: fuUuid,
-            nama: fuNama || "Unit Terpilih",
-          }
-        );
-      } else if (fuNama) {
-        const found = fakultasOptions.find(
-          (f) =>
-            f.pureName === fuNama ||
-            f.nama.includes(fuNama) ||
-            fuNama.includes(f.pureName)
-        );
-        setSelectedFakultasUnit(
-          found || {
-            id: fuUuid || "",
-            nama: fuNama,
-          }
-        );
-      } else {
-        setSelectedFakultasUnit(null);
-      }
     } else {
       reset({
         username: "",
         name: "",
         email: "",
-        level: "user",
         password: "",
       });
-      setSelectedFakultasUnit(null);
     }
-  }, [mode, data, open, fakultasOptions]);
+  }, [mode, data, open, reset]);
 
   const onSubmit = async (form) => {
     const token = await getValidToken();
@@ -155,13 +63,6 @@ export default function AccountUserFormModal({
       return;
     }
 
-    // Validasi FakultasUnit jika level fakultas
-    if (form.level === "fakultas" && !selectedFakultasUnit?.id) {
-      setFakultasError("Fakultas / Unit wajib dipilih untuk level Fakultas");
-      return;
-    }
-
-    setFakultasError("");
     setIsSubmitting(true);
 
     try {
@@ -169,14 +70,6 @@ export default function AccountUserFormModal({
       fd.append("username", form.username.trim());
       fd.append("name", form.name.trim());
       fd.append("email", form.email.trim());
-      fd.append("level", form.level === "users" ? "user" : form.level);
-
-      // Jangan kirim FakultasUnit jika admin
-      if (form.level !== "admin" && selectedFakultasUnit?.id) {
-        fd.append("FakultasUnit", selectedFakultasUnit.id);
-      } else {
-        fd.append("FakultasUnit", "");
-      }
 
       if (form.password && form.password.trim() !== "") {
         fd.append("password", form.password.trim());
@@ -238,25 +131,28 @@ export default function AccountUserFormModal({
           <Transition.Child
             as={Fragment}
             enter="ease-out duration-200"
-            enterFrom="scale-95 opacity-0"
-            enterTo="scale-100 opacity-100"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 scale-100"
             leave="ease-in duration-150"
-            leaveFrom="scale-100 opacity-100"
-            leaveTo="scale-95 opacity-0"
+            leaveFrom="opacity-100 scale-100"
+            leaveTo="opacity-0 scale-95"
           >
-            <Dialog.Panel className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-gray-150 transition-all my-8">
-              <div className="flex items-start justify-between gap-3 pb-4 border-b border-gray-100 mb-5">
+            <Dialog.Panel className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden transform transition-all my-8">
+              {/* HEADER */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-linear-to-r from-purple-50/50 to-white">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/80 flex items-center justify-center shrink-0">
-                    <User className="w-5 h-5 stroke-[1.8]" />
+                  <div className="w-10 h-10 rounded-xl bg-purple-100/70 text-purple-700 flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5" />
                   </div>
                   <div>
                     <Dialog.Title className="text-base font-bold text-gray-900 leading-tight">
-                      {mode === "edit" ? "Edit Akun Pengguna" : "Tambah Akun Pengguna Baru"}
+                      {mode === "edit"
+                        ? "Edit Akun Pengguna"
+                        : "Tambah Akun Pengguna Baru"}
                     </Dialog.Title>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {mode === "edit"
-                        ? "Perbarui informasi akun, level hak akses, dan unit kerja"
+                        ? "Perbarui informasi dasar profil pengguna"
                         : "Daftarkan akun pengguna baru ke dalam sistem SIAMIDA"}
                     </p>
                   </div>
@@ -264,35 +160,39 @@ export default function AccountUserFormModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition cursor-pointer"
-                  title="Tutup"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer"
                 >
-                  <X className="w-4 h-4" />
+                  <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                {/* USERNAME & NAMA */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* FORM */}
+              <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+                {/* USERNAME / NIDN */}
+                <div>
                   <TextInput
                     label="Username / NIDN"
-                    placeholder="Contoh: 0413117601 atau namauser"
-                    error={errors.username?.message}
                     required
+                    placeholder="Contoh: 0413117601 atau nama_user"
+                    icon={User}
+                    error={errors.username?.message}
                     {...register("username", {
-                      required: "Username wajib diisi",
+                      required: "Username / NIDN wajib diisi",
                       minLength: {
                         value: 3,
-                        message: "Minimal 3 karakter",
+                        message: "Username minimal 3 karakter",
                       },
                     })}
                   />
+                </div>
 
+                {/* NAMA LENGKAP */}
+                <div>
                   <TextInput
                     label="Nama Lengkap"
+                    required
                     placeholder="Nama lengkap beserta gelar"
                     error={errors.name?.message}
-                    required
                     {...register("name", {
                       required: "Nama lengkap wajib diisi",
                     })}
@@ -300,84 +200,22 @@ export default function AccountUserFormModal({
                 </div>
 
                 {/* EMAIL */}
-                <TextInput
-                  label="Alamat Email"
-                  type="email"
-                  placeholder="Contoh: dosen@unpak.ac.id"
-                  error={errors.email?.message}
-                  required
-                  {...register("email", {
-                    required: "Email wajib diisi",
-                    pattern: {
-                      value:
-                        /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
-                      message: "Format email tidak valid",
-                    },
-                  })}
-                />
-
-                {/* LEVEL ROLE */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Level / Hak Akses <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <select
-                      className={`w-full px-3.5 py-2.5 text-sm border rounded-xl appearance-none bg-white outline-none transition cursor-pointer ${
-                        errors.level
-                          ? "border-rose-400 focus:border-rose-500 focus:ring-3 focus:ring-rose-500/15"
-                          : "border-gray-200 focus:border-purple-600 focus:ring-3 focus:ring-purple-600/15"
-                      }`}
-                      {...register("level", {
-                        required: "Level user wajib dipilih",
-                      })}
-                    >
-                      {LEVEL_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-gray-400">
-                      <Shield size={16} />
-                    </div>
-                  </div>
-                  {errors.level && (
-                    <span className="text-xs text-rose-500 mt-1 block">
-                      {errors.level.message}
-                    </span>
-                  )}
-                </div>
-
-                {/* FAKULTAS / UNIT */}
-                <div>
-                  <SearchSelect
-                    label="Fakultas / Unit / Target Kerja"
-                    placeholder={
-                      watchLevel === "admin"
-                        ? "Tidak berlaku untuk Administrator Sistem (LPM)"
-                        : "Pilih atau cari Fakultas, Unit, atau Prodi..."
-                    }
-                    options={fakultasOptions}
-                    value={selectedFakultasUnit}
-                    disabled={watchLevel === "admin"}
-                    onChange={(val) => {
-                      if (watchLevel !== "admin") {
-                        setSelectedFakultasUnit(val);
-                        setFakultasError("");
-                      }
-                    }}
-                    loading={loadingFakultas}
-                    required={watchLevel === "fakultas"}
-                    error={fakultasError}
+                  <TextInput
+                    label="Alamat Email"
+                    required
+                    type="email"
+                    placeholder="Contoh: dosen@unpak.ac.id"
+                    icon={Mail}
+                    error={errors.email?.message}
+                    {...register("email", {
+                      required: "Alamat email wajib diisi",
+                      pattern: {
+                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                        message: "Format email tidak valid",
+                      },
+                    })}
                   />
-                  <span className="text-[11px] text-gray-500 mt-0.5 block">
-                    {watchLevel === "fakultas"
-                      ? "Wajib diisi untuk level Verifikator Fakultas"
-                      : watchLevel === "admin"
-                        ? "Administrator Sistem memiliki hak akses penuh ke seluruh unit (tidak terikat unit)"
-                        : "Opsional jika akun berafiliasi / bertugas pada unit atau prodi tertentu"}
-                  </span>
                 </div>
 
                 {/* PASSWORD */}
@@ -407,7 +245,9 @@ export default function AccountUserFormModal({
                       }`}
                       {...register("password", {
                         required:
-                          mode === "new" ? "Password wajib diisi untuk akun baru" : false,
+                          mode === "new"
+                            ? "Password wajib diisi untuk akun baru"
+                            : false,
                         minLength: {
                           value: 3,
                           message: "Password minimal 3 karakter",
@@ -428,6 +268,14 @@ export default function AccountUserFormModal({
                       {errors.password.message}
                     </span>
                   )}
+                </div>
+
+                {/* NOTE FOR ROLE ASSIGNMENT */}
+                <div className="p-3 bg-purple-50/70 border border-purple-200/60 rounded-xl text-xs text-purple-900 leading-relaxed flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-600 mt-1.5 shrink-0" />
+                  <span>
+                    <strong>Pengaturan Role & Fakultas/Unit:</strong> Level, tahun penugasan, dan fakultas/unit/prodi kini bersifat fleksibel (bisa lebih dari satu) dan dikelola melalui menu <strong>Kelola Role</strong> pada baris akun pengguna.
+                  </span>
                 </div>
 
                 {/* ACTIONS */}
