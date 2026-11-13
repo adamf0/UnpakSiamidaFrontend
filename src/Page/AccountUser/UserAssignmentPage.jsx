@@ -127,17 +127,7 @@ export default function UserAssignmentPage() {
       const res = await apiClient.get(url);
       const list = res?.data ?? res ?? [];
       const safeList = Array.isArray(list) ? list : (list.data || []);
-      const filtered = safeList.filter((item) => {
-        const r = (
-          item.Role ||
-          item.role ||
-          item.ComputedRole ||
-          item.computed_role ||
-          ""
-        ).toLowerCase();
-        return ["upms", "upmf", "upml"].includes(r);
-      });
-      setAssignments(filtered);
+      setAssignments(safeList);
     } catch (err) {
       console.error("Fetch user-abac error:", err);
       addToast(
@@ -220,6 +210,51 @@ export default function UserAssignmentPage() {
   // Role styling helper
   const renderRoleBadge = (roleCode) => {
     const code = String(roleCode || "upmf").toLowerCase();
+    if (code === "admin") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
+          <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+          <span>ADMIN</span>
+          <span className="text-[10px] font-normal opacity-75">(Administrator)</span>
+        </span>
+      );
+    }
+    if (code === "fakultas") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+          <Building className="w-3.5 h-3.5 text-amber-600" />
+          <span>FAKULTAS</span>
+          <span className="text-[10px] font-normal opacity-75">(Verifikator)</span>
+        </span>
+      );
+    }
+    if (code === "evaluator") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+          <span>EVALUATOR</span>
+          <span className="text-[10px] font-normal opacity-75">(Proker)</span>
+        </span>
+      );
+    }
+    if (code === "anggaran") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-100 text-teal-800 border border-teal-200">
+          <Calendar className="w-3.5 h-3.5 text-teal-600" />
+          <span>ANGGARAN</span>
+          <span className="text-[10px] font-normal opacity-75">(Form 13)</span>
+        </span>
+      );
+    }
+    if (code === "auditee") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+          <User className="w-3.5 h-3.5 text-indigo-600" />
+          <span>AUDITEE</span>
+          <span className="text-[10px] font-normal opacity-75">(Target Audit)</span>
+        </span>
+      );
+    }
     if (code === "upml") {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -235,15 +270,6 @@ export default function UserAssignmentPage() {
           <School className="w-3.5 h-3.5 text-amber-600" />
           <span>UPMS</span>
           <span className="text-[10px] font-normal opacity-75">(Prodi)</span>
-        </span>
-      );
-    }
-    if (code === "user") {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
-          <User className="w-3.5 h-3.5 text-purple-600" />
-          <span>User</span>
-          <span className="text-[10px] font-normal opacity-75">(Pengelola)</span>
         </span>
       );
     }
@@ -461,7 +487,10 @@ export default function UserAssignmentPage() {
                 className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
               >
                 <option value="all">Semua Role ABAC</option>
-                <option value="user">User (Pengguna / Pengelola Unit)</option>
+                <option value="fakultas">Fakultas (Verifikator Fakultas)</option>
+                <option value="evaluator">Evaluator (Verifikator Proker)</option>
+                <option value="anggaran">Anggaran (Verifikator Form 13)</option>
+                <option value="auditee">Auditee (Target Audit)</option>
                 <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
                 <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
                 <option value="upms">UPMS (Unit Penjaminan Mutu Program Studi)</option>

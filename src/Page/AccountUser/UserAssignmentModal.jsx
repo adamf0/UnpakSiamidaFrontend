@@ -305,28 +305,24 @@ export default function UserAssignmentModal({
     }
 
     const effRole = effectiveRole;
-    if (!selectedFakultasUnit) {
-      if (effRole === "upms") {
-        addToast("error", "Target Program Studi (Prodi) wajib dipilih untuk role UPMS");
-      } else if (effRole === "upmf") {
-        addToast("error", "Target Fakultas wajib dipilih untuk role UPMF");
-      } else {
-        addToast("error", "Target Fakultas / Unit wajib dipilih untuk role UPML");
-      }
+    if (!selectedFakultasUnit && (effRole === "upms" || effRole === "upmf" || effRole === "fakultas")) {
+      addToast("error", "Target Fakultas / Unit / Prodi wajib dipilih untuk role ini");
       return;
     }
 
-    if (effRole === "upms" && !checkIsProdi(selectedFakultasUnit)) {
-      addToast("error", "Target untuk role UPMS harus berupa Program Studi (Prodi)");
-      return;
-    }
-    if (effRole === "upmf" && !checkIsFakultas(selectedFakultasUnit)) {
-      addToast("error", "Target untuk role UPMF harus berupa Fakultas");
-      return;
-    }
-    if (effRole === "upml" && checkIsProdi(selectedFakultasUnit)) {
-      addToast("error", "Target untuk role UPML harus berupa Fakultas atau Unit (bukan Program Studi)");
-      return;
+    if (selectedFakultasUnit) {
+      if (effRole === "upms" && !checkIsProdi(selectedFakultasUnit)) {
+        addToast("error", "Target untuk role UPMS harus berupa Program Studi (Prodi)");
+        return;
+      }
+      if ((effRole === "upmf" || effRole === "fakultas") && !checkIsFakultas(selectedFakultasUnit)) {
+        addToast("error", "Target untuk role UPMF / Fakultas harus berupa Fakultas");
+        return;
+      }
+      if (effRole === "upml" && checkIsProdi(selectedFakultasUnit)) {
+        addToast("error", "Target untuk role UPML harus berupa Fakultas atau Unit (bukan Program Studi)");
+        return;
+      }
     }
 
     if (isEmpty(formValues.tahun)) {
@@ -490,6 +486,10 @@ export default function UserAssignmentModal({
                       <option value="auto">
                         Otomatis (Berdasarkan Target Unit: {detectedRole.toUpperCase()})
                       </option>
+                      <option value="fakultas">Fakultas (Verifikator Fakultas)</option>
+                      <option value="evaluator">Evaluator (Verifikator Proker)</option>
+                      <option value="anggaran">Anggaran (Verifikator Form 13)</option>
+                      <option value="auditee">Auditee (Target Audit)</option>
                       <option value="upms">UPMS (Unit Penjaminan Mutu Program Studi)</option>
                       <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
                       <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>

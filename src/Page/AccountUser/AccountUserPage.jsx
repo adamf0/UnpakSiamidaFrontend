@@ -2,7 +2,6 @@ import RemoteTable from "@/Components/RemoteTable";
 import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AccountUserFormModal from "./AccountUserFormModal";
-import UserRoleModal from "./UserRoleModal";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
@@ -53,8 +52,6 @@ export default function AccountUserPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("new");
   const [selectedRow, setSelectedRow] = useState(null);
-  const [roleModalOpen, setRoleModalOpen] = useState(false);
-  const [selectedUserForRole, setSelectedUserForRole] = useState(null);
   const { addToast } = useToast();
   const { getValidToken } = useAuth();
 
@@ -258,51 +255,7 @@ export default function AccountUserPage() {
                   label: "Level Role",
                   searchable: true,
                   renderKey: (row) => {
-                    const userRoles = Array.isArray(row?.UserRoles)
-                      ? row.UserRoles
-                      : [];
-                    if (userRoles.length > 0) {
-                      return (
-                        <div className="flex flex-wrap gap-1.5 items-center">
-                          {userRoles.map((ur, idx) => {
-                            const lvl = String(
-                              ur.Level || ur.level || "user",
-                            ).toLowerCase();
-                            const badgeClass =
-                              LEVEL_BADGES[lvl] ||
-                              "bg-gray-100 text-gray-700 border-gray-200";
-                            const isActive =
-                              String(
-                                ur.Status || ur.status || "active",
-                              ).toLowerCase() === "active";
-                            const tahun = ur.Tahun || ur.tahun || "";
-
-                            return (
-                              <span
-                                key={ur.UUID || ur.uuid || idx}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedUserForRole(row);
-                                  setRoleModalOpen(true);
-                                }}
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider border ${badgeClass} cursor-pointer hover:shadow-xs transition ${
-                                  !isActive ? "opacity-50 line-through" : ""
-                                }`}
-                                title={`${lvl.toUpperCase()} (${tahun}) - Klik untuk kelola role`}
-                              >
-                                <span>{lvl}</span>
-                                {tahun && (
-                                  <span className="text-[10px] font-mono opacity-70 normal-case font-normal">
-                                    ({tahun})
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      );
-                    }
-
+                    const uUuid = row?.UUID || row?.uuid;
                     const lvl = String(
                       row?.Level || row?.level || "user",
                     ).toLowerCase();
@@ -313,8 +266,18 @@ export default function AccountUserPage() {
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedUserForRole(row);
-                          setRoleModalOpen(true);
+                          navigate(
+                            uUuid
+                              ? `/users/${uUuid}/abac`
+                              : "/users/abac",
+                            {
+                              state: {
+                                user: row,
+                                user_uuid: uUuid,
+                                user_name: row?.Name || row?.name,
+                              },
+                            },
+                          );
                         }}
                         className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider border ${badgeClass} cursor-pointer hover:shadow-xs transition`}
                         title="Klik untuk kelola role"
@@ -329,9 +292,14 @@ export default function AccountUserPage() {
                   label: "Fakultas / Unit",
                   searchable: true,
                   renderKey: (row) => {
-                    const userRoles = Array.isArray(row?.UserRoles)
-                      ? row.UserRoles
-                      : [];
+                    const uId = row?.ID || row?.id;
+                    const uUuid = row?.UUID || row?.uuid;
+                    const fromRow = row?.UserAbac || row?.user_abac;
+                    const userRoles =
+                      Array.isArray(fromRow) && fromRow.length > 0
+                        ? fromRow
+                        : abacMap[uId] || abacMap[uUuid] || [];
+
                     if (userRoles.length > 0) {
                       const units = [];
                       userRoles.forEach((ur) => {
@@ -563,19 +531,6 @@ export default function AccountUserPage() {
                 <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-purple-700 hover:text-purple-800 hover:bg-purple-50/80 rounded-xl transition-all cursor-pointer text-left group"
-                    onClick={() => {
-                      setSelectedUserForRole(row);
-                      setRoleModalOpen(true);
-                      close();
-                    }}
-                  >
-                    <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0 group-hover:scale-110 transition-transform" />
-                    <span>Kelola Role</span>
-                  </button>
-
-                  <button
-                    type="button"
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50/80 rounded-xl transition-all cursor-pointer text-left group"
                     onClick={() => {
                       const uUuid = row?.UUID || row?.uuid;
@@ -590,10 +545,8 @@ export default function AccountUserPage() {
                     }}
                   >
                     <UserCheck className="w-4 h-4 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
-                    <span>Tugaskan (ABAC)</span>
+                    <span>Tugaskan</span>
                   </button>
-
-                  <div className="my-1 border-t border-gray-150" />
 
                   <button
                     type="button"
@@ -632,16 +585,6 @@ export default function AccountUserPage() {
         mode={modalMode}
         data={selectedRow}
         onClose={() => setModalOpen(false)}
-        onSuccess={() => {
-          tableRef.current?.reload?.({ resetPage: false });
-        }}
-      />
-
-      {/* ROLE MODAL */}
-      <UserRoleModal
-        open={roleModalOpen}
-        user={selectedUserForRole}
-        onClose={() => setRoleModalOpen(false)}
         onSuccess={() => {
           tableRef.current?.reload?.({ resetPage: false });
         }}
