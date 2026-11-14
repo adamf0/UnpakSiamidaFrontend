@@ -246,12 +246,11 @@ export default function UserAssignmentPage() {
         </span>
       );
     }
-    if (code === "auditee") {
+    if (code === "user") {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-          <User className="w-3.5 h-3.5 text-indigo-600" />
-          <span>AUDITEE</span>
-          <span className="text-[10px] font-normal opacity-75">(Target Audit)</span>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+          <User className="w-3.5 h-3.5 text-blue-600" />
+          <span>USER</span>
         </span>
       );
     }
@@ -487,10 +486,10 @@ export default function UserAssignmentPage() {
                 className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
               >
                 <option value="all">Semua Role ABAC</option>
+                <option value="user">User</option>
                 <option value="fakultas">Fakultas (Verifikator Fakultas)</option>
                 <option value="evaluator">Evaluator (Verifikator Proker)</option>
                 <option value="anggaran">Anggaran (Verifikator Form 13)</option>
-                <option value="auditee">Auditee (Target Audit)</option>
                 <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
                 <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
                 <option value="upms">UPMS (Unit Penjaminan Mutu Program Studi)</option>
@@ -617,19 +616,21 @@ export default function UserAssignmentPage() {
                             <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
                             <div>
                               <p className="font-semibold text-gray-800 leading-tight">
-                                {renderLabelFakultasUnit({
-                                  nama: item.NamaFakultasUnit || item.nama_fakultas_unit,
-                                  jenjang:
-                                    item.JenjangFakultasUnit ||
-                                    item.jenjang_fakultas_unit ||
-                                    item.jenjang ||
-                                    item.Jenjang,
-                                  type: item.TypeFakultasUnit || item.type_fakultas_unit,
-                                  role: role,
-                                }) || (role === "upms" ? "Seluruh Unit (Tingkat Universitas / Sekolah)" : "-")}
+                                {role === "evaluator" || role === "anggaran"
+                                  ? "Tingkat Universitas (Global)"
+                                  : renderLabelFakultasUnit({
+                                      nama: item.NamaFakultasUnit || item.nama_fakultas_unit,
+                                      jenjang:
+                                        item.JenjangFakultasUnit ||
+                                        item.jenjang_fakultas_unit ||
+                                        item.jenjang ||
+                                        item.Jenjang,
+                                      type: item.TypeFakultasUnit || item.type_fakultas_unit,
+                                      role: role,
+                                    }) || "Seluruh Unit (Tingkat Universitas)"}
                               </p>
                               <span className="text-[10px] text-gray-400 capitalize">
-                                Tipe: {item.TypeFakultasUnit || item.type_fakultas_unit || (role === "upms" ? "Universitas" : "Unit")}
+                                Tipe: {role === "evaluator" || role === "anggaran" ? "Universitas" : (item.TypeFakultasUnit || item.type_fakultas_unit || "Unit")}
                               </span>
                             </div>
                           </div>

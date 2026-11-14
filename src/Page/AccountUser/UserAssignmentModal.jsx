@@ -187,8 +187,10 @@ export default function UserAssignmentModal({
   useEffect(() => {
     if (open) {
       if (mode === "edit" && data) {
+        const rawRole = String(data.Role || data.role || "auto").toLowerCase();
+        const normalizedRole = rawRole === "auditee" ? "user" : rawRole;
         setValue("tahun", String(data.Tahun || data.tahun || defaultYear));
-        setValue("role", (data.Role || data.role || "auto").toLowerCase());
+        setValue("role", normalizedRole);
         setValue("status", (data.Status || data.status || "active").toLowerCase());
 
         // Match user
@@ -206,21 +208,25 @@ export default function UserAssignmentModal({
           }
         );
 
-        // Match unit
-        const foundUnit = fakultasOptions.find(
-          (f) =>
-            f.id_numeric === (data.IdFakultasUnit || data.id_fakultas_unit) ||
-            f.uuid === (data.UuidFakultasUnit || data.uuid_fakultas_unit)
-        );
-        setSelectedFakultasUnit(
-          foundUnit || {
-            id: data.UuidFakultasUnit || data.IdFakultasUnit,
-            nama: data.NamaFakultasUnit || data.nama_fakultas_unit,
-            uuid: data.UuidFakultasUnit || data.uuid_fakultas_unit,
-            id_numeric: data.IdFakultasUnit || data.id_fakultas_unit,
-            type: data.TypeFakultasUnit || data.type_fakultas_unit,
-          }
-        );
+        // Match unit (jika bukan evaluator atau anggaran)
+        if (normalizedRole === "evaluator" || normalizedRole === "anggaran") {
+          setSelectedFakultasUnit(null);
+        } else {
+          const foundUnit = fakultasOptions.find(
+            (f) =>
+              f.id_numeric === (data.IdFakultasUnit || data.id_fakultas_unit) ||
+              f.uuid === (data.UuidFakultasUnit || data.uuid_fakultas_unit)
+          );
+          setSelectedFakultasUnit(
+            foundUnit || {
+              id: data.UuidFakultasUnit || data.IdFakultasUnit,
+              nama: data.NamaFakultasUnit || data.nama_fakultas_unit,
+              uuid: data.UuidFakultasUnit || data.uuid_fakultas_unit,
+              id_numeric: data.IdFakultasUnit || data.id_fakultas_unit,
+              type: data.TypeFakultasUnit || data.type_fakultas_unit,
+            }
+          );
+        }
 
         const r = detectRoleFromFu(foundUnit || data);
         setDetectedRole(r);
@@ -256,12 +262,14 @@ export default function UserAssignmentModal({
     }
   }, [open, mode, data, defaultUser, usersOptions, fakultasOptions, defaultYear]);
 
+  const isNoTargetRole = watchRole === "evaluator" || watchRole === "anggaran";
+
   // Filter target options berdasarkan role yang dipilih
   const filteredFakultasOptions = useMemo(() => {
     if (watchRole === "upms") {
       return fakultasOptions.filter(checkIsProdi);
     }
-    if (watchRole === "upmf") {
+    if (watchRole === "upmf" || watchRole === "fakultas") {
       return fakultasOptions.filter(checkIsFakultas);
     }
     if (watchRole === "upml") {
@@ -281,15 +289,19 @@ export default function UserAssignmentModal({
 
   // Reset target jika role yang dipilih tidak cocok dengan target yang sedang aktif
   useEffect(() => {
+    if (isNoTargetRole) {
+      if (selectedFakultasUnit) setSelectedFakultasUnit(null);
+      return;
+    }
     if (!selectedFakultasUnit) return;
     if (watchRole === "upms" && !checkIsProdi(selectedFakultasUnit)) {
       setSelectedFakultasUnit(null);
-    } else if (watchRole === "upmf" && !checkIsFakultas(selectedFakultasUnit)) {
+    } else if ((watchRole === "upmf" || watchRole === "fakultas") && !checkIsFakultas(selectedFakultasUnit)) {
       setSelectedFakultasUnit(null);
     } else if (watchRole === "upml" && checkIsProdi(selectedFakultasUnit)) {
       setSelectedFakultasUnit(null);
     }
-  }, [watchRole]);
+  }, [watchRole, isNoTargetRole]);
 
   const effectiveRole = useMemo(() => {
     if (watchRole && watchRole !== "auto") {
@@ -305,18 +317,20 @@ export default function UserAssignmentModal({
     }
 
     const effRole = effectiveRole;
-    if (!selectedFakultasUnit && (effRole === "upms" || effRole === "upmf" || effRole === "fakultas")) {
+    const isGlobalRole = effRole === "evaluator" || effRole === "anggaran";
+
+    if (!isGlobalRole && !selectedFakultasUnit && (effRole === "upms" || effRole === "upmf" || effRole === "fakultas" || effRole === "upml" || effRole === "user")) {
       addToast("error", "Target Fakultas / Unit / Prodi wajib dipilih untuk role ini");
       return;
     }
 
-    if (selectedFakultasUnit) {
+    if (selectedFakultasUnit && !isGlobalRole) {
       if (effRole === "upms" && !checkIsProdi(selectedFakultasUnit)) {
         addToast("error", "Target untuk role UPMS harus berupa Program Studi (Prodi)");
         return;
       }
       if ((effRole === "upmf" || effRole === "fakultas") && !checkIsFakultas(selectedFakultasUnit)) {
-        addToast("error", "Target untuk role UPMF / Fakultas harus berupa Fakultas");
+        addToast("error", "Target untuk role Fakultas / UPMF harus berupa Fakultas");
         return;
       }
       if (effRole === "upml" && checkIsProdi(selectedFakultasUnit)) {
@@ -335,8 +349,13 @@ export default function UserAssignmentModal({
       const fd = new FormData();
       if (selectedUser.id_numeric) fd.append("id_user", String(selectedUser.id_numeric));
       if (selectedUser.uuid) fd.append("user_uuid", selectedUser.uuid);
-      if (selectedFakultasUnit?.id_numeric) fd.append("id_fakultas_unit", String(selectedFakultasUnit.id_numeric));
-      if (selectedFakultasUnit?.uuid) fd.append("uuid_fakultas_unit", selectedFakultasUnit.uuid);
+      if (isGlobalRole) {
+        fd.append("id_fakultas_unit", "0");
+        fd.append("uuid_fakultas_unit", "");
+      } else {
+        if (selectedFakultasUnit?.id_numeric) fd.append("id_fakultas_unit", String(selectedFakultasUnit.id_numeric));
+        if (selectedFakultasUnit?.uuid) fd.append("uuid_fakultas_unit", selectedFakultasUnit.uuid);
+      }
       fd.append("tahun", String(formValues.tahun).trim());
       fd.append("role", effRole);
       fd.append("status", formValues.status || "active");
@@ -486,10 +505,10 @@ export default function UserAssignmentModal({
                       <option value="auto">
                         Otomatis (Berdasarkan Target Unit: {detectedRole.toUpperCase()})
                       </option>
+                      <option value="user">User</option>
                       <option value="fakultas">Fakultas (Verifikator Fakultas)</option>
                       <option value="evaluator">Evaluator (Verifikator Proker)</option>
                       <option value="anggaran">Anggaran (Verifikator Form 13)</option>
-                      <option value="auditee">Auditee (Target Audit)</option>
                       <option value="upms">UPMS (Unit Penjaminan Mutu Program Studi)</option>
                       <option value="upmf">UPMF (Unit Penjaminan Mutu Fakultas)</option>
                       <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>
@@ -506,17 +525,33 @@ export default function UserAssignmentModal({
                     </div>
                   </div>
                   <span className="text-[11px] text-gray-500 mt-1 block">
-                    {watchRole === "upms" ? (
+                    {watchRole === "user" ? (
                       <span>
-                        • <b>UPMS:</b> Khusus Program Studi (Prodi). Pilihan target di bawah otomatis difilter ke daftar prodi saja.
+                        • <b>User:</b> Pengguna / Unit sasaran. Pilihan target di bawah menampilkan seluruh Fakultas, Unit kerja, atau Prodi sasaran.
+                      </span>
+                    ) : watchRole === "fakultas" ? (
+                      <span>
+                        • <b>Fakultas:</b> Verifikator tingkat Fakultas. Pilihan target di bawah otomatis difilter ke daftar Fakultas saja.
+                      </span>
+                    ) : watchRole === "evaluator" ? (
+                      <span>
+                        • <b>Evaluator:</b> Verifikator Program Kerja tingkat Universitas (tidak memerlukan pemilihan target unit).
+                      </span>
+                    ) : watchRole === "anggaran" ? (
+                      <span>
+                        • <b>Anggaran:</b> Verifikator Form 13 Anggaran tingkat Universitas (tidak memerlukan pemilihan target unit).
+                      </span>
+                    ) : watchRole === "upms" ? (
+                      <span>
+                        • <b>UPMS:</b> Khusus Program Studi (Prodi). Pilihan target di bawah otomatis difilter ke daftar Prodi saja.
                       </span>
                     ) : watchRole === "upmf" ? (
                       <span>
-                        • <b>UPMF:</b> Khusus Fakultas. Pilihan target di bawah otomatis difilter ke daftar fakultas saja.
+                        • <b>UPMF:</b> Khusus Fakultas. Pilihan target di bawah otomatis difilter ke daftar Fakultas saja.
                       </span>
                     ) : watchRole === "upml" ? (
                       <span>
-                        • <b>UPML:</b> Lembaga / Unit kerja dan Fakultas. Pilihan target difilter ke fakultas dan unit.
+                        • <b>UPML:</b> Lembaga / Unit kerja dan Fakultas. Pilihan target difilter ke Fakultas dan Unit.
                       </span>
                     ) : (
                       <span>
@@ -527,42 +562,51 @@ export default function UserAssignmentModal({
                 </div>
 
                 {/* TARGET FAKULTAS / UNIT / PRODI */}
-                <div>
-                  <SearchSelect
-                    label={
-                      watchRole === "upms"
-                        ? "Target Program Studi (Prodi)"
-                        : watchRole === "upmf"
-                          ? "Target Fakultas"
+                {isNoTargetRole ? (
+                  <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-xs text-emerald-900 flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <div className="leading-relaxed">
+                      <span className="font-bold">Tingkat Universitas / Sistem:</span> Role <strong>{watchRole === "evaluator" ? "Evaluator" : "Anggaran"}</strong> berlaku di tingkat Universitas tanpa terikat pada target Fakultas/Unit/Prodi tertentu.
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <SearchSelect
+                      label={
+                        watchRole === "upms"
+                          ? "Target Program Studi (Prodi)"
+                          : watchRole === "upmf" || watchRole === "fakultas"
+                            ? "Target Fakultas"
+                            : watchRole === "upml"
+                              ? "Target Fakultas / Unit / Lembaga"
+                              : "Target Fakultas / Unit / Lembaga / Prodi"
+                      }
+                      placeholder={
+                        watchRole === "upms"
+                          ? "Pilih program studi sasaran..."
+                          : watchRole === "upmf" || watchRole === "fakultas"
+                            ? "Pilih fakultas sasaran..."
+                            : watchRole === "upml"
+                              ? "Pilih fakultas atau unit kerja sasaran..."
+                              : "Pilih unit kerja, fakultas, atau prodi sasaran..."
+                      }
+                      options={filteredFakultasOptions}
+                      value={selectedFakultasUnit}
+                      onChange={handleSelectUnit}
+                      loading={loadingFakultas}
+                      required
+                    />
+                    <span className="text-[11px] text-gray-500 mt-0.5 block">
+                      {watchRole === "upms"
+                        ? "Menampilkan data Program Studi saja sesuai role UPMS."
+                        : watchRole === "upmf" || watchRole === "fakultas"
+                          ? "Menampilkan data Fakultas saja sesuai role Fakultas."
                           : watchRole === "upml"
-                            ? "Target Fakultas / Unit / Lembaga"
-                            : "Target Fakultas / Unit / Lembaga / Prodi"
-                    }
-                    placeholder={
-                      watchRole === "upms"
-                        ? "Pilih program studi sasaran..."
-                        : watchRole === "upmf"
-                          ? "Pilih fakultas sasaran..."
-                          : watchRole === "upml"
-                            ? "Pilih fakultas atau unit kerja sasaran..."
-                            : "Pilih unit kerja, fakultas, atau prodi sasaran..."
-                    }
-                    options={filteredFakultasOptions}
-                    value={selectedFakultasUnit}
-                    onChange={handleSelectUnit}
-                    loading={loadingFakultas}
-                    required
-                  />
-                  <span className="text-[11px] text-gray-500 mt-0.5 block">
-                    {watchRole === "upms"
-                      ? "Menampilkan data Program Studi saja sesuai role UPMS."
-                      : watchRole === "upmf"
-                        ? "Menampilkan data Fakultas saja sesuai role UPMF."
-                        : watchRole === "upml"
-                          ? "Menampilkan data Fakultas dan Unit kerja sesuai role UPML."
-                          : "Role akan disesuaikan secara otomatis berdasarkan tipe target yang dipilih."}
-                  </span>
-                </div>
+                            ? "Menampilkan data Fakultas dan Unit kerja sesuai role UPML."
+                            : "Role akan disesuaikan secara otomatis berdasarkan tipe target yang dipilih."}
+                    </span>
+                  </div>
+                )}
 
                 {/* TAHUN PENUGASAN */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -612,7 +656,7 @@ export default function UserAssignmentModal({
                 </div>
 
                 {/* PREVIEW KOTAK INFO */}
-                {selectedUser && selectedFakultasUnit && (
+                {selectedUser && (selectedFakultasUnit || isNoTargetRole) && (
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1">
                     <div className="flex items-center gap-1.5 font-semibold text-blue-800">
                       <CheckCircle2 size={15} className="text-blue-600" />
@@ -623,8 +667,9 @@ export default function UserAssignmentModal({
                       <span className="font-bold uppercase text-blue-700">
                         {effectiveRole}
                       </span>{" "}
-                      untuk <b>{selectedFakultasUnit.nama}</b> pada tahun audit{" "}
-                      <b>{watch("tahun")}</b>.
+                      {isNoTargetRole
+                        ? `di tingkat Universitas / Global pada tahun ${watch("tahun") || "-"}.`
+                        : `untuk ${selectedFakultasUnit?.nama || "-"} pada tahun ${watch("tahun") || "-"}.`}
                     </p>
                   </div>
                 )}

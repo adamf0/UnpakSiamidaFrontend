@@ -17,6 +17,7 @@ import PageHeader from "@/Components/PageHeader";
 import Tooltip from "@/Components/Tooltip";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import CoaSearchSelect from "@/Components/CoaSearchSelect";
+import ProkerAccessBlockCard from "@/Components/ProkerAccessBlockCard";
 import {
   BULAN_LIST,
   WEEKS,
@@ -74,6 +75,8 @@ import {
   Coins,
   Lock,
   Link2,
+  ShieldAlert,
+  RefreshCw,
 } from "lucide-react";
 import RubberStamp from "../Dashboard/MonitoringProker3D/RubberStamp";
 
@@ -145,59 +148,137 @@ export default function ProkerV3TimelinePage() {
   const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
 
   const isVerifierRoleOrLevel = useMemo(() => {
-    if (isAdmin) return false;
-    const normRole = curRole.toLowerCase().trim();
-    const normLevel = String(level || localStorage.getItem("activeLevel") || "")
+    const activeRole = String(
+      level || localStorage.getItem("activeLevel") || user?.level || ""
+    )
       .toLowerCase()
       .trim();
-    const userLevel = String(user?.level || "")
-      .toLowerCase()
-      .trim();
-    const userName = String(user?.name || "").toLowerCase().trim();
-    const userNidn = String(user?.nidn_username || "").toLowerCase().trim();
 
-    // Role / Level UPML SELALU diizinkan melihat nominal anggaran (TIDAK disensor)
-    const isUpml =
-      normRole.includes("upml") ||
-      normLevel.includes("upml") ||
-      userLevel.includes("upml") ||
-      userName.includes("upml") ||
-      userNidn.includes("upml") ||
-      (Array.isArray(user?.extra_role) &&
-        user.extra_role.some(
-          (r) =>
-            String(r.role || r.Role || "").toLowerCase().trim() === "upml"
-        ));
-    if (isUpml) return false;
+    // UPML, Admin, Anggaran/Keuangan, dan User pengusul BOLEH melihat uang anggaran
+    if (isAdmin || activeRole === "admin") return false;
+    if (activeRole === "upml") return false;
+    if (activeRole === "anggaran" || activeRole === "keuangan") return false;
+    if (activeRole === "user") return false;
 
-    // Level USER biasa juga TIDAK disensor (pengusul proker)
-    if (isLevelUser || normRole === "user" || normLevel === "user") return false;
-
-    const verifierRoles = [
-      "upmf",
-      "upms",
-      "fakultas",
-      "evaluator",
-      "verifikator",
-    ];
-    return (
-      verifierRoles.some((v) => normRole.includes(v)) ||
-      verifierRoles.some((v) => normLevel.includes(v)) ||
-      verifierRoles.some((v) => userLevel.includes(v)) ||
-      isEvaluator
-    );
-  }, [curRole, level, user, isAdmin, isEvaluator, isLevelUser]);
+    // Selain itu (UPMF, UPMS, Evaluator, Fakultas, dll): SENSOR ***
+    return true;
+  }, [level, user, isAdmin]);
 
   const isUpmUser = useMemo(() => {
     if (isLevelUser) return false;
     return ["upml", "upmf", "upms"].includes(curRole);
   }, [isLevelUser, curRole]);
 
+  // Unit penugasan aktif sesuai level/role dan tahun saat ini
+  const activeRoleUnit = useMemo(() => {
+    if (!Array.isArray(user?.extra_role) || user.extra_role.length === 0) {
+      return {
+        id: user?.id_fakultas_unit || user?.fakultas_unit || null,
+        uuid: user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "",
+        name: user?.nama_fakultas_unit || user?.fakultas || "",
+      };
+    }
+    const effYear = String(positionYear || "").trim();
+    const match = user.extra_role.find((r) => {
+      const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+      if (curRole && rRole && rRole !== curRole && curRole !== "user") {
+        return false;
+      }
+      const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+      if (rYear && effYear && rYear !== effYear) {
+        return false;
+      }
+      return true;
+    });
+    if (match) {
+      return {
+        id: match.id_fakultas_unit ?? match.IdFakultasUnit,
+        uuid: match.uuid_fakultas_unit ?? match.UuidFakultasUnit ?? "",
+        name: match.nama_fakultas_unit ?? match.NamaFakultasUnit ?? "",
+      };
+    }
+    return {
+      id: user?.id_fakultas_unit || user?.fakultas_unit || null,
+      uuid: user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "",
+      name: user?.nama_fakultas_unit || user?.fakultas || "",
+    };
+  }, [user, curRole, positionYear]);
+
   // Data states
   const [loading, setLoading] = useState(true);
   const [aktivitas, setAktivitas] = useState(null);
   const [proker, setProker] = useState(null);
   const [timelines, setTimelines] = useState([]);
+  const [isAccessBlocked, setIsAccessBlocked] = useState(false);
+  const [accessBlockInfo, setAccessBlockInfo] = useState(null);
+
+  // Validasi izin akses proker di sisi klien
+  const checkClientAccess = useCallback(
+    (rawProker) => {
+      if (!rawProker) return true;
+      if (
+        isAdmin ||
+        curRole === "anggaran" ||
+        curRole === "keuangan" ||
+        curRole === "evaluator" ||
+        curRole === "lpm"
+      ) {
+        return true;
+      }
+
+      const prokerUnitId =
+        rawProker.IdFakultasUnit != null ? Number(rawProker.IdFakultasUnit) : null;
+      const prokerUnitName = String(
+        rawProker.NamaFakultasUnit || rawProker.nama_fakultas_unit || "",
+      )
+        .trim()
+        .toLowerCase();
+      const prokerParentFakultas = String(
+        rawProker.ParentFakultas || rawProker.parent_fakultas || "",
+      )
+        .trim()
+        .toLowerCase();
+
+      const assignedId =
+        activeRoleUnit.id != null ? Number(activeRoleUnit.id) : null;
+      const assignedName = String(activeRoleUnit.name || "")
+        .trim()
+        .toLowerCase();
+
+      // 1. Direct match dengan unit penugasan aktif
+      if (assignedId && prokerUnitId && assignedId === prokerUnitId) {
+        return true;
+      }
+      if (
+        assignedName &&
+        prokerUnitName &&
+        (assignedName === prokerUnitName || prokerUnitName.includes(assignedName))
+      ) {
+        return true;
+      }
+
+      // 2. Strict scoping untuk UPML, UPMS, dan normal user
+      if (curRole === "upml" || curRole === "upms" || curRole === "user") {
+        return false;
+      }
+
+      // 3. UPMF: mencakup 1 fakultas dan prodi-prodi di bawahnya
+      if (curRole === "upmf") {
+        if (
+          assignedName &&
+          prokerParentFakultas &&
+          (assignedName === prokerParentFakultas ||
+            prokerParentFakultas.includes(assignedName))
+        ) {
+          return true;
+        }
+        return false;
+      }
+
+      return false;
+    },
+    [isAdmin, curRole, activeRoleUnit],
+  );
 
   // Multi-scope support for Standar, Target, and Luaran
   const scopesList = useMemo(() => {
@@ -809,14 +890,46 @@ export default function ProkerV3TimelinePage() {
   const fetchData = async () => {
     if (!actUuid) return;
     setLoading(true);
+    setIsAccessBlocked(false);
+    setAccessBlockInfo(null);
     try {
       const res = await apiClient.get(`/proker_v3/aktivitas/${actUuid}`);
       const json = res.data;
 
+      const rawProker = json.proker || null;
+      if (rawProker) {
+        rawProker.Tahun = rawProker.Tahun || rawProker.tahun;
+        rawProker.NamaProgram = rawProker.NamaProgram || rawProker.nama_program;
+        rawProker.NamaFakultasUnit =
+          rawProker.NamaFakultasUnit || rawProker.nama_fakultas_unit;
+        rawProker.IdFakultasUnit =
+          rawProker.IdFakultasUnit ?? rawProker.id_fakultas_unit;
+        rawProker.UuidFakultasUnit =
+          rawProker.UuidFakultasUnit || rawProker.uuid_fakultas_unit;
+        rawProker.ParentFakultas =
+          rawProker.ParentFakultas || rawProker.parent_fakultas;
+      }
+
+      // Validasi hak akses klien jika data ter-load
+      if (rawProker && !checkClientAccess(rawProker)) {
+        setIsAccessBlocked(true);
+        setAccessBlockInfo({
+          title: "Akses Ditolak: Bukan Unit Penugasan Anda",
+          message: `Anda sedang aktif dengan hak akses ${curRole.toUpperCase()}${activeRoleUnit?.name ? ` (${activeRoleUnit.name})` : ""}, sedangkan jadwal kegiatan "${rawProker.NamaProgram || "-"}" ini berada di bawah ${rawProker.NamaFakultasUnit || "unit lain"}. Anda tidak memiliki hak akses untuk melihat rincian jadwal kegiatan unit ini.`,
+          proker: rawProker,
+          targetUnit: rawProker.NamaFakultasUnit || "Unit Terkait",
+        });
+        setAktivitas(null);
+        setProker(null);
+        setTimelines([]);
+        setLoading(false);
+        return;
+      }
+
       setAktivitas(json.aktivitas || null);
       setActRabRows(parseActRabRows(json.aktivitas));
-      setProker(json.proker || null);
-      fetchJadwalStatus(json.proker, json.aktivitas);
+      setProker(rawProker);
+      fetchJadwalStatus(rawProker, json.aktivitas);
 
       const rawList = json.data || json.timelines || [];
       const mergedList = rawList.map((tl) => {
@@ -847,7 +960,23 @@ export default function ProkerV3TimelinePage() {
         }));
       }
     } catch (err) {
-      addToast("error", err?.message || "Layanan tidak dapat dihubungi");
+      if (err?.response?.status === 403) {
+        setIsAccessBlocked(true);
+        setAccessBlockInfo({
+          title: "Akses Ditolak: Bukan Unit Penugasan Anda",
+          message:
+            err?.response?.data?.error ||
+            "Anda tidak memiliki hak akses untuk melihat jadwal kegiatan program kerja unit ini.",
+          activeRole: curRole,
+          activeRoleUnit: activeRoleUnit?.name,
+          targetUnit: "Unit Lain (Di Luar Penugasan)",
+        });
+        setAktivitas(null);
+        setProker(null);
+        setTimelines([]);
+      } else {
+        addToast("error", err?.message || "Layanan tidak dapat dihubungi");
+      }
     } finally {
       setLoading(false);
     }
@@ -880,7 +1009,7 @@ export default function ProkerV3TimelinePage() {
 
   useEffect(() => {
     fetchData();
-  }, [actUuid]);
+  }, [actUuid, curRole, positionYear]);
 
   useEffect(() => {
     if (proker || aktivitas) {
@@ -2349,7 +2478,31 @@ export default function ProkerV3TimelinePage() {
           }
         />
 
-        {/* Jadwal Pengajuan Proker Status Alert */}
+        {isAccessBlocked ? (
+          <ProkerAccessBlockCard
+            curRole={curRole}
+            activeRoleUnit={activeRoleUnit}
+            accessBlockInfo={accessBlockInfo}
+            onBack={() =>
+              navigate(
+                proker?.UUID
+                  ? `/proker_v3/${proker.UUID}/aktivitas`
+                  : prokerUuid
+                    ? `/proker_v3/${prokerUuid}/aktivitas`
+                    : "/proker_v3",
+              )
+            }
+            backLabel={
+              prokerUuid || proker?.UUID
+                ? "Kembali ke aktivitas"
+                : "Kembali ke daftar program kerja"
+            }
+            onChangeLevel={() => setOpenChangeLevel(true)}
+            changeLevelLabel="Ganti level atau unit"
+          />
+        ) : (
+          <>
+            {/* Jadwal Pengajuan Proker Status Alert */}
         {jadwalProkerStatus && (
           <div
             className={`p-3.5 sm:px-4 sm:py-3 rounded-2xl border flex items-center justify-between gap-3 text-xs sm:text-sm font-medium ${
@@ -2441,15 +2594,6 @@ export default function ProkerV3TimelinePage() {
                   )
                 )}
               </span>
-              {isAnggaranRevised(aktivitas) &&
-                getRealisasiAnggaran(aktivitas) !== null &&
-                Number(getRealisasiAnggaran(aktivitas)) <
-                  Number(aktivitas.Anggaran) && (
-                  <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3 text-rose-600" />
-                    Diluar Budget
-                  </span>
-                )}
             </div>
           </div>
 
@@ -4775,6 +4919,8 @@ export default function ProkerV3TimelinePage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* ======================================================== */}

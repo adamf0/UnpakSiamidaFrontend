@@ -19,6 +19,9 @@ import {
   GraduationCap,
   School,
   ShieldCheck,
+  Building2,
+  CheckCircle2,
+  Wallet,
 } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
@@ -252,7 +255,7 @@ export default function AccountUserPage() {
                 },
                 {
                   key: "Level",
-                  label: "Level Role",
+                  label: "Level Akun",
                   searchable: true,
                   renderKey: (row) => {
                     const uUuid = row?.UUID || row?.uuid;
@@ -280,7 +283,7 @@ export default function AccountUserPage() {
                           );
                         }}
                         className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider border ${badgeClass} cursor-pointer hover:shadow-xs transition`}
-                        title="Klik untuk kelola role"
+                        title="Klik untuk kelola penugasan ABAC"
                       >
                         {lvl}
                       </span>
@@ -382,7 +385,7 @@ export default function AccountUserPage() {
                         item.role ||
                         ""
                       ).toLowerCase();
-                      return ["upms", "upmf", "upml"].includes(r);
+                      return ["upms", "upmf", "upml", "fakultas", "evaluator", "anggaran", "user"].includes(r);
                     });
 
                     if (!abacs || abacs.length === 0) {
@@ -435,17 +438,33 @@ export default function AccountUserPage() {
                           let badgeColor =
                             "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
                           let Icon = GraduationCap;
+                          let displayTarget = unit;
+
                           if (role === "UPML") {
                             badgeColor =
                               "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100";
                             Icon = Building;
-                          } else if (role === "UPMS") {
-                            badgeColor =
-                              "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100";
-                            Icon = School;
-                          } else if (role === "USER") {
+                          } else if (role === "UPMF" || role === "FAKULTAS") {
                             badgeColor =
                               "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100";
+                            Icon = Building2;
+                          } else if (role === "UPMS") {
+                            badgeColor =
+                              "bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100";
+                            Icon = School;
+                          } else if (role === "EVALUATOR") {
+                            badgeColor =
+                              "bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100";
+                            Icon = CheckCircle2;
+                            displayTarget = "Universitas";
+                          } else if (role === "ANGGARAN") {
+                            badgeColor =
+                              "bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100";
+                            Icon = Wallet;
+                            displayTarget = "Universitas";
+                          } else if (role === "USER") {
+                            badgeColor =
+                              "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
                             Icon = User;
                           }
 
@@ -468,15 +487,15 @@ export default function AccountUserPage() {
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold border ${badgeColor} shadow-2xs cursor-pointer transition ${
                                 !isActive ? "opacity-50 line-through" : ""
                               }`}
-                              title={`${role} • ${unit} (${tahun}) - Status: ${
+                              title={`${role} • ${displayTarget || "-"} (${tahun}) - Status: ${
                                 isActive ? "Aktif" : "Non-Aktif"
                               }. Klik untuk kelola.`}
                             >
                               <Icon className="w-3.5 h-3.5 shrink-0" />
                               <span className="font-bold">{role}</span>
-                              {unit && (
+                              {displayTarget && (
                                 <span className="font-normal opacity-90 truncate max-w-[120px]">
-                                  ({unit})
+                                  ({displayTarget})
                                 </span>
                               )}
                               {tahun && (

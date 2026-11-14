@@ -22,6 +22,7 @@ import {
   formatProdiWithJenjang,
   cleanDuplicateJenjang,
   formatTanggalBulanTahun,
+  isValidUuid,
 } from "@/Common/Utils";
 import {
   Plus,
@@ -222,48 +223,22 @@ export default function ProkerV3Page() {
 
   // Level verifikator dan role verifikator (yang nominal anggarannya disensor)
   const isVerifikatorRoleOrLevel = useMemo(() => {
-    if (isAdmin) return false;
-    const normRole = curRole.toLowerCase().trim();
-    const normLevel = String(level || localStorage.getItem("activeLevel") || "")
+    // Role aktif saat ini (sedang akses pakai apa)
+    const activeRole = String(
+      level || localStorage.getItem("activeLevel") || user?.level || ""
+    )
       .toLowerCase()
       .trim();
-    const userLevel = String(user?.level || "")
-      .toLowerCase()
-      .trim();
-    const userName = String(user?.name || "").toLowerCase().trim();
-    const userNidn = String(user?.nidn_username || "").toLowerCase().trim();
 
-    // Role / Level UPML SELALU diizinkan melihat nominal anggaran (TIDAK disensor)
-    const isUpml =
-      normRole.includes("upml") ||
-      normLevel.includes("upml") ||
-      userLevel.includes("upml") ||
-      userName.includes("upml") ||
-      userNidn.includes("upml") ||
-      (Array.isArray(user?.extra_role) &&
-        user.extra_role.some(
-          (r) =>
-            String(r.role || r.Role || "").toLowerCase().trim() === "upml"
-        ));
-    if (isUpml) return false;
+    // UPML, Admin, Anggaran/Keuangan, dan User pengusul BOLEH melihat uang anggaran
+    if (isAdmin || activeRole === "admin") return false;
+    if (activeRole === "upml") return false;
+    if (activeRole === "anggaran" || activeRole === "keuangan") return false;
+    if (activeRole === "user") return false;
 
-    // Level USER biasa juga TIDAK disensor (pengusul proker)
-    if (isLevelUser || normRole === "user" || normLevel === "user") return false;
-
-    const verifierRoles = [
-      "upmf",
-      "upms",
-      "fakultas",
-      "evaluator",
-      "verifikator",
-    ];
-    return (
-      verifierRoles.some((v) => normRole.includes(v)) ||
-      verifierRoles.some((v) => normLevel.includes(v)) ||
-      verifierRoles.some((v) => userLevel.includes(v)) ||
-      isEvaluator
-    );
-  }, [curRole, level, user, isAdmin, isEvaluator, isLevelUser]);
+    // Selain itu (UPMF, UPMS, Evaluator, Fakultas, dll): SENSOR ***
+    return true;
+  }, [level, user, isAdmin]);
 
   const [selectedUnit, setSelectedUnit] = useState("all");
   const [selectedUnitObj, setSelectedUnitObj] = useState(null);
@@ -426,11 +401,34 @@ export default function ProkerV3Page() {
   // Fetch pengaturan tanggal aktif Proker Batal
   useEffect(() => {
     let cancel = false;
-    const targetUnitId =
-      selectedUnit && selectedUnit !== "all"
-        ? selectedUnit
-        : userUnitData?.id || "";
-    const unitParam = targetUnitId ? `?unit_id=${encodeURIComponent(targetUnitId)}` : "";
+    let targetUnitUuid = "";
+    if (selectedUnit && selectedUnit !== "all" && selectedUnit !== "none") {
+      const foundInOptions = unitOptions.find(
+        (u) =>
+          String(u.id) === String(selectedUnit) ||
+          String(u.uuid) === String(selectedUnit),
+      );
+      const candUuid =
+        foundInOptions?.uuid ||
+        (isValidUuid(selectedUnitObj?.uuid) ? selectedUnitObj.uuid : "") ||
+        (isValidUuid(selectedUnit) ? selectedUnit : "");
+
+      if (isValidUuid(candUuid)) {
+        targetUnitUuid = candUuid;
+      }
+    } else {
+      const candUuid =
+        userUnitData?.uuid ||
+        user?.uuid_fakultas_unit ||
+        user?.UuidFakultasUnit ||
+        "";
+      if (isValidUuid(candUuid)) {
+        targetUnitUuid = candUuid;
+      }
+    }
+    const unitParam = isValidUuid(targetUnitUuid)
+      ? `?unit_uuid=${encodeURIComponent(targetUnitUuid)}`
+      : "";
     apiClient
       .get(`/settings/proker-batal${unitParam}`)
       .then((res) => {
@@ -442,7 +440,7 @@ export default function ProkerV3Page() {
     return () => {
       cancel = true;
     };
-  }, [selectedUnit, userUnitData]);
+  }, [selectedUnit, selectedUnitObj, userUnitData, unitOptions, user]);
 
   const userTargetName =
     userUnitData?.raw_nama ||
@@ -478,10 +476,11 @@ export default function ProkerV3Page() {
         const found = unitOptions.find(
           (u) => String(u.id) === uId || String(u.uuid) === uId,
         );
+        const mUuid = m.uuid_fakultas_unit || m.UuidFakultasUnit || "";
         unique.push(
           found || {
             id: uId,
-            uuid: uId,
+            uuid: isValidUuid(mUuid) ? mUuid : isValidUuid(uId) ? uId : "",
             nama: m.nama_fakultas_unit || `Unit #${uId}`,
             label: m.nama_fakultas_unit || `Unit #${uId}`,
             name: m.nama_fakultas_unit || `Unit #${uId}`,
@@ -1722,13 +1721,17 @@ export default function ProkerV3Page() {
     const sAngg = (row.StatusAnggaran || "").toLowerCase().trim();
 
     const isVerifierApproved =
-      sVerif === "terima_verifikator" ||
-      sVerif === "disetujui" ||
-      sVerif.includes("diverifikasi") ||
-      sMain === "disetujui" ||
-      sMain === "terima_anggaran" ||
-      sMain === "terima anggaran" ||
-      sMain.includes("diverifikasi");
+      sVerif !== "revisi" &&
+      sMain !== "revisi" &&
+      sVerif !== "ditolak" &&
+      !sMain.includes("ditolak") &&
+      (sVerif === "terima_verifikator" ||
+        sVerif === "disetujui" ||
+        sVerif.includes("diverifikasi") ||
+        sMain === "disetujui" ||
+        sMain === "terima_anggaran" ||
+        sMain === "terima anggaran" ||
+        sMain.includes("diverifikasi"));
 
     const isAnggaranApproved =
       sAngg === "terima_anggaran" ||
@@ -2235,7 +2238,7 @@ export default function ProkerV3Page() {
                   {firstRow.HasPagu && firstRow.PaguUnit > 0 && (
                     <div
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs shadow-2xs font-mono border ${
-                        firstRow.IsMelebihiPagu
+                        firstRow.IsMelebihiPagu || (totalRealisasiGroup > Number(firstRow.PaguUnit))
                           ? "bg-rose-50 border-rose-200 text-rose-800"
                           : "bg-blue-50 border-blue-200 text-blue-800"
                       }`}
@@ -2247,9 +2250,9 @@ export default function ProkerV3Page() {
                       <span className="font-bold">
                         {formatRupiah(firstRow.PaguUnit)}
                       </span>
-                      {firstRow.IsMelebihiPagu && (
+                      {(firstRow.IsMelebihiPagu || (totalRealisasiGroup > Number(firstRow.PaguUnit))) && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">
-                          Melebihi Pagu
+                          Diluar Budget
                         </span>
                       )}
                     </div>
@@ -2359,13 +2362,17 @@ export default function ProkerV3Page() {
               const sAngg = (r.StatusAnggaran || "").toLowerCase().trim();
 
               const isVerifierApproved =
-                sVerif === "terima_verifikator" ||
-                sVerif === "disetujui" ||
-                sVerif.includes("diverifikasi") ||
-                sMain === "disetujui" ||
-                sMain === "terima_anggaran" ||
-                sMain === "terima anggaran" ||
-                sMain.includes("diverifikasi");
+                sVerif !== "revisi" &&
+                sMain !== "revisi" &&
+                sVerif !== "ditolak" &&
+                !sMain.includes("ditolak") &&
+                (sVerif === "terima_verifikator" ||
+                  sVerif === "disetujui" ||
+                  sVerif.includes("diverifikasi") ||
+                  sMain === "disetujui" ||
+                  sMain === "terima_anggaran" ||
+                  sMain === "terima anggaran" ||
+                  sMain.includes("diverifikasi"));
 
               const isAnggaranApproved =
                 sAngg === "terima_anggaran" ||
@@ -2839,7 +2846,23 @@ export default function ProkerV3Page() {
         );
 
         let badgeUpm = null;
-        if (
+        if (sVerif === "revisi" || sMain === "revisi") {
+          badgeUpm = (
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
+              REVISI EVALUATOR
+            </span>
+          );
+        } else if (
+          sVerif === "ditolak" ||
+          (sMain.includes("ditolak") &&
+            (catatanVerif || !sAngg.includes("ditolak")))
+        ) {
+          badgeUpm = (
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
+              DITOLAK EVALUATOR
+            </span>
+          );
+        } else if (
           sVerif === "terima_verifikator" ||
           sVerif === "disetujui" ||
           sMain === "disetujui" ||
@@ -2880,22 +2903,6 @@ export default function ProkerV3Page() {
               </span>
             </div>
           );
-        } else if (
-          sVerif === "ditolak" ||
-          (sMain.includes("ditolak") &&
-            (catatanVerif || !sAngg.includes("ditolak")))
-        ) {
-          badgeUpm = (
-            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-rose-300 bg-rose-50 text-rose-800 uppercase tracking-wider">
-              DITOLAK EVALUATOR
-            </span>
-          );
-        } else if (sVerif === "revisi" || sMain === "revisi") {
-          badgeUpm = (
-            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
-              REVISI EVALUATOR
-            </span>
-          );
         } else if (sVerif === "diajukan" || sMain === "diajukan") {
           badgeUpm = (
             <div className="flex flex-col gap-0.5 items-start">
@@ -2913,13 +2920,17 @@ export default function ProkerV3Page() {
         }
 
         const isVerifierApproved =
-          sVerif === "terima_verifikator" ||
-          sVerif === "disetujui" ||
-          sVerif.includes("diverifikasi") ||
-          sMain === "disetujui" ||
-          sMain === "terima_anggaran" ||
-          sMain === "terima anggaran" ||
-          sMain.includes("diverifikasi");
+          sVerif !== "revisi" &&
+          sMain !== "revisi" &&
+          sVerif !== "ditolak" &&
+          !sMain.includes("ditolak") &&
+          (sVerif === "terima_verifikator" ||
+            sVerif === "disetujui" ||
+            sVerif.includes("diverifikasi") ||
+            sMain === "disetujui" ||
+            sMain === "terima_anggaran" ||
+            sMain === "terima anggaran" ||
+            sMain.includes("diverifikasi"));
 
         let badgeAnggaran = null;
         if (
@@ -3234,7 +3245,10 @@ export default function ProkerV3Page() {
           totalAng !== totalReal,
         );
         const hasPagu = Boolean(r.HasPagu && r.PaguUnit > 0);
-        const isMelebihi = Boolean(r.IsMelebihiPagu);
+        const isMelebihi = Boolean(
+          r.IsMelebihiPagu ||
+          (hasPagu && Number(r.TotalAnggaranUnit) > Number(r.PaguUnit))
+        );
         const isBatal = Boolean(r.IsBatal);
 
         if (isBatal) {
@@ -3318,10 +3332,10 @@ export default function ProkerV3Page() {
             ) : isMelebihi ? (
               <span
                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
-                title={`Total anggaran unit (${formatRupiah(r.TotalAnggaranUnit)}) melebihi batas pagu (${formatRupiah(r.PaguUnit)})`}
+                title={`Total realisasi anggaran unit (${formatRupiah(r.TotalAnggaranUnit)}) melebihi batas pagu (${formatRupiah(r.PaguUnit)})`}
               >
                 <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
-                <span>Melebihi Pagu</span>
+                <span>Diluar Budget</span>
               </span>
             ) : (
               <span
@@ -3850,7 +3864,7 @@ export default function ProkerV3Page() {
                   }`}
                 >
                   {curRole === "upms"
-                    ? "UPMS (Unit Penjaminan Mutu Sekolah)"
+                    ? `UPMS (${selectedUnitObj?.nama || "Program Studi"})`
                     : curRole === "upmf"
                       ? `UPMF (${selectedUnitObj?.nama || "Fakultas"})`
                       : curRole === "upml"
@@ -3871,7 +3885,7 @@ export default function ProkerV3Page() {
               <p className="text-xs sm:text-sm text-gray-700 font-medium mt-0.5">
                 {isUpm
                   ? curRole === "upms"
-                    ? "Menampilkan seluruh data matriks program kerja universitas / sekolah."
+                    ? `Menampilkan data program kerja program studi penugasan (${selectedUnitObj?.nama || "Program Studi Terpilih"}).`
                     : curRole === "upmf"
                       ? `Menampilkan data program kerja ${selectedUnitObj?.nama || "Fakultas"} dan seluruh program studi di bawahnya.`
                       : `Menampilkan data program kerja unit penugasan (${selectedUnitObj?.nama || "Unit Terpilih"}).`
@@ -4187,7 +4201,7 @@ export default function ProkerV3Page() {
                       {unitPaguSummary.is_melebihi_pagu ? (
                         <>
                           <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                          <span>Melebihi Pagu</span>
+                          <span>Diluar Budget</span>
                         </>
                       ) : (
                         <>

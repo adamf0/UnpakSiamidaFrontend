@@ -70,6 +70,21 @@ export default function ProkerV3DokumenPage() {
   const isVerifierRole = ["upml", "upmf", "upms", "evaluator", "anggaran", "keuangan"].includes(curRole);
   const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
 
+  const isVerifierRoleOrLevel = useMemo(() => {
+    const activeRole = String(
+      level || localStorage.getItem("activeLevel") || user?.level || ""
+    )
+      .toLowerCase()
+      .trim();
+
+    if (isAdmin || activeRole === "admin") return false;
+    if (activeRole === "upml") return false;
+    if (activeRole === "anggaran" || activeRole === "keuangan") return false;
+    if (activeRole === "user") return false;
+
+    return true;
+  }, [level, user, isAdmin]);
+
   // Cek apakah user memiliki fakultas_unit (langsung atau via penugasan extra_role)
   const hasFakultasUnit = Boolean(
     user?.fakultas_unit ||
@@ -932,7 +947,7 @@ export default function ProkerV3DokumenPage() {
                     {currentAktivitas.Anggaran !== undefined && currentAktivitas.Anggaran !== null && (
                       <span className="inline-flex items-center gap-1">
                         <span>Anggaran:</span>{" "}
-                        {isEvaluator ? (
+                        {isVerifierRoleOrLevel ? (
                           <b className="text-emerald-700 font-bold font-mono">***</b>
                         ) : isAnggaranRevised(currentAktivitas) ? (
                           <span className="inline-flex items-center gap-1 font-mono">

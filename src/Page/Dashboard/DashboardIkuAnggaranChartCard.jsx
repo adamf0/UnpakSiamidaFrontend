@@ -2127,11 +2127,7 @@ export default function DashboardIkuAnggaranChartCard({
                                 <span className="font-semibold text-gray-700">
                                   Pagu: {formatRupiah(chain.anggaran)}
                                 </span>
-                                {chain.anggaran < chain.anggaranPengajuan && (
-                                  <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
-                                    Diluar Budget
-                                  </span>
-                                )}
+
                               </span>
                             ) : (
                               <span>Pagu: {formatRupiah(chain.anggaran)}</span>
@@ -2433,11 +2429,7 @@ export default function DashboardIkuAnggaranChartCard({
                                                   </span>
                                                   Pagu:{" "}
                                                   {formatRupiah(keg.anggaran)}
-                                                  {keg.anggaran < keg.anggaranPengajuan && (
-                                                    <span className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
-                                                      Diluar Budget
-                                                    </span>
-                                                  )}
+
                                                 </span>
                                               ) : (
                                                 <span>
@@ -2597,11 +2589,7 @@ export default function DashboardIkuAnggaranChartCard({
                                                             {formatRupiah(
                                                               keg.anggaran,
                                                             )}
-                                                            {keg.anggaran < keg.anggaranPengajuan && (
-                                                              <span className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
-                                                                Diluar Budget
-                                                              </span>
-                                                            )}
+
                                                           </span>
                                                         ) : (
                                                           <span>
@@ -2763,11 +2751,7 @@ export default function DashboardIkuAnggaranChartCard({
                                                         {formatRupiah(
                                                           keg.anggaran,
                                                         )}
-                                                        {keg.anggaran < keg.anggaranPengajuan && (
-                                                          <span className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
-                                                            Diluar Budget
-                                                          </span>
-                                                        )}
+
                                                       </span>
                                                     ) : (
                                                       <span>
@@ -3376,12 +3360,7 @@ export default function DashboardIkuAnggaranChartCard({
                                   </span>
                                 )}
                                 {formatRupiah(k.anggaran)}
-                                {k.isAnggaranRevised &&
-                                  k.anggaran < k.anggaranPengajuan && (
-                                    <span className="block text-[9px] font-bold text-rose-600">
-                                      Diluar Budget
-                                    </span>
-                                  )}
+
                               </span>
                             </div>
                             <div className="flex justify-between text-emerald-700 font-semibold">
@@ -3722,16 +3701,7 @@ export default function DashboardIkuAnggaranChartCard({
                           </span>
                         )}
                         <span>{formatRupiah(selectedKegiatanDetail?.anggaran)}</span>
-                        {selectedKegiatanDetail?.isAnggaranRevised &&
-                          selectedKegiatanDetail.anggaran <
-                            selectedKegiatanDetail.anggaranPengajuan && (
-                            <span className="block mt-1">
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
-                                <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
-                                Diluar Budget
-                              </span>
-                            </span>
-                          )}
+
                       </div>
                     </div>
                     <div className="p-2.5 bg-slate-50 rounded-xl border border-gray-200">

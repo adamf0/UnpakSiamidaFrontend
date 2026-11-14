@@ -24,6 +24,11 @@ export function formatDate(dateString) {
   );
 }
 
+export const isValidUuid = (val) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(val || "").trim()
+  );
+
 export const formatTanggalIndo = (value) => {
   if (!value) return "-";
 
@@ -210,67 +215,56 @@ export function mappedText(text, user, positionYear, unitOptions = []) {
   if (low === "fakultas") {
     return "Fakultas";
   }
-  if (low === "upml") {
-    return "UPML (Unit Penjaminan Mutu Lembaga)";
-  }
-  if (low === "upmf") {
-    return "UPMF (Unit Penjaminan Mutu Fakultas)";
-  }
-  if (low === "upms") {
-    return "UPMS (Unit Penjaminan Mutu Sekolah)";
-  }
   if (low === "anggaran" || low === "keuangan") {
     return "Tim Anggaran";
   }
   if (low === "evaluator") {
     return "Evaluator";
   }
-  if (low === "user") {
+
+  // Helper untuk mengambil target unit yang didapat oleh suatu role (upml, upmf, upms, user)
+  const getRoleTargetUnit = (roleKey) => {
+    if (!user) return "";
     let targetName = "";
-    if (user) {
-      if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
-        const match =
-          user.extra_role.find(
-            (r) =>
-              String(r.role || "").toLowerCase() === "user" &&
-              (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear)) &&
-              (r.nama_fakultas_unit || r.NamaFakultasUnit)
-          ) ||
-          user.extra_role.find(
-            (r) =>
-              String(r.role || "").toLowerCase() === "user" &&
-              (r.nama_fakultas_unit || r.NamaFakultasUnit)
-          );
-        if (match?.nama_fakultas_unit || match?.NamaFakultasUnit) {
-          targetName = match.nama_fakultas_unit || match.NamaFakultasUnit;
-        }
-      }
 
-      if (!targetName) {
-        const rawFu = user?.fakultas_unit ?? user?.id_fakultas_unit ?? user?.FakultasUnit;
-        const fuStr = String(rawFu ?? "").trim();
-        const hasValidFu = fuStr !== "" && fuStr !== "0" && fuStr !== "null" && fuStr !== "undefined";
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      // Prioritaskan penugasan yang cocok dengan tahun aktif
+      const matchInYear = user.extra_role.find(
+        (r) =>
+          String(r.role || "").toLowerCase() === roleKey &&
+          (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear)) &&
+          (r.nama_fakultas_unit || r.NamaFakultasUnit)
+      );
 
-        if (hasValidFu) {
-          const rawFuName = user?.nama_fakultas_unit || user?.NamaFakultasUnit;
-          if (
-            rawFuName &&
-            String(rawFuName).trim() !== "" &&
-            String(rawFuName).trim() !== "null" &&
-            String(rawFuName).trim() !== "-"
-          ) {
-            targetName = rawFuName;
-          } else if (Array.isArray(unitOptions) && unitOptions.length > 0) {
-            const found = unitOptions.find((u) => {
-              const uid = String(u.id ?? u.Id ?? "").trim();
-              const uuid = String(u.uuid ?? u.UUID ?? "").trim().toLowerCase();
-              const uName = String(u.Nama ?? u.nama ?? u.nama_fak_prod_unit ?? "").trim().toLowerCase();
-              return (
-                (uid !== "" && uid === fuStr) ||
-                (uuid !== "" && uuid === fuStr.toLowerCase()) ||
-                (uName !== "" && uName === fuStr.toLowerCase())
-              );
-            });
+      if (matchInYear?.nama_fakultas_unit || matchInYear?.NamaFakultasUnit) {
+        targetName = matchInYear.nama_fakultas_unit || matchInYear.NamaFakultasUnit;
+      } else {
+        const matchAny = user.extra_role.find(
+          (r) =>
+            String(r.role || "").toLowerCase() === roleKey &&
+            (r.nama_fakultas_unit || r.NamaFakultasUnit)
+        );
+        if (matchAny?.nama_fakultas_unit || matchAny?.NamaFakultasUnit) {
+          targetName = matchAny.nama_fakultas_unit || matchAny.NamaFakultasUnit;
+        } else {
+          // Cek jika hanya ada ID fakultas unit
+          const idMatch =
+            user.extra_role.find(
+              (r) =>
+                String(r.role || "").toLowerCase() === roleKey &&
+                (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear)) &&
+                (r.id_fakultas_unit || r.IdFakultasUnit)
+            ) ||
+            user.extra_role.find(
+              (r) =>
+                String(r.role || "").toLowerCase() === roleKey &&
+                (r.id_fakultas_unit || r.IdFakultasUnit)
+            );
+          const fuId = idMatch?.id_fakultas_unit || idMatch?.IdFakultasUnit;
+          if (fuId && Array.isArray(unitOptions) && unitOptions.length > 0) {
+            const found = unitOptions.find(
+              (u) => String(u.id ?? u.Id) === String(fuId)
+            );
             if (found) {
               targetName = renderLabelFakultasUnit(found);
             }
@@ -278,7 +272,57 @@ export function mappedText(text, user, positionYear, unitOptions = []) {
         }
       }
     }
-    return targetName ? `User (${targetName})` : "User";
+
+    if (!targetName && roleKey === "user") {
+      const rawFu = user?.fakultas_unit ?? user?.id_fakultas_unit ?? user?.FakultasUnit;
+      const fuStr = String(rawFu ?? "").trim();
+      const hasValidFu = fuStr !== "" && fuStr !== "0" && fuStr !== "null" && fuStr !== "undefined";
+
+      if (hasValidFu) {
+        const rawFuName = user?.nama_fakultas_unit || user?.NamaFakultasUnit;
+        if (
+          rawFuName &&
+          String(rawFuName).trim() !== "" &&
+          String(rawFuName).trim() !== "null" &&
+          String(rawFuName).trim() !== "-"
+        ) {
+          targetName = rawFuName;
+        } else if (Array.isArray(unitOptions) && unitOptions.length > 0) {
+          const found = unitOptions.find((u) => {
+            const uid = String(u.id ?? u.Id ?? "").trim();
+            const uuid = String(u.uuid ?? u.UUID ?? "").trim().toLowerCase();
+            const uName = String(u.Nama ?? u.nama ?? u.nama_fak_prod_unit ?? "").trim().toLowerCase();
+            return (
+              (uid !== "" && uid === fuStr) ||
+              (uuid !== "" && uuid === fuStr.toLowerCase()) ||
+              (uName !== "" && uName === fuStr.toLowerCase())
+            );
+          });
+          if (found) {
+            targetName = renderLabelFakultasUnit(found);
+          }
+        }
+      }
+    }
+
+    return targetName;
+  };
+
+  if (low === "upml") {
+    const target = getRoleTargetUnit("upml");
+    return target ? `UPML (${target})` : "UPML";
+  }
+  if (low === "upmf") {
+    const target = getRoleTargetUnit("upmf");
+    return target ? `UPMF (${target})` : "UPMF";
+  }
+  if (low === "upms") {
+    const target = getRoleTargetUnit("upms");
+    return target ? `UPMS (${target})` : "UPMS";
+  }
+  if (low === "user") {
+    const target = getRoleTargetUnit("user");
+    return target ? `User (${target})` : "User";
   }
   return text ? text.toUpperCase() : "User";
 }
