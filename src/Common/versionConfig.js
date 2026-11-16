@@ -82,6 +82,8 @@ export const V3_FEATURE_PATHS = [
   "/proker_v3",
   "/proker",
   "/jadwal_proker",
+  "/mata_programv3",
+  "/mata_programv2",
   "/users",
   "/account_user",
 ];

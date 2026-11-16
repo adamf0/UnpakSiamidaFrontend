@@ -50,6 +50,10 @@ export default function ProkerV3FormModal({
   // Form Fields - Step 1: Identitas Unit & Program Kerja
   const [noProker, setNoProker] = useState(1);
   const [namaProgram, setNamaProgram] = useState("");
+  const [idMataProgram, setIdMataProgram] = useState(null);
+  const [selectedMataProgram, setSelectedMataProgram] = useState(null);
+  const [mataProgramOptions, setMataProgramOptions] = useState([]);
+  const [loadingMataProgram, setLoadingMataProgram] = useState(false);
   const [idFakultasUnit, setIdFakultasUnit] = useState(null);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [tahun, setTahun] = useState("2026");
@@ -98,6 +102,57 @@ export default function ProkerV3FormModal({
     }));
   };
 
+  // Fetch Mata Program V2 options for selected unit and year
+  const fetchMataProgramOptions = async () => {
+    const curYear = selectedTahun?.tahun || selectedTahun?.Tahun || tahun || "2027";
+    const curUnit = selectedUnit?.id || idFakultasUnit;
+    setLoadingMataProgram(true);
+    try {
+      const params = new URLSearchParams();
+      params.append("mode", "all");
+      if (curYear) params.append("tahun", String(curYear));
+      if (curUnit) params.append("id_fakultas_unit", String(curUnit));
+
+      const res = await apiClient.get(`/mataprogramv2s?${params.toString()}`);
+      const raw = res?.data ?? res ?? [];
+      const list = Array.isArray(raw) ? raw : (raw.data || []);
+      const mapped = list.map((item) => ({
+        ...item,
+        id: item.Id || item.id,
+        rawId: item.Id || item.id,
+        nama: item.MataProgram || item.mata_program || item.nama,
+        label: item.MataProgram || item.mata_program || item.nama,
+      }));
+      setMataProgramOptions(mapped);
+
+      const currentProgName = initialData?.NamaProgram || initialData?.MataProgram || namaProgram;
+      const currentProgId = initialData?.IdMataProgram || initialData?.id_mata_program || idMataProgram;
+
+      if (currentProgId || currentProgName) {
+        const found = mapped.find(
+          (m) =>
+            (currentProgId && String(m.id) === String(currentProgId)) ||
+            (currentProgName && m.nama?.toLowerCase() === currentProgName?.toLowerCase())
+        );
+        if (found) {
+          setSelectedMataProgram(found);
+          setIdMataProgram(found.id);
+          setNamaProgram(found.nama);
+        }
+      }
+    } catch (err) {
+      console.error("Gagal memuat mata program:", err);
+    } finally {
+      setLoadingMataProgram(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      fetchMataProgramOptions();
+    }
+  }, [open, selectedTahun, selectedUnit]);
+
   // Reset or Populate form on open
   useEffect(() => {
     if (!open) return;
@@ -105,7 +160,19 @@ export default function ProkerV3FormModal({
 
     if (mode === "edit" && initialData) {
       setNoProker(initialData.NoProker || 1);
-      setNamaProgram(initialData.NamaProgram || "");
+      const initialProgName = initialData.NamaProgram || initialData.MataProgram || initialData.nama_program || "";
+      setNamaProgram(initialProgName);
+      const initialProgId = initialData.IdMataProgram || initialData.id_mata_program || null;
+      setIdMataProgram(initialProgId);
+      if (initialProgName) {
+        setSelectedMataProgram({
+          id: initialProgId,
+          nama: initialProgName,
+          label: initialProgName,
+        });
+      } else {
+        setSelectedMataProgram(null);
+      }
       setIdFakultasUnit(initialData.IdFakultasUnit || null);
       setTahun(initialData.Tahun || "2026");
       setPic(initialData.PIC || "");
@@ -184,6 +251,8 @@ export default function ProkerV3FormModal({
       // Create mode
       setNoProker(1);
       setNamaProgram("");
+      setIdMataProgram(null);
+      setSelectedMataProgram(null);
       const resolvedYear = defaultYear && defaultYear !== "all" ? String(defaultYear) : "2026";
       setTahun(resolvedYear);
       setPic(user?.nama || user?.name || "");
@@ -486,7 +555,9 @@ export default function ProkerV3FormModal({
       fd.append("nama_program", namaProgram.trim());
       if (currentUnitId) fd.append("id_fakultas_unit", String(currentUnitId));
       if (currentUnitUuid) fd.append("fakultas_unit", currentUnitUuid);
-      if (initialData?.IdMataProgram) fd.append("id_mata_program", String(initialData.IdMataProgram));
+      if (idMataProgram || initialData?.IdMataProgram) {
+        fd.append("id_mata_program", String(idMataProgram || initialData?.IdMataProgram));
+      }
       fd.append("tahun", String(currentTahun));
       fd.append("pic", pic.trim());
       fd.append("beban_yayasan", bebanYayasan ? "1" : "0");
@@ -741,16 +812,25 @@ export default function ProkerV3FormModal({
 
                         {/* Nama Program Kerja */}
                         <div className="sm:col-span-12">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
-                            Nama Program Kerja <span className="text-rose-500">*</span>
-                          </label>
-                          <textarea
-                            rows={3}
+                          <SearchSelect
+                            label="Nama Program Kerja"
                             required
-                            placeholder="Contoh: Maintenance Infrastruktur Server & Network / Pengembangan Sistem Baru"
-                            value={namaProgram}
-                            onChange={(e) => setNamaProgram(e.target.value)}
-                            className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 leading-relaxed"
+                            options={mataProgramOptions}
+                            value={selectedMataProgram}
+                            loading={loadingMataProgram}
+                            onRetry={fetchMataProgramOptions}
+                            placeholder={
+                              loadingMataProgram
+                                ? "Memuat daftar program kerja..."
+                                : mataProgramOptions.length === 0
+                                ? "Belum ada master program kerja untuk unit & tahun ini"
+                                : "Pilih atau cari Program Kerja"
+                            }
+                            onChange={(val) => {
+                              setSelectedMataProgram(val);
+                              setNamaProgram(val?.nama || val?.mata_program || "");
+                              setIdMataProgram(val?.id || val?.Id || val?.rawId || null);
+                            }}
                           />
                         </div>
 

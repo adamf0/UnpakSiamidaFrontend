@@ -99,14 +99,20 @@ const MataProgramPage = () => {
     "anggaran",
     "keuangan",
     "evaluator",
-    "admin",
-    "auditee",
+    // "user",
+    "upml",
+    "upms",
+    "upmf",
     "auditor1",
     "auditor2",
   ];
-  const canAdd = hasTarget && !excludedAddRoles.includes(curRole);
+  const canAdd = isAdmin || (hasTarget && !excludedAddRoles.includes(curRole));
+  // console.log(`canAdd = ${isAdmin} || (${hasTarget} && ${!excludedAddRoles.includes(curRole)})`)
+
   const canManage = canAdd || isAdmin;
-  const canShowActions = useFeatureActionVisibility();
+  const featureActionVisibility = useFeatureActionVisibility();
+  const canShowActions = isAdmin || featureActionVisibility;
+  // console.log(`canShowActions = ${isAdmin} || ${featureActionVisibility}`)
 
   const isUnrestrictedData =
     curRole === "anggaran" ||
@@ -158,12 +164,13 @@ const MataProgramPage = () => {
             ref={tableRef}
             endpoint={endpoint}
             mode="paging"
+            forceShowActions={isAdmin || canShowActions}
             token={getValidToken()}
             onError={(err) => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              canShowActions && canAdd ? (
+              isAdmin || (canShowActions && canAdd) ? (
                 <button
                   type="button"
                   className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"

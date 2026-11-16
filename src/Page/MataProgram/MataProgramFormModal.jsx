@@ -162,6 +162,10 @@ export default function MataProgramFormModal({
   }, [mode, data, open, tahunOptions, unitOptions, defaultYear, defaultUnit, reset]);
 
   const onSubmit = async (form) => {
+    if (isAdmin && !form.fakultas_unit && !defaultUnit) {
+      addToast("error", "Fakultas / Prodi / Unit wajib dipilih");
+      return;
+    }
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -169,6 +173,8 @@ export default function MataProgramFormModal({
       fd.append("mataprogram", form.mataprogram ?? "");
 
       const resolvedUnitVal =
+        form.fakultas_unit?.rawId ??
+        form.fakultas_unit?.id_numeric ??
         form.fakultas_unit?.id ??
         form.fakultas_unit?.UUID ??
         (defaultUnit ? String(defaultUnit) : "");
@@ -287,12 +293,14 @@ export default function MataProgramFormModal({
                 {isAdmin ? (
                   <SearchSelect
                     label="Fakultas / Prodi / Unit"
+                    required
                     options={unitOptions}
                     placeholder="Pilih target fakultas / prodi / unit"
                     loading={loadingUnit}
                     loadError={errorUnit}
                     onRetry={fetchUnitOptions}
                     value={watch("fakultas_unit")}
+                    error={errors.fakultas_unit?.message}
                     onChange={(item) =>
                       setValue("fakultas_unit", item, {
                         shouldValidate: true,

@@ -27,6 +27,8 @@ import AuditHistoryPage from "./Page/Audit/AuditHistoryPage";
 import BeritaAcaraPage from "./Page/BeritaAcara/BeritaAcaraPage";
 import MasterTahunPage from "./Page/MasterTahun/MasterTahunPage";
 import MataProgramPage from "./Page/MataProgram/MataProgramPage";
+import MataProgramV2Page from "./Page/MataProgramV2/MataProgramV2Page";
+import MataProgramV2FormPage from "./Page/MataProgramV2/MataProgramV2FormPage";
 import AktivitasPage from "./Page/Aktivitas/AktivitasPage";
 import PelaporanPelaksanaanPage from "./Page/PelaporanPelaksanaan/PelaporanPelaksanaanPage";
 import PelaporanDokumenPage from "./Page/PelaporanDokumen/PelaporanDokumenPage";
@@ -72,6 +74,10 @@ export default function App() {
                       <Route path="/master_tahun" element={<MasterTahunPage />} />
                       <Route path="/tahun_proker" element={<MasterTahunPage />} />
                       <Route path="/mata_program" element={<MataProgramPage />} />
+                      <Route path="/mata_programv3" element={<MataProgramV2Page />} />
+                      <Route path="/mata_programv3/new" element={<MataProgramV2FormPage />} />
+                      <Route path="/mata_programv2" element={<MataProgramV2Page />} />
+                      <Route path="/mata_programv2/new" element={<MataProgramV2FormPage />} />
                       <Route path="/aktivitas" element={<AktivitasPage />} />
                       <Route path="/aktivitas_proker" element={<AktivitasPage />} />
                       <Route path="/pelaporan_pelaksanaan" element={<PelaporanPelaksanaanPage />} />

@@ -402,6 +402,17 @@ const RemoteTable = forwardRef(function RemoteTable(
     return () => clearTimeout(timer);
   }, [draftFilters]);
 
+  // Debounce global search input so typing auto-triggers search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmed = searchInput.trim();
+      setSearch(prev => (prev === trimmed ? prev : trimmed));
+      setPage(p => (p === 1 ? p : 1));
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
 
   /* =========================
      RENDER
@@ -412,25 +423,44 @@ const RemoteTable = forwardRef(function RemoteTable(
       <div className="flex justify-start gap-2 relative mb-4">
         {
         disableGlobalSearch &&
-          <div className="flex-1">
+          <div className="flex-1 relative">
             <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              onBlur={(e) => {
-                  setSearch(searchInput);
-                  setPage(1);
+              onBlur={() => {
+                const trimmed = searchInput.trim();
+                setSearch(prev => (prev === trimmed ? prev : trimmed));
+                setPage(1);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  setSearch(searchInput);
+                  const trimmed = searchInput.trim();
+                  setSearch(prev => (prev === trimmed ? prev : trimmed));
                   setPage(1);
                   e.currentTarget.blur();
                 }
               }}
               placeholder="Cari data..."
-              className="w-full pl-10 pr-3 py-2 border rounded-lg text-sm"
+              className="w-full pl-10 pr-9 py-2 border rounded-lg text-sm"
             />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearch("");
+                  setPage(1);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                title="Hapus pencarian"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            )}
           </div>
         }
         {renderAddAction}

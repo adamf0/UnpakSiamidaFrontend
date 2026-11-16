@@ -48,6 +48,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
       : selectedYear <= 2023
       ? "v1"
       : "v2";
+  const mataProgramPath = effectiveVersion === "v3" ? "/mata_programv3" : "/mata_program";
   const currentVerConfig = getVersionConfig(effectiveVersion);
   const rawFu =
     user?.fakultas_unit ??
@@ -177,7 +178,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             },
             {
               name: "Mata Program",
-              path: "/mata_program",
+              path: mataProgramPath,
               icon: <FolderKanban size={18} strokeWidth={1.5} />,
             },
             {
@@ -255,7 +256,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
             },
             {
               name: "Mata Program",
-              path: "/mata_program",
+              path: mataProgramPath,
               icon: <FolderKanban size={18} strokeWidth={1.5} />,
             },
             {
@@ -373,7 +374,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                   },
                   {
                     name: "Mata Program",
-                    path: "/mata_program",
+                    path: mataProgramPath,
                     icon: <FolderKanban size={18} strokeWidth={1.5} />,
                   },
                   {
@@ -445,7 +446,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                   },
                   {
                     name: "Mata Program",
-                    path: "/mata_program",
+                    path: mataProgramPath,
                     icon: <FolderKanban size={18} strokeWidth={1.5} />,
                   },
                   {
