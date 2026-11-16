@@ -171,8 +171,13 @@ export const ContentProvider = ({ children }) => {
         ? [auditRolesAllYears[0]]
         : [];
 
-    // Gabungkan level dasar pengguna ("user") dengan role penugasan ABAC (prioritaskan penugasan)
-    const allRoles = Array.from(new Set([...effectiveRoles, ...matchingRoles, userBaseLevel])).filter(Boolean);
+    // Jika user memiliki penugasan role spesifik untuk tahun/konteks ini (effectiveRoles),
+    // gunakan HANYA role yang ditugaskan (termasuk "user" jika memang ditugaskan sebagai user).
+    // Jangan menambahkan "user" secara otomatis jika tidak didaftarkan dalam penugasan ABAC.
+    const allRoles =
+      effectiveRoles.length > 0
+        ? Array.from(new Set(effectiveRoles)).filter(Boolean)
+        : [userBaseLevel];
 
     setListLevel(allRoles);
 

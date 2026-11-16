@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Popover } from "@headlessui/react";
 import { useNavigate } from "react-router-dom";
 import { Bell, User, Menu, Calendar, Layers, ChevronDown, Check, Settings as SettingsIcon } from "lucide-react";
-import { mappedText } from "@/Common/Utils";
+import { mappedText, getRoleTargetUnits, getRoleBaseName } from "@/Common/Utils";
 import { useSidebar } from "@/Providers/SidebarProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
@@ -277,30 +277,63 @@ const Navbar = ({ renderChangeLevelModal }) => {
                   <span className="hidden lg:inline text-sm">{user?.name ?? "-"}</span>
                 </Popover.Button>
 
-                <Popover.Panel className="z-50 absolute right-0 mt-2 w-64 bg-[#f6f6f6] border rounded-md shadow-lg p-4 text-sm">
-                  <div className="border-b pb-2 mb-2">
-                    <div className="text-sm font-medium text-gray-900">{user?.name ?? "-"}</div>
-                    <div className="flex justify-between items-center gap-2 text-xs text-gray-600 mt-0.5">
-                      <span
-                        className="font-semibold text-purple-900 truncate"
-                        title={mappedText(level, user, positionYear, unitOptions)}
-                      >
-                        {mappedText(level, user, positionYear, unitOptions)}
-                      </span>
-                      {listLevel.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            close();
-                            setOpenChangeLevel(true);
-                          }}
-                          className="text-blue-700 hover:underline shrink-0 text-xs cursor-pointer"
-                        >
-                          Change Level
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                <Popover.Panel className="z-50 absolute right-0 mt-2 w-80 sm:w-88 bg-white border border-gray-200 rounded-xl shadow-xl p-4 text-sm">
+                  {(() => {
+                    const navRoleUnits = getRoleTargetUnits(level, user, positionYear, unitOptions);
+                    const navRoleText = mappedText(level, user, positionYear, unitOptions);
+                    const navFullTitle = navRoleUnits.length > 0
+                      ? `${getRoleBaseName(level)} (${navRoleUnits.join(", ")})`
+                      : navRoleText;
+
+                    return (
+                      <div className="border-b border-gray-150 pb-3 mb-2.5">
+                        <div className="text-sm font-bold text-gray-900">{user?.name ?? "-"}</div>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <span
+                            className="font-semibold text-purple-900 text-xs truncate flex-1 min-w-0"
+                            title={navFullTitle}
+                          >
+                            {navRoleText}
+                          </span>
+                          {listLevel.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                close();
+                                setOpenChangeLevel(true);
+                              }}
+                              className="text-purple-700 hover:text-purple-900 hover:underline shrink-0 text-xs font-semibold cursor-pointer"
+                            >
+                              Change Level
+                            </button>
+                          )}
+                        </div>
+
+                        {navRoleUnits.length > 1 && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-gray-100">
+                            <span className="text-[10px] text-gray-500 font-medium">Unit:</span>
+                            {navRoleUnits.slice(0, 2).map((u) => (
+                              <span
+                                key={u}
+                                className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-800 border border-purple-200/80 truncate max-w-[200px]"
+                                title={u}
+                              >
+                                {u}
+                              </span>
+                            ))}
+                            {navRoleUnits.length > 2 && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200"
+                                title={navRoleUnits.slice(2).join(", ")}
+                              >
+                                +{navRoleUnits.length - 2} lainnya
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* MENU */}
                   <div className="py-1 text-sm space-y-1">

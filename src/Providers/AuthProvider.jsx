@@ -124,7 +124,10 @@ export function AuthProvider({ children }) {
             const fuNama = item.NamaFakultasUnit || item.nama_fakultas_unit;
             if (tahun && role) {
               const already = extraRoles.some(
-                (r) => String(r.tahun ?? r.Tahun) === tahun && String(r.role ?? r.Role).toLowerCase() === role
+                (r) =>
+                  String(r.tahun ?? r.Tahun) === tahun &&
+                  String(r.role ?? r.Role).toLowerCase() === role &&
+                  String(r.id_fakultas_unit ?? r.IdFakultasUnit ?? "") === String(fuId ?? "")
               );
               if (!already) {
                 extraRoles.push({
