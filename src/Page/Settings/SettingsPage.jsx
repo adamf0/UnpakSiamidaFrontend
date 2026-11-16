@@ -22,6 +22,13 @@ import {
   Check,
   Filter,
   Layers,
+  Cpu,
+  Bot,
+  Sparkles,
+  ShieldAlert,
+  Database,
+  Key,
+  Play,
 } from "lucide-react";
 import Navbar from "@/Components/Navbar";
 import PageHeader from "@/Components/PageHeader";
@@ -450,6 +457,139 @@ export default function SettingsPage() {
 
   const handleClearSelectedUnits = () => {
     setSelectedTargetUnitIds([]);
+  };
+
+  // =======================
+  // STATE & LOGIC: AUDIT & GUARDIAN ANOMALI (ADMIN)
+  // =======================
+  const [guardianConfig, setGuardianConfig] = useState({
+    mode: "rule_engine",
+    ai_provider: "gemini",
+    ai_model: "gemini-2.5-flash",
+    ai_api_key: "",
+    is_active: true,
+    check_fsm: true,
+    check_budget_math: true,
+    check_hash_chain: true,
+    check_unregistered_mutation: true,
+  });
+  const [maskedApiKey, setMaskedApiKey] = useState("");
+  const [guardianStats, setGuardianStats] = useState({
+    total_audit_logs: 0,
+    active_anomalies: 0,
+    total_checkpoints: 0,
+    hash_chain_valid: true,
+    broken_sequence_no: 0,
+  });
+  const [loadingGuardian, setLoadingGuardian] = useState(false);
+  const [savingGuardian, setSavingGuardian] = useState(false);
+  const [scanningGuardian, setScanningGuardian] = useState(false);
+  const [creatingBaseline, setCreatingBaseline] = useState(false);
+  const [guardianFeedback, setGuardianFeedback] = useState(null);
+  const [anomaliesList, setAnomaliesList] = useState([]);
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [reconcilingId, setReconcilingId] = useState(null);
+
+  const fetchGuardianSettings = useCallback(async () => {
+    if (!isAdmin) return;
+    setLoadingGuardian(true);
+    try {
+      const res = await apiClient.get("/settings/audit-guardian");
+      const data = res?.data || {};
+      if (data.config) {
+        setGuardianConfig(data.config);
+      }
+      if (data.masked_api_key) {
+        setMaskedApiKey(data.masked_api_key);
+      }
+      if (data.stats) {
+        setGuardianStats(data.stats);
+      }
+      const anomRes = await apiClient.get("/audit/anomalies?status=DETECTED");
+      setAnomaliesList(anomRes?.data?.data || []);
+    } catch (err) {
+      console.error("Gagal memuat pengaturan audit guardian:", err);
+    } finally {
+      setLoadingGuardian(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    fetchGuardianSettings();
+  }, [fetchGuardianSettings]);
+
+  const handleSaveGuardian = async (e) => {
+    e.preventDefault();
+    setSavingGuardian(true);
+    setGuardianFeedback(null);
+    try {
+      const res = await apiClient.put("/settings/audit-guardian", guardianConfig);
+      const okMsg = res?.data?.message || "Pengaturan Audit & Guardian berhasil disimpan";
+      setGuardianFeedback({ type: "success", text: okMsg });
+      addToast("success", okMsg);
+      await fetchGuardianSettings();
+    } catch (err) {
+      const parsed = parseApiError(err, "Gagal menyimpan pengaturan audit");
+      setGuardianFeedback({ type: "error", text: parsed.summary });
+      addToast("error", parsed.summary);
+    } finally {
+      setSavingGuardian(false);
+    }
+  };
+
+  const handleTriggerScan = async () => {
+    setScanningGuardian(true);
+    setGuardianFeedback(null);
+    try {
+      const res = await apiClient.post("/audit/scan");
+      const data = res?.data || {};
+      const count = data.total || 0;
+      const okMsg = `Audit scan [${data.mode_used}] selesai. ${
+        count > 0 ? `Ditemukan ${count} temuan anomali.` : "Semua data berstatus valid & sesuai invarian."
+      }`;
+      setGuardianFeedback({ type: count > 0 ? "error" : "success", text: okMsg });
+      addToast(count > 0 ? "warning" : "success", okMsg);
+      await fetchGuardianSettings();
+    } catch (err) {
+      const parsed = parseApiError(err, "Gagal menjalankan scan audit anomali");
+      setGuardianFeedback({ type: "error", text: parsed.summary });
+      addToast("error", parsed.summary);
+    } finally {
+      setScanningGuardian(false);
+    }
+  };
+
+  const handleCreateBaseline = async () => {
+    setCreatingBaseline(true);
+    setGuardianFeedback(null);
+    try {
+      const res = await apiClient.post("/audit/baseline");
+      const okMsg = res?.data?.message || "Checkpoint baseline data aktif berhasil dibuat";
+      setGuardianFeedback({ type: "success", text: okMsg });
+      addToast("success", okMsg);
+      await fetchGuardianSettings();
+    } catch (err) {
+      const parsed = parseApiError(err, "Gagal membuat checkpoint baseline");
+      setGuardianFeedback({ type: "error", text: parsed.summary });
+      addToast("error", parsed.summary);
+    } finally {
+      setCreatingBaseline(false);
+    }
+  };
+
+  const handleReconcileAnomaly = async (id) => {
+    setReconcilingId(id);
+    try {
+      await apiClient.post(`/audit/anomalies/${id}/reconcile`, {
+        notes: "Diverifikasi dan diselesaikan oleh Admin melalui panel pengaturan",
+      });
+      addToast("success", "Anomali berhasil diselesaikan");
+      await fetchGuardianSettings();
+    } catch (err) {
+      addToast("error", "Gagal menyelesaikan anomali");
+    } finally {
+      setReconcilingId(null);
+    }
   };
 
   const inputBaseClass = (hasErr) =>
@@ -1523,6 +1663,391 @@ export default function SettingsPage() {
                       )}
                     </>
                   )}
+                </div>
+              </section>
+            )}
+
+            {/* ================= SECTION: AUDIT & GUARDIAN ANOMALI (ADMIN ONLY) ================= */}
+            {isAdmin && (
+              <section
+                aria-labelledby="heading-audit-guardian"
+                className="lg:col-span-12 bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden"
+              >
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center shrink-0">
+                      <Cpu size={18} strokeWidth={1.8} />
+                    </div>
+                    <div>
+                      <h2
+                        id="heading-audit-guardian"
+                        className="text-base font-bold text-gray-900"
+                      >
+                        Sistem Audit & Guardian Anomali
+                      </h2>
+                      <p className="text-xs text-gray-600">
+                        Pilih mode audit: Rule Engine Deterministik (Tanpa AI) atau AI Guardian (Gemini / Claude)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={loadingGuardian || scanningGuardian}
+                      onClick={handleTriggerScan}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                    >
+                      {scanningGuardian ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" />
+                          <span>Scanning...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={13} />
+                          <span>Jalankan Scan Sekarang</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={loadingGuardian || creatingBaseline}
+                      onClick={handleCreateBaseline}
+                      title="Ambil snapshot kondisi data aktif saat ini sebagai baseline valid"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs font-semibold shadow-2xs transition cursor-pointer disabled:opacity-50"
+                    >
+                      {creatingBaseline ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" />
+                          <span>Membuat...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Database size={13} />
+                          <span>Buat Baseline (Cold-Start)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  {/* Feedback Banner */}
+                  {guardianFeedback && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className={`rounded-lg px-3.5 py-2.5 text-xs border flex items-start gap-2 ${
+                        guardianFeedback.type === "success"
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                          : "bg-red-50 border-red-200 text-red-800"
+                      }`}
+                    >
+                      {guardianFeedback.type === "success" ? (
+                        <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                      )}
+                      <span>{guardianFeedback.text}</span>
+                    </div>
+                  )}
+
+                  {/* 4 Health Stats Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="p-3.5 bg-gray-50/70 border border-gray-200/80 rounded-xl space-y-1">
+                      <span className="text-[11px] text-gray-500 font-medium">Catatan Audit (Ledger)</span>
+                      <p className="text-xl font-bold text-gray-900">{guardianStats.total_audit_logs}</p>
+                      <span className="text-[10px] text-gray-400">Pre-rendered diff</span>
+                    </div>
+
+                    <div className="p-3.5 bg-gray-50/70 border border-gray-200/80 rounded-xl space-y-1">
+                      <span className="text-[11px] text-gray-500 font-medium">Rantai Kriptografi</span>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <span className={`w-2 h-2 rounded-full ${guardianStats.hash_chain_valid ? "bg-emerald-500" : "bg-red-500"}`} />
+                        <span className={`font-bold text-sm ${guardianStats.hash_chain_valid ? "text-emerald-700" : "text-red-700"}`}>
+                          {guardianStats.hash_chain_valid ? "SHA-256 Valid" : "Rantai Patah!"}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-gray-400">Anti-tamper database</span>
+                    </div>
+
+                    <div className="p-3.5 bg-gray-50/70 border border-gray-200/80 rounded-xl space-y-1">
+                      <span className="text-[11px] text-gray-500 font-medium">Checkpoint Baseline</span>
+                      <p className="text-xl font-bold text-gray-900">{guardianStats.total_checkpoints}</p>
+                      <span className="text-[10px] text-gray-400">Jangkar PITR & cold-start</span>
+                    </div>
+
+                    <div className="p-3.5 bg-gray-50/70 border border-gray-200/80 rounded-xl space-y-1">
+                      <span className="text-[11px] text-gray-500 font-medium">Anomali Terdeteksi</span>
+                      <div className="flex items-center gap-2">
+                        <p className={`text-xl font-bold ${guardianStats.active_anomalies > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                          {guardianStats.active_anomalies}
+                        </p>
+                        {guardianStats.active_anomalies > 0 && (
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-red-100 text-red-700 animate-pulse">
+                            Perlu Perhatian
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-400">Invarian pelanggaran</span>
+                    </div>
+                  </div>
+
+                  {/* Mode Selector Form */}
+                  <form onSubmit={handleSaveGuardian} noValidate className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-800 mb-2">
+                        Pilih Mode Deteksi Anomali
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* Option 1: Rule Engine */}
+                        <div
+                          onClick={() => setGuardianConfig((prev) => ({ ...prev, mode: "rule_engine" }))}
+                          className={`p-4 rounded-xl border transition cursor-pointer select-none space-y-2 ${
+                            guardianConfig.mode === "rule_engine"
+                              ? "border-purple-600 bg-purple-50/50 ring-2 ring-purple-600/20"
+                              : "border-gray-200 hover:border-gray-300 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1.5 font-bold text-xs text-gray-900">
+                              <Shield size={14} className="text-purple-700" />
+                              <span>Rule Engine (Tanpa AI)</span>
+                            </span>
+                            <input
+                              type="radio"
+                              name="guardian_mode"
+                              checked={guardianConfig.mode === "rule_engine"}
+                              onChange={() => {}}
+                              className="text-purple-600 cursor-pointer"
+                            />
+                          </div>
+                          <p className="text-[11px] text-gray-600 leading-relaxed">
+                            Deterministik 100%, cepat O(1), validasi rantai hash SHA-256, FSM workflow state, dan kesesuaian anggaran RAB tanpa token API.
+                          </p>
+                        </div>
+
+                        {/* Option 2: AI Guardian */}
+                        <div
+                          onClick={() => setGuardianConfig((prev) => ({ ...prev, mode: "ai_guardian" }))}
+                          className={`p-4 rounded-xl border transition cursor-pointer select-none space-y-2 ${
+                            guardianConfig.mode === "ai_guardian"
+                              ? "border-purple-600 bg-purple-50/50 ring-2 ring-purple-600/20"
+                              : "border-gray-200 hover:border-gray-300 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1.5 font-bold text-xs text-gray-900">
+                              <Bot size={14} className="text-purple-700" />
+                              <span>AI Guardian (Pakai AI)</span>
+                            </span>
+                            <input
+                              type="radio"
+                              name="guardian_mode"
+                              checked={guardianConfig.mode === "ai_guardian"}
+                              onChange={() => {}}
+                              className="text-purple-600 cursor-pointer"
+                            />
+                          </div>
+                          <p className="text-[11px] text-gray-600 leading-relaxed">
+                            Auditor independen cerdas berbasis LLM (Gemini 2.5 Flash / Claude Haiku) dengan izin <strong>Read-Only</strong> untuk analisis semantik dan risiko narasi.
+                          </p>
+                        </div>
+
+                        {/* Option 3: Hybrid */}
+                        <div
+                          onClick={() => setGuardianConfig((prev) => ({ ...prev, mode: "hybrid" }))}
+                          className={`p-4 rounded-xl border transition cursor-pointer select-none space-y-2 ${
+                            guardianConfig.mode === "hybrid"
+                              ? "border-purple-600 bg-purple-50/50 ring-2 ring-purple-600/20"
+                              : "border-gray-200 hover:border-gray-300 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1.5 font-bold text-xs text-gray-900">
+                              <Sparkles size={14} className="text-purple-700" />
+                              <span>Hybrid (Rekomendasi)</span>
+                            </span>
+                            <input
+                              type="radio"
+                              name="guardian_mode"
+                              checked={guardianConfig.mode === "hybrid"}
+                              onChange={() => {}}
+                              className="text-purple-600 cursor-pointer"
+                            />
+                          </div>
+                          <p className="text-[11px] text-gray-600 leading-relaxed">
+                            Penyaringan ganda: Rule Engine memfilter pelanggaran teknis secara instan, dan AI Guardian menyintesis narasi audit risiko SPI.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* AI Provider & API Key Form (Tampil jika AI Guardian atau Hybrid aktif) */}
+                    {(guardianConfig.mode === "ai_guardian" || guardianConfig.mode === "hybrid") && (
+                      <div className="p-4 bg-gray-50/70 border border-gray-200 rounded-xl space-y-3 text-xs">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-gray-900 flex items-center gap-1.5">
+                            <Key size={14} className="text-purple-700" />
+                            <span>Konfigurasi Provider AI (Read-Only Guardian)</span>
+                          </h4>
+                          <span className="text-[10px] text-gray-500">
+                            Hanya membaca data audit (Zero Mutation Privilege)
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Provider AI
+                            </label>
+                            <select
+                              value={guardianConfig.ai_provider}
+                              onChange={(e) =>
+                                setGuardianConfig((prev) => ({
+                                  ...prev,
+                                  ai_provider: e.target.value,
+                                  ai_model: e.target.value === "gemini" ? "gemini-2.5-flash" : "claude-3-5-haiku",
+                                }))
+                              }
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:border-purple-600"
+                            >
+                              <option value="gemini">Google Gemini</option>
+                              <option value="claude">Anthropic Claude</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Model LLM
+                            </label>
+                            <input
+                              type="text"
+                              value={guardianConfig.ai_model}
+                              onChange={(e) =>
+                                setGuardianConfig((prev) => ({ ...prev, ai_model: e.target.value }))
+                              }
+                              placeholder="gemini-2.5-flash"
+                              className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:border-purple-600"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              API Key (Opsional jika sudah di .env)
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showApiKeyInput ? "text" : "password"}
+                                value={guardianConfig.ai_api_key}
+                                onChange={(e) =>
+                                  setGuardianConfig((prev) => ({ ...prev, ai_api_key: e.target.value }))
+                                }
+                                placeholder={maskedApiKey || "Masukkan API Key"}
+                                className="w-full px-3 py-2 pr-8 text-xs rounded-xl border border-gray-300 bg-white focus:outline-none focus:border-purple-600"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowApiKeyInput((v) => !v)}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                              >
+                                {showApiKeyInput ? <EyeOff size={13} /> : <Eye size={13} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Submit Button */}
+                    <div className="pt-2 flex items-center justify-end">
+                      <button
+                        type="submit"
+                        disabled={savingGuardian}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white text-xs font-semibold shadow-2xs transition cursor-pointer"
+                      >
+                        {savingGuardian ? (
+                          <>
+                            <RefreshCw size={13} className="animate-spin" />
+                            <span>Menyimpan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save size={13} />
+                            <span>Simpan Pengaturan Guardian</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Detected Anomalies Table */}
+                  <div className="space-y-3 pt-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        <ShieldAlert size={14} className="text-amber-600" />
+                        <span>Daftar Temuan Anomali Aktif ({anomaliesList.length})</span>
+                      </h4>
+                      {anomaliesList.length > 0 && (
+                        <span className="text-[11px] text-gray-500">
+                          Memerlukan peninjauan atau rekonsiliasi
+                        </span>
+                      )}
+                    </div>
+
+                    {anomaliesList.length === 0 ? (
+                      <div className="p-4 text-center border border-dashed border-gray-200 rounded-xl bg-emerald-50/30">
+                        <p className="text-xs font-medium text-emerald-800">
+                          ✅ Tidak ada anomali aktif. Seluruh data konsisten dan valid.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden bg-white text-xs">
+                        {anomaliesList.map((anom) => (
+                          <div key={anom.id} className="p-3.5 flex items-start justify-between gap-3 hover:bg-gray-50 transition">
+                            <div className="space-y-1 flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[10px] font-bold uppercase ${
+                                    anom.severity === "CRITICAL"
+                                      ? "bg-red-100 text-red-800"
+                                      : anom.severity === "HIGH"
+                                      ? "bg-orange-100 text-orange-800"
+                                      : "bg-amber-100 text-amber-800"
+                                  }`}
+                                >
+                                  {anom.severity}
+                                </span>
+                                <span className="font-semibold text-gray-900">
+                                  {anom.rule_code}
+                                </span>
+                                <span className="text-[10px] text-gray-400">
+                                  Target: {anom.entity_type} ({anom.entity_id?.slice(0, 8)}...)
+                                </span>
+                              </div>
+                              <p className="text-gray-700 leading-relaxed">
+                                {anom.description}
+                              </p>
+                              <p className="text-[10px] text-gray-400">
+                                Terdeteksi: {new Date(anom.detected_at).toLocaleString("id-ID")}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={reconcilingId === anom.id}
+                              onClick={() => handleReconcileAnomaly(anom.id)}
+                              className="px-2.5 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-gray-700 font-semibold text-[11px] shrink-0 transition cursor-pointer shadow-2xs"
+                            >
+                              {reconcilingId === anom.id ? "Menyelesaikan..." : "Selesaikan"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
             )}

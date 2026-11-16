@@ -17,7 +17,9 @@ import {
   Calendar,
   RotateCcw,
   Trash2,
+  FileText,
 } from "lucide-react";
+import AuditHistoryModal from "@/Components/AuditHistoryModal";
 
 const parseFormattedDate = (dateStr) => {
   if (!dateStr) return "-";
@@ -164,12 +166,14 @@ export default function StateHistoryDrawer({
   isOpen,
   onClose,
   entityUuid,
+  entityType = "proker",
   title = "Program Kerja",
   subtitle = "Riwayat Status & Verifikasi",
 }) {
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
 
   const fetchHistory = async () => {
     if (!entityUuid) return;
@@ -313,6 +317,16 @@ export default function StateHistoryDrawer({
                         </button>
                       </div>
                     </div>
+
+                    {/* Button Buka Audit Diff Modal */}
+                    <button
+                      type="button"
+                      onClick={() => setAuditModalOpen(true)}
+                      className="w-full mt-3 py-1.5 px-3 rounded-xl bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Buka Tabel Perubahan Data (Diff Audit)</span>
+                    </button>
 
                     {/* Progress Step Indicator (Summary) */}
                     <div className="mt-4 pt-3 border-t border-purple-100/80">
@@ -535,6 +549,15 @@ export default function StateHistoryDrawer({
           </div>
         </div>
       </Dialog>
+
+      {/* Field-level Pre-rendered Audit Diff Modal */}
+      <AuditHistoryModal
+        isOpen={auditModalOpen}
+        onClose={() => setAuditModalOpen(false)}
+        entityType={entityType}
+        entityId={entityUuid}
+        title={title}
+      />
     </Transition>
   );
 }

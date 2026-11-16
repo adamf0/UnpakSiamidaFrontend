@@ -99,11 +99,12 @@ const MataProgramPage = () => {
     "anggaran",
     "keuangan",
     "evaluator",
-    "admin",
+    // "admin",
     "auditee",
     "auditor1",
     "auditor2",
   ];
+  console.log(curRole)
   const canAdd = hasTarget && !excludedAddRoles.includes(curRole);
   const canManage = canAdd || isAdmin;
   const canShowActions = useFeatureActionVisibility();
