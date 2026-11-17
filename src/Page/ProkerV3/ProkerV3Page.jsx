@@ -4499,13 +4499,7 @@ export default function ProkerV3Page() {
         open={formModalOpen}
         mode={formModalMode}
         initialData={selectedRow}
-        unitOptions={
-          isAdmin || curRole === "anggaran" || curRole === "keuangan" || curRole === "evaluator"
-            ? unitOptions
-            : userAssignedUnits.length > 0
-            ? userAssignedUnits
-            : unitOptions
-        }
+        unitOptions={unitOptions}
         tahunOptions={tahunOptions}
         standarOptions={standarOptions}
         indikatorOptions={indikatorOptions}
