@@ -1,6 +1,7 @@
 import React, { Fragment, useEffect, useState, useMemo } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { useAuth } from "@/Providers/AuthProvider";
+import { useContent } from "@/Providers/ContentProvider";
 import { useToast } from "@/Providers/ToastProvider";
 import { apiClient } from "@/Common/api";
 import SearchSelect from "@/Components/SearchSelect";
@@ -42,8 +43,124 @@ export default function ProkerV3FormModal({
 }) {
   const { getValidToken, user } = useAuth();
   const { addToast } = useToast();
+  const { level, positionYear } = useContent();
 
-  const isAdmin = user?.level === "admin";
+  const curRole = String(
+    level || localStorage.getItem("activeLevel") || user?.level || ""
+  ).toLowerCase().trim();
+
+  const isAdmin =
+    curRole === "admin" ||
+    user?.level === "admin" ||
+    user?.Level === "admin";
+
+  // Filter unit options based on user assignment in userv3_abac (user.extra_role)
+  const availableUnitOptions = useMemo(() => {
+    const isUnrestricted =
+      isAdmin ||
+      curRole === "anggaran" ||
+      curRole === "keuangan" ||
+      curRole === "evaluator";
+
+    if (isUnrestricted) {
+      return unitOptions;
+    }
+
+    const extra = Array.isArray(user?.extra_role)
+      ? user.extra_role
+      : Array.isArray(user?.ExtraRole)
+      ? user.ExtraRole
+      : [];
+
+    const assignedIds = new Set();
+    const assignedUuids = new Set();
+    const assignedNames = new Set();
+
+    let matched = [];
+    if (extra.length > 0) {
+      // 1. Matches role & active positionYear
+      matched = extra.filter(
+        (r) =>
+          (!curRole || String(r.role || r.Role || "").toLowerCase() === curRole) &&
+          (!positionYear || positionYear === "all" || String(r.tahun ?? r.Tahun) === String(positionYear)) &&
+          (r.id_fakultas_unit || r.IdFakultasUnit)
+      );
+
+      // 2. Fallback to role matching in any year
+      if (matched.length === 0) {
+        matched = extra.filter(
+          (r) =>
+            (!curRole || String(r.role || r.Role || "").toLowerCase() === curRole) &&
+            (r.id_fakultas_unit || r.IdFakultasUnit)
+        );
+      }
+
+      // 3. Fallback to any extra_role with unit assignment
+      if (matched.length === 0) {
+        matched = extra.filter((r) => r.id_fakultas_unit || r.IdFakultasUnit);
+      }
+
+      matched.forEach((m) => {
+        const uId = String(m.id_fakultas_unit ?? m.IdFakultasUnit ?? "").trim();
+        if (uId && uId !== "0") assignedIds.add(uId);
+
+        const uUuid = String(m.uuid_fakultas_unit ?? m.UuidFakultasUnit ?? m.uuid ?? m.UUID ?? "").trim().toLowerCase();
+        if (uUuid) assignedUuids.add(uUuid);
+
+        const uName = String(m.nama_fakultas_unit ?? m.NamaFakultasUnit ?? "").trim().toLowerCase();
+        if (uName && uName !== "null" && uName !== "-") assignedNames.add(uName);
+      });
+    }
+
+    // Direct unit on user
+    const directFu = String(user?.fakultas_unit ?? user?.id_fakultas_unit ?? user?.FakultasUnit ?? "").trim();
+    if (directFu && directFu !== "0") {
+      assignedIds.add(directFu);
+      if (directFu.includes("-")) assignedUuids.add(directFu.toLowerCase());
+    }
+    const directFuName = String(user?.nama_fakultas_unit ?? user?.NamaFakultasUnit ?? "").trim().toLowerCase();
+    if (directFuName) assignedNames.add(directFuName);
+
+    if (assignedIds.size === 0 && assignedUuids.size === 0 && assignedNames.size === 0) {
+      return unitOptions;
+    }
+
+    const filtered = (unitOptions || []).filter((u) => {
+      const uId = String(u.id ?? u.Id ?? "").trim();
+      const uUuid = String(u.uuid ?? u.UUID ?? "").trim().toLowerCase();
+      const uRawNama = String(u.raw_nama ?? "").trim().toLowerCase();
+      const uNama = String(u.nama ?? u.name ?? "").trim().toLowerCase();
+      const uLabel = String(u.label ?? "").trim().toLowerCase();
+
+      return (
+        (uId && assignedIds.has(uId)) ||
+        (uUuid && assignedUuids.has(uUuid)) ||
+        (uRawNama && assignedNames.has(uRawNama)) ||
+        (uNama && assignedNames.has(uNama)) ||
+        (uLabel && assignedNames.has(uLabel))
+      );
+    });
+
+    const result = [...filtered];
+    matched.forEach((m) => {
+      const uId = String(m.id_fakultas_unit ?? m.IdFakultasUnit ?? "").trim();
+      const uName = String(m.nama_fakultas_unit ?? m.NamaFakultasUnit ?? "").trim();
+      if (uId && uId !== "0" && !result.some((r) => String(r.id) === uId)) {
+        result.push({
+          id: Number(uId) || uId,
+          uuid: m.uuid_fakultas_unit || m.UuidFakultasUnit || "",
+          nama: uName || `Unit #${uId}`,
+          label: uName || `Unit #${uId}`,
+          name: uName || `Unit #${uId}`,
+          raw_nama: uName || `Unit #${uId}`,
+          type: "unit",
+        });
+      }
+    });
+
+    return result.length > 0 ? result : unitOptions;
+  }, [isAdmin, curRole, positionYear, user, unitOptions]);
+
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
 
@@ -269,19 +386,26 @@ export default function ProkerV3FormModal({
         user?.FakultasUnit;
       const uObj =
         (defaultUnit && typeof defaultUnit === "object" && defaultUnit.id ? defaultUnit : null) ||
+        availableUnitOptions.find(
+          (u) =>
+            String(u.id) === String(targetUnitValue) ||
+            String(u.uuid) === String(targetUnitValue) ||
+            String(u.nama).toLowerCase() === String(targetUnitValue).toLowerCase()
+        ) ||
         unitOptions.find(
           (u) =>
             String(u.id) === String(targetUnitValue) ||
             String(u.uuid) === String(targetUnitValue) ||
             String(u.nama).toLowerCase() === String(targetUnitValue).toLowerCase()
-        );
+        ) ||
+        (availableUnitOptions.length > 0 ? availableUnitOptions[0] : null);
       setSelectedUnit(uObj || null);
       setIdFakultasUnit(uObj ? uObj.id : targetUnitValue ? Number(targetUnitValue) || targetUnitValue : null);
 
       const tObj = tahunOptions.find((t) => String(t.tahun || t.Tahun) === resolvedYear);
       setSelectedTahun(tObj || null);
     }
-  }, [open, mode, initialData, unitOptions, tahunOptions, standarOptions, indikatorOptions, user, defaultYear, defaultUnit]);
+  }, [open, mode, initialData, unitOptions, availableUnitOptions, tahunOptions, standarOptions, indikatorOptions, user, defaultYear, defaultUnit]);
 
   // Scopes management helpers
   const handleAddScope = () => {
@@ -798,7 +922,7 @@ export default function ProkerV3FormModal({
                             Fakultas / Unit Kerja <span className="text-rose-500">*</span>
                           </label>
                           <SearchSelect
-                            options={unitOptions}
+                            options={availableUnitOptions}
                             value={selectedUnit}
                             onChange={(val) => {
                               setSelectedUnit(val);

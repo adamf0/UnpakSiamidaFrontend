@@ -208,11 +208,12 @@ export default function UserAssignmentModal({
           }
         );
 
+        let foundUnit = null;
         // Match unit (jika bukan evaluator atau anggaran)
         if (normalizedRole === "evaluator" || normalizedRole === "anggaran") {
           setSelectedFakultasUnit(null);
         } else {
-          const foundUnit = fakultasOptions.find(
+          foundUnit = fakultasOptions.find(
             (f) =>
               f.id_numeric === (data.IdFakultasUnit || data.id_fakultas_unit) ||
               f.uuid === (data.UuidFakultasUnit || data.uuid_fakultas_unit)
