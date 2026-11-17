@@ -438,7 +438,7 @@ export default function ProkerV3FormModal({
       return false;
     }
     const currentUnitId = selectedUnit?.id || idFakultasUnit;
-    if (!currentUnitId && isAdmin) {
+    if (!currentUnitId) {
       addToast("warning", "Silakan pilih Fakultas / Unit Kerja");
       return false;
     }
@@ -800,10 +800,12 @@ export default function ProkerV3FormModal({
                           <SearchSelect
                             options={unitOptions}
                             value={selectedUnit}
-                            disabled={!isAdmin && Boolean(selectedUnit)}
                             onChange={(val) => {
                               setSelectedUnit(val);
                               setIdFakultasUnit(val?.id || null);
+                              setSelectedMataProgram(null);
+                              setIdMataProgram(null);
+                              setNamaProgram("");
                             }}
                             placeholder="Pilih Unit Kerja"
                             icon={Building2}
