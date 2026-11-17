@@ -487,7 +487,7 @@ export default function UserAssignmentPage() {
               >
                 <option value="all">Semua Role ABAC</option>
                 <option value="user">User</option>
-                <option value="fakultas">Fakultas (Verifikator Fakultas)</option>
+                <option value="fakultas">Fakultas</option>
                 <option value="evaluator">Evaluator (Verifikator Proker)</option>
                 <option value="anggaran">Anggaran (Verifikator Form 13)</option>
                 <option value="upml">UPML (Unit Penjaminan Mutu Lembaga)</option>

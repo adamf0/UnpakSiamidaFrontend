@@ -209,6 +209,7 @@ export default function UserAssignmentModal({
         );
 
         // Match unit (jika bukan evaluator atau anggaran)
+        let resolvedUnit = null;
         if (normalizedRole === "evaluator" || normalizedRole === "anggaran") {
           setSelectedFakultasUnit(null);
         } else {
@@ -217,18 +218,18 @@ export default function UserAssignmentModal({
               f.id_numeric === (data.IdFakultasUnit || data.id_fakultas_unit) ||
               f.uuid === (data.UuidFakultasUnit || data.uuid_fakultas_unit)
           );
-          setSelectedFakultasUnit(
+          resolvedUnit =
             foundUnit || {
               id: data.UuidFakultasUnit || data.IdFakultasUnit,
               nama: data.NamaFakultasUnit || data.nama_fakultas_unit,
               uuid: data.UuidFakultasUnit || data.uuid_fakultas_unit,
               id_numeric: data.IdFakultasUnit || data.id_fakultas_unit,
               type: data.TypeFakultasUnit || data.type_fakultas_unit,
-            }
-          );
+            };
+          setSelectedFakultasUnit(resolvedUnit);
         }
 
-        const r = detectRoleFromFu(foundUnit || data);
+        const r = detectRoleFromFu(resolvedUnit || data);
         setDetectedRole(r);
       } else {
         reset({
@@ -506,7 +507,7 @@ export default function UserAssignmentModal({
                         Otomatis (Berdasarkan Target Unit: {detectedRole.toUpperCase()})
                       </option>
                       <option value="user">User</option>
-                      <option value="fakultas">Fakultas (Verifikator Fakultas)</option>
+                      <option value="fakultas">Fakultas</option>
                       <option value="evaluator">Evaluator (Verifikator Proker)</option>
                       <option value="anggaran">Anggaran (Verifikator Form 13)</option>
                       <option value="upms">UPMS (Unit Penjaminan Mutu Program Studi)</option>
