@@ -196,7 +196,7 @@ export default function RiskAssessmentFormModal({
               paramsMp.append("id_fakultas_unit", String(currentUnitId));
               paramsMp.append("target", String(currentUnitId));
             }
-            const resMp = await apiClient.get(`/mataprograms?${paramsMp.toString()}`);
+            const resMp = await apiClient.get(`/mataprogramv2s?${paramsMp.toString()}`);
             const jsonMp = resMp.data;
             if (Array.isArray(jsonMp)) {
               setAllPrograms(
@@ -221,7 +221,7 @@ export default function RiskAssessmentFormModal({
               );
             }
           } catch (eMp) {
-            console.warn("Fallback fetch /mataprograms failed:", eMp);
+            console.warn("Fallback fetch /mataprogramv2s failed:", eMp);
           }
         }
       }

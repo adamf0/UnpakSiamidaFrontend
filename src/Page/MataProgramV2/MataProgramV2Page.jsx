@@ -43,6 +43,12 @@ export default function MataProgramV2Page() {
     user?.level === "admin" ||
     user?.Level === "admin";
 
+  React.useEffect(() => {
+    if (!isAdmin) {
+      navigate("/dashboard");
+    }
+  }, [isAdmin, navigate]);
+
   const activeUnit = React.useMemo(() => {
     let userFU = user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit;
     if (Array.isArray(user?.extra_role)) {

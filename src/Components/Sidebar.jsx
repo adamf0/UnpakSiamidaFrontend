@@ -254,11 +254,15 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
               path: "/risk_assessment",
               icon: <AlertTriangle size={18} strokeWidth={1.5} />,
             },
-            {
-              name: "Mata Program",
-              path: mataProgramPath,
-              icon: <FolderKanban size={18} strokeWidth={1.5} />,
-            },
+            ...(effectiveVersion !== "v3"
+              ? [
+                  {
+                    name: "Mata Program",
+                    path: mataProgramPath,
+                    icon: <FolderKanban size={18} strokeWidth={1.5} />,
+                  },
+                ]
+              : []),
             {
               name: "Aktivitas",
               path: "/aktivitas",
@@ -372,11 +376,15 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                     path: "/risk_assessment",
                     icon: <AlertTriangle size={18} strokeWidth={1.5} />,
                   },
-                  {
-                    name: "Mata Program",
-                    path: mataProgramPath,
-                    icon: <FolderKanban size={18} strokeWidth={1.5} />,
-                  },
+                  ...(effectiveVersion !== "v3"
+                    ? [
+                        {
+                          name: "Mata Program",
+                          path: mataProgramPath,
+                          icon: <FolderKanban size={18} strokeWidth={1.5} />,
+                        },
+                      ]
+                    : []),
                   {
                     name: "Aktivitas",
                     path: "/aktivitas",
@@ -444,11 +452,15 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
                     path: "/risk_assessment",
                     icon: <AlertTriangle size={18} strokeWidth={1.5} />,
                   },
-                  {
-                    name: "Mata Program",
-                    path: mataProgramPath,
-                    icon: <FolderKanban size={18} strokeWidth={1.5} />,
-                  },
+                  ...(effectiveVersion !== "v3"
+                    ? [
+                        {
+                          name: "Mata Program",
+                          path: mataProgramPath,
+                          icon: <FolderKanban size={18} strokeWidth={1.5} />,
+                        },
+                      ]
+                    : []),
                   {
                     name: "Aktivitas",
                     path: "/aktivitas",

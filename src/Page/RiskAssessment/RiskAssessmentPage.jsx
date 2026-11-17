@@ -68,7 +68,7 @@ const RiskAssessmentPage = () => {
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [userUnitData, setUserUnitData] = useState(null);
 
-  // Cek apakah user memiliki fakultas_unit yang ditugaskan
+  // Cek apakah user memiliki fakultas_unit yang ditugaskan dengan role user
   const hasFakultasUnit = useMemo(() => {
     if (userUnitData?.id || userUnitData?.UUID) return true;
     if (
@@ -80,16 +80,20 @@ const RiskAssessmentPage = () => {
       return true;
     }
     if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      const posYear = localStorage.getItem("positionYear") || positionYear;
       return user.extra_role.some((r) => {
+        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        if (rRole && rRole !== "user") return false;
+        if (posYear && r.tahun && String(r.tahun) !== String(posYear)) return false;
         const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
-        return Boolean(uId);
+        return Boolean(uId && String(uId) !== "0");
       });
     }
     return false;
-  }, [user, userUnitData]);
+  }, [user, userUnitData, positionYear]);
 
-  // Tombol tambah, edit, hapus muncul untuk Admin atau level unit pengguna (user, auditee, pengelola unit)
-  const isUnitManager = (isLevelUser || curRole === "auditee" || curRole === "fakultas" || !isEvaluator) && hasFakultasUnit;
+  // Tombol tambah, edit, hapus hanya muncul untuk Admin atau level user dengan role user fakultas/unit
+  const isUnitManager = isLevelUser && hasFakultasUnit;
   const canManage = isAdmin || isUnitManager;
 
   // Modals
@@ -139,20 +143,30 @@ const RiskAssessmentPage = () => {
 
         if (!myFuId && Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
           const posYear = localStorage.getItem("positionYear") || positionYear;
-          const matchYear = user.extra_role.find((r) => {
+          const matchYearRole = user.extra_role.find((r) => {
+            const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
             const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
             const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
-            return (!posYear || rYear === String(posYear)) && Boolean(uId);
+            return (!rRole || rRole === "user") && (!posYear || rYear === String(posYear)) && Boolean(uId);
           });
-          if (matchYear) {
-            myFuId = matchYear.id_fakultas_unit ?? matchYear.IdFakultasUnit ?? matchYear.uuid_fakultas_unit;
+          if (matchYearRole) {
+            myFuId = matchYearRole.id_fakultas_unit ?? matchYearRole.IdFakultasUnit ?? matchYearRole.uuid_fakultas_unit;
           } else {
-            const anyMatch = user.extra_role.find((r) => {
+            const matchYear = user.extra_role.find((r) => {
+              const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
               const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
-              return Boolean(uId);
+              return (!posYear || rYear === String(posYear)) && Boolean(uId);
             });
-            if (anyMatch) {
-              myFuId = anyMatch.id_fakultas_unit ?? anyMatch.IdFakultasUnit ?? anyMatch.uuid_fakultas_unit;
+            if (matchYear) {
+              myFuId = matchYear.id_fakultas_unit ?? matchYear.IdFakultasUnit ?? matchYear.uuid_fakultas_unit;
+            } else {
+              const anyMatch = user.extra_role.find((r) => {
+                const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
+                return Boolean(uId);
+              });
+              if (anyMatch) {
+                myFuId = anyMatch.id_fakultas_unit ?? anyMatch.IdFakultasUnit ?? anyMatch.uuid_fakultas_unit;
+              }
             }
           }
         }
@@ -290,7 +304,7 @@ const RiskAssessmentPage = () => {
     if (!canManage) {
       addToast(
         "warning",
-        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat menambah data"
+        "Akses ditolak: Hanya level admin dan level user yang memiliki fakultas/unit yang dapat menambah data"
       );
       return;
     }
@@ -303,7 +317,7 @@ const RiskAssessmentPage = () => {
     if (!canManage) {
       addToast(
         "warning",
-        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat mengedit data"
+        "Akses ditolak: Hanya level admin dan level user yang memiliki fakultas/unit yang dapat mengedit data"
       );
       return;
     }
@@ -316,7 +330,7 @@ const RiskAssessmentPage = () => {
     if (!canManage) {
       addToast(
         "warning",
-        "Akses ditolak: Hanya level user yang memiliki fakultas/unit yang dapat menghapus data"
+        "Akses ditolak: Hanya level admin dan level user yang memiliki fakultas/unit yang dapat menghapus data"
       );
       return;
     }
@@ -600,7 +614,9 @@ const RiskAssessmentPage = () => {
               ? `Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (${
                   userUnitData?.nama || "Unit Kerja Terdaftar"
                 })`
-              : "Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (Mode Pratinjau / Lihat Saja)"
+              : `Tabel Analisis Risiko, Residu dan Rencana Tindak Lanjut Proker (${
+                  userUnitData?.nama || "Unit Kerja Terdaftar"
+                }) (Mode Pratinjau / Lihat Saja)`
           }
           icon={FileSpreadsheet}
           iconColor="text-purple-600"

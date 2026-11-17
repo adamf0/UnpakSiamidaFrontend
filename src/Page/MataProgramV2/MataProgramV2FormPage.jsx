@@ -83,6 +83,21 @@ export default function MataProgramV2FormPage() {
   // Filter search stakeholder text
   const [filterUnitText, setFilterUnitText] = useState("");
 
+  const curRole = String(
+    level || localStorage.getItem("activeLevel") || user?.level || ""
+  ).toLowerCase().trim();
+
+  const isAdmin =
+    curRole === "admin" ||
+    user?.level === "admin" ||
+    user?.Level === "admin";
+
+  useEffect(() => {
+    if (!isAdmin) {
+      navigate("/dashboard");
+    }
+  }, [isAdmin, navigate]);
+
   const fetchTahunOptions = async () => {
     setLoadingTahun(true);
     try {
