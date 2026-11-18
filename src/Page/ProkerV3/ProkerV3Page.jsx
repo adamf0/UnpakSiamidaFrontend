@@ -1659,8 +1659,10 @@ export default function ProkerV3Page() {
     try {
       setIsSubmittingSoftDelete(true);
       setSoftDeleteError("");
+      const fd = new FormData();
+      fd.append("catatan", trimmed);
       await apiClient.delete(`/proker_v3/${softDeleteRow.UUID}`, {
-        data: { catatan: trimmed },
+        data: fd,
       });
       addToast(
         "success",

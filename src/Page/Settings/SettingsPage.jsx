@@ -149,18 +149,17 @@ export default function SettingsPage() {
     setSavingAccount(true);
 
     try {
-      const payload = {
-        username: username.trim(),
-        name: name.trim(),
-        email: email.trim(),
-      };
+      const fd = new FormData();
+      fd.append("username", username.trim());
+      fd.append("name", name.trim());
+      fd.append("email", email.trim());
       if (wantsPwdChange) {
-        payload.current_password = currentPassword;
-        payload.new_password = newPassword.trim();
-        payload.confirm_password = confirmPassword.trim();
+        fd.append("current_password", currentPassword);
+        fd.append("new_password", newPassword.trim());
+        fd.append("confirm_password", confirmPassword.trim());
       }
 
-      const res = await apiClient.put("/account/profile", payload);
+      const res = await apiClient.put("/account/profile", fd);
       await fetchUserInfo({ silent: true });
 
       setCurrentPassword("");
@@ -304,9 +303,9 @@ export default function SettingsPage() {
     setBatalDateError("");
     setSavingBatalSetting(true);
     try {
-      const res = await apiClient.put("/settings/proker-batal", {
-        global_date: batalDateInput.trim(),
-      });
+      const fd = new FormData();
+      fd.append("global_date", batalDateInput.trim());
+      const res = await apiClient.put("/settings/proker-batal", fd);
       const data = res?.data || {};
       setBatalSetting((prev) => ({
         ...prev,
@@ -336,9 +335,9 @@ export default function SettingsPage() {
     setBatalDateError("");
     setSavingBatalSetting(true);
     try {
-      const res = await apiClient.put("/settings/proker-batal", {
-        action: "reset_global",
-      });
+      const fd = new FormData();
+      fd.append("action", "reset_global");
+      const res = await apiClient.put("/settings/proker-batal", fd);
       const data = res?.data || {};
       setBatalSetting((prev) => ({
         ...prev,
@@ -377,10 +376,12 @@ export default function SettingsPage() {
     setUnitDateError("");
     setSavingBatalSetting(true);
     try {
-      const res = await apiClient.put("/settings/proker-batal", {
-        target_units: selectedTargetUnitIds,
-        tanggal: unitDateInput.trim(),
+      const fd = new FormData();
+      selectedTargetUnitIds.forEach((id) => {
+        fd.append("target_units[]", String(id));
       });
+      fd.append("tanggal", unitDateInput.trim());
+      const res = await apiClient.put("/settings/proker-batal", fd);
       const data = res?.data || {};
       setBatalSetting((prev) => ({
         ...prev,
@@ -409,10 +410,10 @@ export default function SettingsPage() {
     setBatalFeedback(null);
     setDeletingUnitId(unitId);
     try {
-      const res = await apiClient.put("/settings/proker-batal", {
-        action: "delete_unit",
-        delete_unit_id: unitId,
-      });
+      const fd = new FormData();
+      fd.append("action", "delete_unit");
+      fd.append("delete_unit_id", String(unitId));
+      const res = await apiClient.put("/settings/proker-batal", fd);
       const data = res?.data || {};
       setBatalSetting((prev) => ({
         ...prev,
