@@ -418,6 +418,7 @@ const IndikatorRenstraPage = () => {
             ref={tableRef}
             endpoint={tableEndpoint}
             mode="sse"
+            forceShowActions={isAdmin}
             token={getValidToken()}
             onError={(err) => {
               console.error("TABLE ERROR:", err);

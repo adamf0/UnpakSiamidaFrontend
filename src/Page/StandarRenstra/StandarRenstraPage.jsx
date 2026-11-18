@@ -86,6 +86,7 @@ const StandarRenstraPage = () => {
             ref={tableRef}
             endpoint="/standarrenstras"
             mode="paging"
+            forceShowActions={isAdmin}
             token={getValidToken()}
             onError={(err) => {
               console.error("TABLE ERROR:", err);

@@ -44,7 +44,9 @@ const RemoteTable = forwardRef(function RemoteTable(
 ) {
   const isManual = Array.isArray(listdata);
   const isStreaming = mode === "sse" || mode === "ndjson";
-  const canShowActions = forceShowActions || useFeatureActionVisibility();
+  // Hook dipanggil tanpa syarat agar urutan hook stabil saat forceShowActions berubah
+  const featureActionsVisible = useFeatureActionVisibility();
+  const canShowActions = forceShowActions || featureActionsVisible;
   const effectiveSelectable = canShowActions ? selectable : false;
   const effectiveRenderAction = canShowActions ? renderAction : null;
   const effectiveRenderBulkAction = canShowActions ? renderBulkAction : null;
