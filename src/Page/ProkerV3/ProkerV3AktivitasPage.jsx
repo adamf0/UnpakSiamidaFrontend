@@ -265,22 +265,63 @@ export default function ProkerV3AktivitasPage() {
         return false;
       }
 
-      // 3. UPMF: mencakup 1 fakultas dan prodi-prodi di bawahnya
-      if (curRole === "upmf") {
+      // 3. UPMF & FAKULTAS: mencakup 1 fakultas dan prodi-prodi di bawahnya
+      if (curRole === "upmf" || curRole === "fakultas") {
         if (
           assignedName &&
           prokerParentFakultas &&
           (assignedName === prokerParentFakultas ||
-            prokerParentFakultas.includes(assignedName))
+            prokerParentFakultas.includes(assignedName) ||
+            assignedName.includes(prokerParentFakultas))
         ) {
           return true;
+        }
+        if (
+          assignedName &&
+          prokerUnitName &&
+          (assignedName === prokerUnitName ||
+            prokerUnitName.includes(assignedName) ||
+            assignedName.includes(prokerUnitName))
+        ) {
+          return true;
+        }
+        if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+          const matchExtra = user.extra_role.some((r) => {
+            const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+            if (rRole && rRole !== "fakultas" && rRole !== "upmf") return false;
+            const rFuName = String(
+              r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "",
+            )
+              .trim()
+              .toLowerCase();
+            if (
+              rFuName &&
+              prokerParentFakultas &&
+              (rFuName === prokerParentFakultas ||
+                prokerParentFakultas.includes(rFuName) ||
+                rFuName.includes(prokerParentFakultas))
+            ) {
+              return true;
+            }
+            if (
+              rFuName &&
+              prokerUnitName &&
+              (rFuName === prokerUnitName ||
+                prokerUnitName.includes(rFuName) ||
+                rFuName.includes(prokerUnitName))
+            ) {
+              return true;
+            }
+            return false;
+          });
+          if (matchExtra) return true;
         }
         return false;
       }
 
       return false;
     },
-    [isAdmin, isAnggaran, curRole, activeRoleUnit],
+    [isAdmin, isAnggaran, curRole, activeRoleUnit, user],
   );
 
   // Multi-scope support for Standar, Target, and Luaran

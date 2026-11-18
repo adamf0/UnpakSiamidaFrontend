@@ -12,7 +12,7 @@ import { apiClient } from "@/Common/api";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { useToast } from "@/Providers/ToastProvider";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BsFilter } from "react-icons/bs";
 import Dossier3DStackView from "./MonitoringProker3D/Dossier3DStackView";
 import AdminKeyRack from "./MonitoringProker3D/AdminKeyRack";
@@ -31,7 +31,7 @@ import {
 
 export default function MonitoringTableCard() {
   const { user, getValidToken } = useAuth();
-  const { positionYear, activeYear } = useContent();
+  const { positionYear, activeYear, setPositionYear, changeYear } = useContent();
   const { addToast } = useToast();
 
   /* =========================
@@ -51,6 +51,12 @@ export default function MonitoringTableCard() {
   const [errorTahun, setErrorTahun] = useState(null);
   const [loadingFakultasUnit, setLoadingFakultasUnit] = useState(false);
   const [errorFakultasUnit, setErrorFakultasUnit] = useState(null);
+
+  const prevPositionYearRef = useRef(positionYear);
+  const tahunRef = useRef(tahun);
+  tahunRef.current = tahun;
+  const unitRef = useRef(unlockedUnit || fakultasunit);
+  unitRef.current = unlockedUnit || fakultasunit;
 
   // Cek apakah user adalah auditee atau memiliki fakultas_unit
   const isAuditee = useMemo(() => {
@@ -122,10 +128,15 @@ export default function MonitoringTableCard() {
   };
 
   const fetchMonitoringProker = useCallback(
-    async (targetTahun = tahun, targetUnit = fakultasunit) => {
-      const tahunUuid = targetTahun?.UUID;
-      const unitUuid = targetUnit?.UUID;
-      const unitId = targetUnit?.ID || targetUnit?.id || targetUnit?.UUID;
+    async (targetTahun, targetUnit) => {
+      const effTahun = targetTahun || tahunRef.current;
+      const effUnit = targetUnit || unitRef.current;
+      const tahunUuid = effTahun?.UUID || effTahun?.uuid;
+      const unitUuid = effUnit?.UUID || effUnit?.uuid;
+      const unitId = effUnit?.ID || effUnit?.id || effUnit?.UUID;
+      const targetYearStr = String(
+        effTahun?.Tahun ?? effTahun?.nama ?? effTahun?.tahun ?? positionYear ?? "",
+      );
 
       if (!tahunUuid || !unitUuid) return;
 
@@ -135,7 +146,11 @@ export default function MonitoringTableCard() {
           apiClient.get(`/monitoringproker/${tahunUuid}/${unitUuid}?mode=all`),
           apiClient.get(`/pelaporandokumens?mode=all&target=${unitUuid}`),
           apiClient.get(`/proker_v3`, {
-            params: { mode: "all", filter_fakultas_unit: unitId },
+            params: {
+              mode: "all",
+              filter_fakultas_unit: unitId,
+              ...(targetYearStr ? { filter_tahun: targetYearStr } : {}),
+            },
           }),
         ]);
 
@@ -325,7 +340,7 @@ export default function MonitoringTableCard() {
         setLoading(false);
       }
     },
-    [getValidToken, tahun, fakultasunit, addToast],
+    [getValidToken, addToast, positionYear],
   );
 
   /* =========================
@@ -380,6 +395,7 @@ export default function MonitoringTableCard() {
       }
 
       if (matchedTahun) {
+        prevPositionYearRef.current = String(matchedTahun.Tahun ?? matchedTahun.nama);
         setTahun(matchedTahun);
         upsertFilter("tahun", matchedTahun);
       }
@@ -430,31 +446,60 @@ export default function MonitoringTableCard() {
   const handleTahunChange = useCallback(
     async (selectedTahun) => {
       if (!selectedTahun) return;
+      const targetYearStr = String(
+        selectedTahun.Tahun ?? selectedTahun.tahun ?? selectedTahun.nama ?? "",
+      );
+
+      // Tandai tahun ini di ref agar navbar sync effect tidak meng-override balik
+      prevPositionYearRef.current = targetYearStr;
+
       setTahun(selectedTahun);
       upsertFilter("tahun", selectedTahun);
+
+      // Sinkronkan ke context global (positionYear & appVersion)
+      if (targetYearStr) {
+        if (changeYear) {
+          changeYear(targetYearStr);
+        } else if (setPositionYear) {
+          setPositionYear(targetYearStr);
+        }
+      }
+
       const targetUnit = unlockedUnit || fakultasunit;
       if (targetUnit) {
         await fetchMonitoringProker(selectedTahun, targetUnit);
       }
     },
-    [unlockedUnit, fakultasunit, fetchMonitoringProker],
+    [unlockedUnit, fakultasunit, fetchMonitoringProker, changeYear, setPositionYear],
   );
 
   // Update jika positionYear di navbar berubah
   useEffect(() => {
     if (!positionYear || dataTahun.length === 0) return;
 
+    // Jika tahun sudah sesuai dengan positionYear, jangan lakukan apa-apa
+    if (
+      prevPositionYearRef.current === String(positionYear) &&
+      tahun &&
+      String(tahun.Tahun ?? tahun.nama) === String(positionYear)
+    ) {
+      return;
+    }
+
+    prevPositionYearRef.current = String(positionYear);
+
     const matchedTahun = dataTahun.find(
-      (t) => String(t.Tahun) === String(positionYear),
+      (t) => String(t.Tahun ?? t.nama) === String(positionYear),
     );
-    if (matchedTahun && matchedTahun.UUID !== tahun?.UUID) {
+    if (matchedTahun) {
       setTahun(matchedTahun);
       upsertFilter("tahun", matchedTahun);
-      if (fakultasunit) {
-        fetchMonitoringProker(matchedTahun, fakultasunit);
+      const targetUnit = unlockedUnit || fakultasunit;
+      if (targetUnit) {
+        fetchMonitoringProker(matchedTahun, targetUnit);
       }
     }
-  }, [positionYear, dataTahun, fakultasunit, fetchMonitoringProker]);
+  }, [positionYear, dataTahun, unlockedUnit, fakultasunit, fetchMonitoringProker, tahun]);
 
   // Update jika user info baru didapat setelah dataFakultasUnit ready
   useEffect(() => {
@@ -564,10 +609,10 @@ export default function MonitoringTableCard() {
               <select
                 id="monitoring-tahun-select"
                 aria-label="Filter Tahun Master Dokumen Program Kerja"
-                value={tahun?.UUID || tahun?.uuid || ""}
+                value={tahun?.UUID || tahun?.uuid || (tahun ? String(tahun.Tahun ?? tahun.nama) : "")}
                 onChange={(e) => {
                   const val = e.target.value;
-                  const selected = dataTahun.find((t) => (t.UUID || t.uuid) === val);
+                  const selected = dataTahun.find((t) => (t.UUID || t.uuid) === val || String(t.Tahun ?? t.nama) === val);
                   if (selected) {
                     handleTahunChange(selected);
                   }
@@ -575,7 +620,7 @@ export default function MonitoringTableCard() {
                 className="text-xs font-semibold text-gray-700 bg-transparent border-none outline-none cursor-pointer"
               >
                 {dataTahun.map((t) => (
-                  <option key={t.UUID || t.uuid || t.nama} value={t.UUID || t.uuid}>
+                  <option key={t.UUID || t.uuid || t.nama} value={t.UUID || t.uuid || String(t.Tahun ?? t.nama)}>
                     Tahun {t.nama || t.Tahun} {String(t.Status || t.status).toLowerCase().includes("aktif") ? "(Aktif)" : ""}
                   </option>
                 ))}

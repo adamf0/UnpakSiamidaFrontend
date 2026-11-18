@@ -67,6 +67,7 @@ export default function ProkerV3DokumenPage() {
 
   const curRole = String(level || localStorage.getItem("activeLevel") || user?.level || "").toLowerCase().trim();
   const isAdmin = curRole === "admin";
+  const isFakultas = curRole === "fakultas" || curRole === "upmf";
   const isVerifierRole = ["upml", "upmf", "upms", "evaluator", "anggaran", "keuangan"].includes(curRole);
   const isEvaluator = curRole === "evaluator" || curRole.includes("evaluator");
 
@@ -112,6 +113,46 @@ export default function ProkerV3DokumenPage() {
   const [selectedActUuid, setSelectedActUuid] = useState(actParamUuid || "");
   const [documents, setDocuments] = useState([]);
   const [activeTab, setActiveTab] = useState("all");
+
+  const isProdiUnit = useMemo(() => {
+    return (
+      (proker?.TypeFakultasUnit || proker?.type_fakultas_unit || "").toLowerCase() === "prodi" ||
+      (proker?.NamaFakultasUnit || proker?.nama_fakultas_unit || "").toLowerCase().includes("prodi")
+    );
+  }, [proker]);
+
+  // Cek apakah user role fakultas sesuai dengan fakultas prodi ini
+  const isUserMatchingFaculty = useMemo(() => {
+    if (isAdmin) return true;
+    if (!isFakultas) return false;
+    if (!proker) return false;
+
+    const parentFak = String(proker.ParentFakultas || proker.parent_fakultas || "").trim().toLowerCase();
+    const prokerFuName = String(proker.NamaFakultasUnit || proker.nama_fakultas_unit || "").trim().toLowerCase();
+    const prokerFuId = String(proker.IdFakultasUnit || proker.id_fakultas_unit || "").trim();
+
+    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+      const match = user.extra_role.some((r) => {
+        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        if (rRole && rRole !== "fakultas" && rRole !== "upmf") return false;
+
+        const rFuName = String(r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "").trim().toLowerCase();
+        if (rFuName && parentFak && (rFuName === parentFak || parentFak.includes(rFuName) || rFuName.includes(parentFak))) return true;
+        if (rFuName && (rFuName === prokerFuName || prokerFuName.includes(rFuName))) return true;
+
+        const rFuId = String(r.id_fakultas_unit ?? r.IdFakultasUnit ?? "").trim();
+        if (rFuId && prokerFuId && rFuId === prokerFuId) return true;
+
+        return false;
+      });
+      if (match) return true;
+    }
+
+    const userFuName = String(user?.nama_fakultas_unit || user?.NamaFakultasUnit || "").trim().toLowerCase();
+    if (userFuName && parentFak && (userFuName === parentFak || parentFak.includes(userFuName) || userFuName.includes(parentFak))) return true;
+
+    return true;
+  }, [isAdmin, isFakultas, proker, user]);
 
   // Izin unggah dokumen: user yang memiliki fakultas_unit (admin & verifikator tidak dapat mengunggah)
   const canUploadDokumen = useMemo(() => {
@@ -210,30 +251,44 @@ export default function ProkerV3DokumenPage() {
   const [catatanTolak, setCatatanTolak] = useState("");
 
   const handleVerifikasiDoc = async (doc) => {
-    if (!isAdmin) {
-      addToast("warning", "Hanya level admin yang dapat memverifikasi dokumen");
+    if (!isAdmin && !(isFakultas && isProdiUnit)) {
+      addToast(
+        "warning",
+        isProdiUnit
+          ? "Hanya level admin atau fakultas yang dapat memverifikasi dokumen prodi"
+          : "Hanya level admin yang dapat memverifikasi dokumen"
+      );
+      return;
+    }
+    if (isAdmin && isProdiUnit && doc?.StatusVerifikasi !== "terverifikasi_fakultas") {
+      addToast("warning", "Dokumen prodi harus diverifikasi oleh fakultas terlebih dahulu");
       return;
     }
     if (!doc?.UUID) return;
     setUpdatingVerifikasi(true);
     try {
+      const targetStatus = isFakultas && isProdiUnit ? "terverifikasi_fakultas" : "terverifikasi";
       const fd = new FormData();
-      fd.append("status_verifikasi", "terverifikasi");
+      fd.append("status_verifikasi", targetStatus);
       fd.append("catatan", "");
       const res = await apiClient.put(`/proker_v3/dokumen/${doc.UUID}/verifikasi`, fd);
-      const json = res.data;
-      addToast("success", `Dokumen "${doc.NamaFile}" berhasil diverifikasi`);
+      addToast(
+        "success",
+        isFakultas && isProdiUnit
+          ? `Dokumen "${doc.NamaFile}" berhasil diverifikasi oleh Fakultas`
+          : `Dokumen "${doc.NamaFile}" berhasil diverifikasi`
+      );
       fetchData();
     } catch (err) {
-      addToast("error", err?.message || "Layanan tidak dapat dihubungi");
+      addToast("error", err?.response?.data?.error || err?.message || "Layanan tidak dapat dihubungi");
     } finally {
       setUpdatingVerifikasi(false);
     }
   };
 
   const openTolakModal = (doc) => {
-    if (!isAdmin) {
-      addToast("warning", "Hanya level admin yang dapat menolak dokumen");
+    if (!isAdmin && !(isFakultas && isProdiUnit)) {
+      addToast("warning", "Anda tidak memiliki hak akses untuk menolak dokumen ini");
       return;
     }
     setDocToTolak(doc);
@@ -243,8 +298,8 @@ export default function ProkerV3DokumenPage() {
 
   const handleConfirmTolak = async (e) => {
     if (e) e.preventDefault();
-    if (!isAdmin) {
-      addToast("warning", "Hanya level admin yang dapat menolak dokumen");
+    if (!isAdmin && !(isFakultas && isProdiUnit)) {
+      addToast("warning", "Anda tidak memiliki hak akses untuk menolak dokumen ini");
       return;
     }
     if (!docToTolak?.UUID) return;
@@ -261,7 +316,7 @@ export default function ProkerV3DokumenPage() {
       setCatatanTolak("");
       fetchData();
     } catch (err) {
-      addToast("error", err?.message || "Layanan tidak dapat dihubungi");
+      addToast("error", err?.response?.data?.error || err?.message || "Layanan tidak dapat dihubungi");
     } finally {
       setUpdatingVerifikasi(false);
     }
@@ -1612,6 +1667,11 @@ export default function ProkerV3DokumenPage() {
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             <span>Terverifikasi</span>
                           </span>
+                        ) : doc.StatusVerifikasi === "terverifikasi_fakultas" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Diverifikasi oleh Fakultas, menunggu verifikasi Admin">
+                            <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                            <span>Verifikasi Fakultas</span>
+                          </span>
                         ) : doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi" ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                             <XCircle className="w-3 h-3 text-rose-600" />
@@ -1620,7 +1680,7 @@ export default function ProkerV3DokumenPage() {
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                             <Clock className="w-3 h-3 text-amber-600" />
-                            <span>Belum Diverifikasi</span>
+                            <span>{isProdiUnit ? "Menunggu Verifikasi Fakultas" : "Belum Diverifikasi"}</span>
                           </span>
                         )}
                       </div>
@@ -1653,8 +1713,9 @@ export default function ProkerV3DokumenPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto shrink-0">
-                      {/* Tombol Verifikasi & Tolak Khusus Level Admin */}
-                      {isAdmin && (
+                      {/* Tombol Verifikasi & Tolak Khusus Level Admin & Fakultas */}
+                      {/* 1. NON-PRODI: Cukup verifikasi Admin */}
+                      {!isProdiUnit && isAdmin && (
                         <>
                           {/* Tombol Verifikasi */}
                           <button
@@ -1695,6 +1756,125 @@ export default function ProkerV3DokumenPage() {
                                 : "Tolak"}
                             </span>
                           </button>
+                        </>
+                      )}
+
+                      {/* 2. PRODI: Verifikasi Fakultas terlebih dahulu, lalu Verifikasi Admin */}
+                      {isProdiUnit && (
+                        <>
+                          {/* A. User Fakultas */}
+                          {isFakultas && isUserMatchingFaculty && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleVerifikasiDoc(doc)}
+                                disabled={
+                                  updatingVerifikasi ||
+                                  doc.StatusVerifikasi === "terverifikasi" ||
+                                  doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                }
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
+                                  doc.StatusVerifikasi === "terverifikasi"
+                                    ? "bg-emerald-50 text-emerald-800 border border-emerald-300 opacity-90 cursor-default"
+                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    ? "bg-blue-50 text-blue-800 border border-blue-300 opacity-90 cursor-default"
+                                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200"
+                                }`}
+                                title={
+                                  doc.StatusVerifikasi === "terverifikasi"
+                                    ? "Dokumen ini sudah diverifikasi penuh oleh Admin"
+                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    ? "Sudah diverifikasi Fakultas (Menunggu Verifikasi Admin)"
+                                    : "Verifikasi dokumen prodi ini (Tahap Fakultas)"
+                                }
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>
+                                  {doc.StatusVerifikasi === "terverifikasi"
+                                    ? "Terverifikasi"
+                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    ? "Terverifikasi Fakultas"
+                                    : "Verifikasi"}
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => openTolakModal(doc)}
+                                disabled={updatingVerifikasi || doc.StatusVerifikasi === "terverifikasi"}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                                  doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                                    ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                    : "bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
+                                }`}
+                                title="Tolak dokumen prodi ini dengan catatan alasan"
+                              >
+                                <X className="w-3.5 h-3.5 text-rose-600" />
+                                <span>
+                                  {doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                                    ? "Ditolak (Ubah)"
+                                    : "Tolak"}
+                                </span>
+                              </button>
+                            </>
+                          )}
+
+                          {/* B. User Admin */}
+                          {isAdmin && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleVerifikasiDoc(doc)}
+                                disabled={
+                                  updatingVerifikasi ||
+                                  doc.StatusVerifikasi === "terverifikasi" ||
+                                  doc.StatusVerifikasi !== "terverifikasi_fakultas"
+                                }
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs ${
+                                  doc.StatusVerifikasi === "terverifikasi"
+                                    ? "bg-emerald-50 text-emerald-800 border border-emerald-300 opacity-90 cursor-default"
+                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 cursor-pointer"
+                                    : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-80"
+                                }`}
+                                title={
+                                  doc.StatusVerifikasi === "terverifikasi"
+                                    ? "Dokumen ini sudah diverifikasi"
+                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    ? "Verifikasi final dokumen prodi ini"
+                                    : "Perlu verifikasi fakultas terlebih dahulu"
+                                }
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>
+                                  {doc.StatusVerifikasi === "terverifikasi"
+                                    ? "Terverifikasi"
+                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    ? "Verifikasi"
+                                    : "Menunggu Fakultas"}
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => openTolakModal(doc)}
+                                disabled={updatingVerifikasi}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                                  doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                                    ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                    : "bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
+                                }`}
+                                title="Tolak dokumen prodi ini dengan catatan alasan"
+                              >
+                                <X className="w-3.5 h-3.5 text-rose-600" />
+                                <span>
+                                  {doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                                    ? "Ditolak (Ubah)"
+                                    : "Tolak"}
+                                </span>
+                              </button>
+                            </>
+                          )}
                         </>
                       )}
 

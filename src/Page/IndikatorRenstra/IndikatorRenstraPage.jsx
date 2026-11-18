@@ -53,16 +53,22 @@ const IndikatorRenstraPage = () => {
   const [selectedStandarObj, setSelectedStandarObj] = useState(null);
   const [selectedIkus, setSelectedIkus] = useState([]);
 
-  // Options Lists
+  // Options Lists & Loading States
   const [tahunList, setTahunList] = useState([]);
   const [standarList, setStandarList] = useState([]);
   const [ikuList, setIkuList] = useState([]);
+  const [loadingTahun, setLoadingTahun] = useState(true);
+  const [loadingStandar, setLoadingStandar] = useState(true);
+  const [loadingIku, setLoadingIku] = useState(true);
 
-  // Fetch filter metadata (Tahun, Standar & Master IKU)
+  // Fetch filter metadata in parallel (Tahun, Standar & Master IKU)
   useEffect(() => {
-    const fetchFilterMetadata = async () => {
+    let isMounted = true;
+
+    // 1. Fetch Tahun
+    const fetchTahun = async () => {
+      setLoadingTahun(true);
       try {
-        // 1. Fetch Tahun
         let years = [];
         try {
           const res = await apiClient.get("/tahunrenstras?mode=all");
@@ -86,7 +92,6 @@ const IndikatorRenstraPage = () => {
           }
         }
 
-        // Deduplicate & sort descending
         const uniqueYears = [];
         const seen = new Set();
         for (const item of years) {
@@ -102,9 +107,18 @@ const IndikatorRenstraPage = () => {
           }
         }
         uniqueYears.sort((a, b) => Number(b.Tahun) - Number(a.Tahun));
-        setTahunList(uniqueYears);
+        if (isMounted) setTahunList(uniqueYears);
+      } catch (err) {
+        console.error("Gagal mengambil tahun renstra:", err);
+      } finally {
+        if (isMounted) setLoadingTahun(false);
+      }
+    };
 
-        // 2. Fetch Standar Renstra
+    // 2. Fetch Standar Renstra
+    const fetchStandar = async () => {
+      setLoadingStandar(true);
+      try {
         const resStandar = await apiClient.get("/standarrenstras?mode=all");
         const dataStandar = resStandar?.data ?? resStandar;
         const list = Array.isArray(dataStandar) ? dataStandar : [];
@@ -114,24 +128,37 @@ const IndikatorRenstraPage = () => {
           nama: s.Nama || s.nama || "",
           ...s,
         }));
-        setStandarList(mappedStandar);
-
-        // 3. Fetch Master IKU
-        try {
-          const resIku = await apiClient.get("/master_iku");
-          const dataIku = resIku?.data ?? resIku;
-          if (Array.isArray(dataIku)) {
-            setIkuList(dataIku);
-          }
-        } catch (e) {
-          console.warn("Gagal fetch master_iku:", e);
-        }
+        if (isMounted) setStandarList(mappedStandar);
       } catch (err) {
-        console.error("Gagal mengambil metadata filter indikator renstra:", err);
+        console.error("Gagal mengambil standar renstra:", err);
+      } finally {
+        if (isMounted) setLoadingStandar(false);
       }
     };
 
-    fetchFilterMetadata();
+    // 3. Fetch Master IKU
+    const fetchIku = async () => {
+      setLoadingIku(true);
+      try {
+        const resIku = await apiClient.get("/master_iku");
+        const dataIku = resIku?.data ?? resIku;
+        if (Array.isArray(dataIku)) {
+          if (isMounted) setIkuList(dataIku);
+        }
+      } catch (e) {
+        console.warn("Gagal fetch master_iku:", e);
+      } finally {
+        if (isMounted) setLoadingIku(false);
+      }
+    };
+
+    fetchTahun();
+    fetchStandar();
+    fetchIku();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Dynamic RemoteTable Endpoint
@@ -352,6 +379,7 @@ const IndikatorRenstraPage = () => {
                 icon={Calendar}
                 placeholder="Semua Tahun"
                 options={tahunList}
+                loading={loadingTahun}
                 value={selectedTahunObj}
                 onChange={(item) => {
                   setSelectedTahunObj(item);
@@ -369,6 +397,7 @@ const IndikatorRenstraPage = () => {
                 icon={Layers}
                 placeholder="Semua Standar"
                 options={standarList}
+                loading={loadingStandar}
                 value={selectedStandarObj}
                 onChange={(item) => {
                   setSelectedStandarObj(item);
@@ -386,6 +415,7 @@ const IndikatorRenstraPage = () => {
                 icon={BookmarkCheck}
                 placeholder="Semua IKU"
                 options={ikuList}
+                loading={loadingIku}
                 value={selectedIkus}
                 onChange={(items) => setSelectedIkus(items)}
                 className="!py-1.5 !text-xs !rounded-xl !bg-gray-50/80 hover:!bg-white focus:!bg-white !border-gray-200"

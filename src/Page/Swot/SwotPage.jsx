@@ -96,6 +96,7 @@ const SwotPage = () => {
   const [tahunList, setTahunList] = useState([]);
   const [fakultasList, setFakultasList] = useState([]);
   const [userUnitData, setUserUnitData] = useState(null);
+  const [loadingMetadata, setLoadingMetadata] = useState(true);
 
   // Loading & Counts for SWOT Cards
   const [loadingCards, setLoadingCards] = useState(true);
@@ -144,8 +145,12 @@ const SwotPage = () => {
   useEffect(() => {
     const fetchMetadata = async () => {
       const token = getValidToken();
-      if (isEmpty(token)) return;
+      if (isEmpty(token)) {
+        setLoadingMetadata(false);
+        return;
+      }
 
+      setLoadingMetadata(true);
       try {
         // Fetch Tahun
         const resTahun = await apiClient.get("/tahunprokers?mode=all");
@@ -220,6 +225,8 @@ const SwotPage = () => {
         }
       } catch (err) {
         console.error("Gagal mengambil master data filter:", err);
+      } finally {
+        setLoadingMetadata(false);
       }
     };
 
@@ -513,6 +520,7 @@ const SwotPage = () => {
                 icon={Calendar}
                 placeholder="Semua Tahun"
                 options={tahunOptions}
+                loading={loadingMetadata}
                 value={selectedTahunObj}
                 onChange={(item) => {
                   setSelectedTahunObj(item);
@@ -529,6 +537,7 @@ const SwotPage = () => {
                   icon={Building2}
                   placeholder="Semua Fakultas/Unit"
                   options={fakultasOptions}
+                  loading={loadingMetadata}
                   value={selectedFakultasObj}
                   onChange={(item) => {
                     setSelectedFakultasObj(item);

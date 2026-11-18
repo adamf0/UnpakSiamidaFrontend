@@ -648,6 +648,7 @@ const RiskAssessmentPage = () => {
                 icon={Calendar}
                 placeholder="Semua Tahun"
                 options={tahunOptions}
+                loading={loadingMetadata}
                 value={selectedTahunObj}
                 onChange={(item) => {
                   setSelectedTahunObj(item);
@@ -664,6 +665,7 @@ const RiskAssessmentPage = () => {
                   icon={Building2}
                   placeholder="Semua Fakultas/Unit"
                   options={fakultasOptions}
+                  loading={loadingMetadata}
                   value={selectedFakultasObj}
                   onChange={(item) => {
                     setSelectedFakultasObj(item);
@@ -680,6 +682,7 @@ const RiskAssessmentPage = () => {
                 icon={FileSpreadsheet}
                 placeholder="Semua Program Kerja"
                 options={programOptions}
+                loading={loadingMetadata}
                 value={selectedProgramObj}
                 onChange={(item) => {
                   setSelectedProgramObj(item);

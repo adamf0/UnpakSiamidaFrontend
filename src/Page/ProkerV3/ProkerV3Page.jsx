@@ -457,7 +457,7 @@ export default function ProkerV3Page() {
         String(r.role ?? r.Role).toLowerCase() === curRole &&
         (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear)),
     );
-    if (matched.length === 0 && curRole === "user") {
+    if (matched.length === 0 && (curRole === "user" || curRole === "fakultas")) {
       matched = user.extra_role.filter(
         (r) =>
           (!positionYear || String(r.tahun ?? r.Tahun) === String(positionYear)) &&
@@ -490,8 +490,37 @@ export default function ProkerV3Page() {
         );
       }
     });
+
+    if (unique.length === 0 && (curRole === "fakultas" || curRole === "user")) {
+      const directId = String(
+        user?.id_fakultas_unit || user?.fakultas_unit || user?.FakultasUnit || "",
+      );
+      if (directId && directId !== "0" && directId !== "null" && directId !== "undefined") {
+        const found = unitOptions.find(
+          (u) => String(u.id) === directId || String(u.uuid) === directId,
+        );
+        const directUuid = user?.uuid_fakultas_unit || user?.UuidFakultasUnit || "";
+        const directName =
+          user?.nama_fakultas_unit ||
+          user?.NamaFakultasUnit ||
+          user?.fakultas ||
+          `Unit #${directId}`;
+        unique.push(
+          found || {
+            id: directId,
+            uuid: isValidUuid(directUuid) ? directUuid : isValidUuid(directId) ? directId : "",
+            nama: directName,
+            label: directName,
+            name: directName,
+            raw_nama: directName,
+            type: "fakultas",
+          },
+        );
+      }
+    }
+
     return unique;
-  }, [user?.extra_role, curRole, positionYear, unitOptions]);
+  }, [user?.extra_role, user?.id_fakultas_unit, user?.fakultas_unit, user?.FakultasUnit, user?.uuid_fakultas_unit, user?.nama_fakultas_unit, curRole, positionYear, unitOptions]);
 
   // Cek apakah user memiliki penugasan aktif untuk role & tahun ini di user_abac
   const hasActiveRoleAssignment = useMemo(() => {
@@ -553,11 +582,11 @@ export default function ProkerV3Page() {
       return [];
     }
 
-    if (curRole === "upmf") {
+    if (curRole === "upmf" || curRole === "fakultas") {
       // Hanya penugasan dengan target bertipe fakultas / sekolah
       const assignedFakultas = userAssignedUnits.filter((u) => {
         const t = (u.type || "").toLowerCase();
-        return t === "fakultas" || t === "sekolah";
+        return t === "fakultas" || t === "sekolah" || curRole === "fakultas";
       });
       if (assignedFakultas.length > 0) {
         const formattedAssigned = assignedFakultas.map(formatUnitOption);
@@ -1178,7 +1207,7 @@ export default function ProkerV3Page() {
     }
 
     const isUnrestricted = isAnggaran || curRole === "evaluator" || isAdmin;
-    const isScopedVerifier = ["upml", "upmf"].includes(curRole);
+    const isScopedVerifier = ["upml", "upmf", "fakultas"].includes(curRole);
 
     if (isUnrestricted) {
       if (selectedUnit && selectedUnit !== "all" && selectedUnit !== "none") {
@@ -1228,12 +1257,12 @@ export default function ProkerV3Page() {
         params.append("filter_tab", activeTab);
       }
     } else if (isScopedVerifier) {
-      // UPML, UPMF: hanya tampilkan jika ada target penugasan di tahun ini
+      // UPML, UPMF, FAKULTAS: hanya tampilkan jika ada target penugasan di tahun ini
       let validAssigned = userAssignedUnits;
-      if (curRole === "upmf") {
+      if (curRole === "upmf" || curRole === "fakultas") {
         validAssigned = userAssignedUnits.filter((u) => {
           const t = (u.type || "").toLowerCase();
-          return t === "fakultas" || t === "sekolah";
+          return t === "fakultas" || t === "sekolah" || curRole === "fakultas";
         });
       }
 
@@ -3409,7 +3438,7 @@ export default function ProkerV3Page() {
         );
       },
     },
-    ...(!isUserWithFakultasUnit
+    ...(!isUserWithFakultasUnit || curRole === "fakultas" || curRole === "upmf"
       ? [
           {
             key: "fakultas_unit",
