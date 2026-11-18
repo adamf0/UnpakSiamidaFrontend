@@ -269,7 +269,7 @@ export default function ProkerV3DokumenPage() {
       );
       fetchData();
     } catch (err) {
-      addToast("error", err?.response?.data?.error || err?.message || "Layanan tidak dapat dihubungi");
+      addToast("error", err?.response?.data?.message || err?.response?.data?.error || err?.message || "Layanan tidak dapat dihubungi");
     } finally {
       setUpdatingVerifikasi(false);
     }
@@ -323,7 +323,7 @@ export default function ProkerV3DokumenPage() {
       setCatatanTolak("");
       fetchData();
     } catch (err) {
-      addToast("error", err?.response?.data?.error || err?.message || "Layanan tidak dapat dihubungi");
+      addToast("error", err?.response?.data?.message || err?.response?.data?.error || err?.message || "Layanan tidak dapat dihubungi");
     } finally {
       setUpdatingVerifikasi(false);
     }
