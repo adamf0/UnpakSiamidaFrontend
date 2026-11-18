@@ -2594,7 +2594,7 @@ export default function ProkerV3Page() {
                 }
 
                 // Jika masih draft / belum diajukan: jika bukan admin, tampilkan label Draf.
-                // Jika admin, izinkan lanjut ke bawah (userCanManage) agar tombol Ajukan, Edit, dan Hapus muncul.
+                // Jika admin, izinkan lanjut ke bawah (userCanManage) agar tombol Ajukan muncul.
                 if (!isAdmin) {
                   return (
                     <div className="flex items-center gap-1.5 flex-nowrap">
@@ -2612,69 +2612,30 @@ export default function ProkerV3Page() {
 
               return (
                 <div className="flex items-center gap-1.5 flex-nowrap">
-                  {/* Tombol Ajukan, Edit, Hapus HANYA muncul di level user yg memiliki target fakultas_unit */}
+                  {/* Tombol Ajukan HANYA muncul di level user yg memiliki target fakultas_unit (Edit & Hapus di-hide karena pengajuan unik per program/unit/tahun) */}
                   {userCanManage &&
                     (sMain === "draft" ||
                       sMain === "ditolak" ||
                       sMain === "revisi") && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateStatus(r, "diajukan")}
-                          disabled={isScheduleLocked}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-2xs transition shrink-0 whitespace-nowrap ${
-                            isScheduleLocked
-                              ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
-                              : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
-                          }`}
-                          title={
-                            isScheduleLocked
-                              ? jadwalStatus?.message ||
-                                "Pengajuan ditutup sesuai jadwal"
-                              : "Ajukan program kerja ke pimpinan/verifikator"
-                          }
-                        >
-                          <Send className="w-3 h-3" />
-                          <span>Ajukan</span>
-                        </button>
-                        <Tooltip title="Edit Program Kerja">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(r)}
-                            className="p-1.5 rounded-lg text-amber-600 bg-white hover:bg-amber-50 border border-amber-200 hover:border-amber-300 transition cursor-pointer shadow-2xs shrink-0 inline-flex items-center justify-center"
-                            title="Edit Program Kerja"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        </Tooltip>
-                        <Tooltip
-                          title={
-                            isAdmin
-                              ? "Hapus Permanen Program Kerja"
-                              : "Hapus Program Kerja"
-                          }
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (isAdmin) {
-                                setSelectedRow(r);
-                                setConfirmDelete(true);
-                              } else {
-                                openSoftDeleteModal(r);
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-rose-600 bg-white hover:bg-rose-50 border border-rose-200 hover:border-rose-300 transition cursor-pointer shadow-2xs shrink-0 inline-flex items-center justify-center"
-                            title={
-                              isAdmin
-                                ? "Hapus Permanen Program Kerja"
-                                : "Hapus Program Kerja"
-                            }
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </Tooltip>
-                      </>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus(r, "diajukan")}
+                        disabled={isScheduleLocked}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-2xs transition shrink-0 whitespace-nowrap ${
+                          isScheduleLocked
+                            ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
+                            : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                        }`}
+                        title={
+                          isScheduleLocked
+                            ? jadwalStatus?.message ||
+                              "Pengajuan ditutup sesuai jadwal"
+                            : "Ajukan program kerja ke pimpinan/verifikator"
+                        }
+                      >
+                        <Send className="w-3 h-3" />
+                        <span>Ajukan</span>
+                      </button>
                     )}
 
                   {/* Level User: Batal Pengajuan (kembalikan ke Draft) */}

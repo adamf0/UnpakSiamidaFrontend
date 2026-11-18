@@ -319,6 +319,7 @@ export default function ProkerV3FormModal({
         selectedIndikator: shouldResetInd ? null : sc.selectedIndikator,
         indikatorKinerja: shouldResetInd ? "" : sc.indikatorKinerja,
         targetUnpak: shouldResetInd ? "" : sc.targetUnpak,
+        targetUnit: shouldResetInd ? "" : sc.targetUnit,
       };
       return next;
     });
@@ -378,9 +379,14 @@ export default function ProkerV3FormModal({
       setScopes((prev) => {
         const next = [...prev];
         if (next[scopeIndex]) {
+          const masterTargetUnit =
+            data?.target_unit && String(data.target_unit).trim() !== ""
+              ? String(data.target_unit).trim()
+              : "";
           next[scopeIndex] = {
             ...next[scopeIndex],
             targetUnpak: val || "",
+            targetUnit: masterTargetUnit || next[scopeIndex].targetUnit,
             loadingTargetUnpak: false,
           };
         }
@@ -422,7 +428,8 @@ export default function ProkerV3FormModal({
         indikatorKinerja: item ? item.indikator || item.label : "",
         selectedStandar: parentStandar || sc.selectedStandar,
         standarSubStandar: parentStandar ? parentStandar.nama : sc.standarSubStandar,
-        targetUnpak: "",
+        targetUnpak: item?.target_unpak || "",
+        targetUnit: item?.target_unit || "",
       };
       return next;
     });
@@ -1002,7 +1009,7 @@ export default function ProkerV3FormModal({
                                         onClick={() => fetchTargetUnpakForScope(index)}
                                         disabled={sc.loadingTargetUnpak || !sc.selectedIndikator}
                                         className="text-[10px] text-purple-600 hover:text-purple-800 flex items-center gap-0.5 disabled:opacity-40 cursor-pointer"
-                                        title="Muat ulang target dari template renstra"
+                                        title="Muat ulang target dari master indikator renstra"
                                       >
                                         <RefreshCw className={`w-3 h-3 ${sc.loadingTargetUnpak ? "animate-spin" : ""}`} />
                                         <span>Sinkronkan</span>
@@ -1053,7 +1060,7 @@ export default function ProkerV3FormModal({
                                     </div>
                                   ) : (
                                     <p className="text-[10px] text-gray-500 mt-1">
-                                      Target institusi terisi otomatis dari template renstra (target single / min-max).
+                                      Target institusi terisi otomatis dari master indikator renstra (fallback template renstra).
                                     </p>
                                   )}
                                 </div>
@@ -1071,7 +1078,7 @@ export default function ProkerV3FormModal({
                                     className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                                   />
                                   <p className="text-[10px] text-gray-500 mt-1">
-                                    Target capaian spesifik unit Anda untuk program ini.
+                                    Terisi otomatis dari master indikator renstra jika tersedia, dapat disesuaikan untuk unit Anda.
                                   </p>
                                 </div>
 

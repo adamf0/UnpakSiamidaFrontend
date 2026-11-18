@@ -314,6 +314,32 @@ const IndikatorRenstraPage = () => {
         );
       },
     },
+    {
+      key: "TargetUnpak",
+      label: "Target Unpak",
+      width: "180px",
+      searchable: true,
+      renderKey: (row) => {
+        const val = row?.TargetUnpak ?? row?.target_unpak;
+        if (!val || !String(val).trim()) {
+          return <span className="text-gray-400">-</span>;
+        }
+        return <span className="font-medium text-emerald-700">{val}</span>;
+      },
+    },
+    {
+      key: "TargetUnit",
+      label: "Target Unit Kerja",
+      width: "200px",
+      searchable: true,
+      renderKey: (row) => {
+        const val = row?.TargetUnit ?? row?.target_unit;
+        if (!val || !String(val).trim()) {
+          return <span className="text-gray-400">-</span>;
+        }
+        return <span className="text-gray-800">{val}</span>;
+      },
+    },
   ];
 
   return (
