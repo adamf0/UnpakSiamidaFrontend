@@ -143,8 +143,8 @@ export const useFeatureActionVisibility = (overridePath = null) => {
   return canShowFeatureActions(targetPath);
 };
 
-export const getVersionConfig = (versionId = "v2") => {
-  return APP_VERSIONS.find((v) => v.id === versionId) || APP_VERSIONS[0];
+export const getVersionConfig = (versionId = "v3") => {
+  return APP_VERSIONS.find((v) => v.id === versionId) || APP_VERSIONS.find((v) => v.id === "v3") || APP_VERSIONS[0];
 };
 
 /**
@@ -153,7 +153,7 @@ export const getVersionConfig = (versionId = "v2") => {
  * - 2024-2026 (v2): menu v2 muncul (menu v3 tidak muncul)
  * - <= 2023 (v1): legacy menu v1
  */
-export const isMenuVisibleForVersion = (path, versionId = "v2") => {
+export const isMenuVisibleForVersion = (path, versionId = "v3") => {
   if (!versionId || versionId === "all") return true;
 
   // Fitur eksklusif V3 (Program Kerja V3, Analisis SWOT, Analisis Risiko): HANYA muncul di v3 (2027)
@@ -181,7 +181,7 @@ export const isMenuVisibleForVersion = (path, versionId = "v2") => {
  * Menentukan apakah Monitoring Dokumen Proker tampil di Dashboard
  * Aktif pada seluruh versi (v1, v2, dan v3 dengan sumber matrix_proker_dokumen)
  */
-export const isDashboardProkerVisibleForVersion = (versionId = "v2") => {
+export const isDashboardProkerVisibleForVersion = (versionId = "v3") => {
   return versionId === "v1" || versionId === "v2" || versionId === "v3";
 };
 
@@ -189,7 +189,7 @@ export const isDashboardProkerVisibleForVersion = (versionId = "v2") => {
  * Menentukan apakah Banner Pengumuman Pelaporan Proker tampil di Dashboard
  * Hanya muncul di versi V2 (audit periode 2024–2026)
  */
-export const isDashboardProkerAnnouncementVisible = (versionId = "v2") => {
-  return (versionId || "v2") === "v2";
+export const isDashboardProkerAnnouncementVisible = (versionId = "v3") => {
+  return (versionId || "v3") === "v2";
 };
 

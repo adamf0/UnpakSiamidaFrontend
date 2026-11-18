@@ -41,7 +41,7 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
   const { user } = useAuth();
   const currentLevel = String(level || "").toLowerCase().trim();
   const isAdmin = currentLevel === "admin" || String(user?.level || "").toLowerCase().trim() === "admin";
-  const selectedYear = parseInt(positionYear || activeYear || "2026", 10);
+  const selectedYear = parseInt(positionYear || activeYear || "2027", 10);
   const effectiveVersion =
     selectedYear >= 2027
       ? "v3"

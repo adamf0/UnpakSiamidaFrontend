@@ -69,9 +69,9 @@ const DashboardContent = () => {
     [currentLevel, user, realFakultasUnits, activeYear],
   );
 
-  const showProkerMonitoring = isDashboardProkerVisibleForVersion(appVersion || "v2");
-  const showPemetaanChart = (appVersion || "v2") === "v2" || (appVersion || "v2") === "v3";
-  const showProkerAnnouncement = isDashboardProkerAnnouncementVisible(appVersion || "v2");
+  const showProkerMonitoring = isDashboardProkerVisibleForVersion(appVersion || "v3");
+  const showPemetaanChart = (appVersion || "v3") === "v2" || (appVersion || "v3") === "v3";
+  const showProkerAnnouncement = isDashboardProkerAnnouncementVisible(appVersion || "v3");
 
   return (
     <>

@@ -30,7 +30,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
   } = useContent();
 
   const isAdmin = level === "admin" || user?.level === "admin";
-  const currentVersionConfig = getVersionConfig(appVersion || "v2");
+  const currentVersionConfig = getVersionConfig(appVersion || "v3");
 
   const [notifications] = useState([
     { id: 1, message: "Notifikasi 1" },
@@ -128,7 +128,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
 
                     <div className="p-1.5 space-y-1 max-h-80 overflow-y-auto">
                       {(APP_VERSIONS || []).map((item) => {
-                        const isSelected = (appVersion || "v2") === item.id;
+                        const isSelected = (appVersion || "v3") === item.id;
                         return (
                           <button
                             key={item.id}
@@ -516,7 +516,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
             </div>
             <div className="p-2 space-y-1 max-h-80 overflow-y-auto">
               {(APP_VERSIONS || []).map((item) => {
-                const isSelected = (appVersion || "v2") === item.id;
+                const isSelected = (appVersion || "v3") === item.id;
                 return (
                   <button
                     key={item.id}

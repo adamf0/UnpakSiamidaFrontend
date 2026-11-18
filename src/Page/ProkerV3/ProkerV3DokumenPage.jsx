@@ -239,6 +239,23 @@ export default function ProkerV3DokumenPage() {
   const [docToTolak, setDocToTolak] = useState(null);
   const [catatanTolak, setCatatanTolak] = useState("");
 
+  // Helper baca status terpisah Fakultas & Admin (dengan fallback data lama)
+  const getFacultyStatus = (doc) => {
+    const s = String(doc?.StatusVerifikasiFakultas || "").toLowerCase().trim();
+    if (s && s !== "belum_terverifikasi") return s;
+    const overall = String(doc?.StatusVerifikasi || "").toLowerCase().trim();
+    if (overall === "terverifikasi_fakultas" || overall === "terverifikasi") return "terverifikasi";
+    return "belum_terverifikasi";
+  };
+
+  const getAdminStatus = (doc) => {
+    const s = String(doc?.StatusVerifikasiAdmin || "").toLowerCase().trim();
+    if (s && s !== "belum_terverifikasi") return s;
+    const overall = String(doc?.StatusVerifikasi || "").toLowerCase().trim();
+    if (overall === "terverifikasi") return "terverifikasi";
+    return "belum_terverifikasi";
+  };
+
   const handleVerifikasiDoc = async (doc) => {
     if (!isAdmin && !(isFakultas && isProdiUnit && isUserMatchingFaculty)) {
       addToast(
@@ -249,7 +266,7 @@ export default function ProkerV3DokumenPage() {
       );
       return;
     }
-    if (isAdmin && isProdiUnit && doc?.StatusVerifikasi !== "terverifikasi_fakultas") {
+    if (isAdmin && isProdiUnit && getFacultyStatus(doc) !== "terverifikasi") {
       addToast("warning", "Dokumen prodi harus diverifikasi oleh fakultas terlebih dahulu");
       return;
     }
@@ -283,14 +300,17 @@ export default function ProkerV3DokumenPage() {
     if (
       isAdmin &&
       isProdiUnit &&
-      doc?.StatusVerifikasi !== "terverifikasi_fakultas" &&
-      doc?.StatusVerifikasi !== "terverifikasi"
+      getFacultyStatus(doc) !== "terverifikasi" &&
+      getAdminStatus(doc) !== "terverifikasi"
     ) {
       addToast("warning", "Dokumen prodi harus diverifikasi oleh fakultas terlebih dahulu");
       return;
     }
     setDocToTolak(doc);
-    setCatatanTolak(doc.CatatanPenolakan || "");
+    const initialNote = isFakultas
+      ? doc.CatatanTolakFakultas || doc.CatatanPenolakan || ""
+      : doc.CatatanTolakAdmin || doc.CatatanPenolakan || "";
+    setCatatanTolak(initialNote);
     setTolakModalOpen(true);
   };
 
@@ -303,8 +323,8 @@ export default function ProkerV3DokumenPage() {
     if (
       isAdmin &&
       isProdiUnit &&
-      docToTolak?.StatusVerifikasi !== "terverifikasi_fakultas" &&
-      docToTolak?.StatusVerifikasi !== "terverifikasi"
+      getFacultyStatus(docToTolak) !== "terverifikasi" &&
+      getAdminStatus(docToTolak) !== "terverifikasi"
     ) {
       addToast("warning", "Dokumen prodi harus diverifikasi oleh fakultas terlebih dahulu");
       return;
@@ -1651,6 +1671,16 @@ export default function ProkerV3DokumenPage() {
                 const fileUrl = doc.FileURL
                   ? `${API_BASE_URL}${doc.FileURL.startsWith("/") ? "" : "/"}${doc.FileURL}`
                   : null;
+                const fakStatus = getFacultyStatus(doc);
+                const adminStatus = getAdminStatus(doc);
+                const fakTolakNote = doc.CatatanTolakFakultas || "";
+                const adminTolakNote = doc.CatatanTolakAdmin || "";
+                const legacyTolakNote =
+                  !fakTolakNote &&
+                  !adminTolakNote &&
+                  (doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi")
+                    ? doc.CatatanPenolakan || doc.Catatan || ""
+                    : "";
 
                 return (
                   <div
@@ -1668,26 +1698,57 @@ export default function ProkerV3DokumenPage() {
                           {doc.NamaFile}
                         </span>
 
-                        {/* Status Verifikasi Badge */}
-                        {doc.StatusVerifikasi === "terverifikasi" ? (
+                        {/* Status Verifikasi Badges (terpisah Fakultas & Admin untuk Prodi) */}
+                        {isProdiUnit ? (
+                          <>
+                            {fakStatus === "terverifikasi" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                                <span>Fakultas: Terverifikasi</span>
+                              </span>
+                            ) : fakStatus === "ditolak" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <XCircle className="w-3 h-3 text-rose-600" />
+                                <span>Fakultas: Ditolak</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                <span>Fakultas: Menunggu</span>
+                              </span>
+                            )}
+
+                            {adminStatus === "terverifikasi" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>Admin: Terverifikasi</span>
+                              </span>
+                            ) : adminStatus === "ditolak" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <XCircle className="w-3 h-3 text-rose-600" />
+                                <span>Admin: Ditolak</span>
+                              </span>
+                            ) : fakStatus === "terverifikasi" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                <span>Admin: Menunggu</span>
+                              </span>
+                            ) : null}
+                          </>
+                        ) : adminStatus === "terverifikasi" ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             <span>Terverifikasi</span>
                           </span>
-                        ) : doc.StatusVerifikasi === "terverifikasi_fakultas" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Diverifikasi oleh Fakultas, menunggu verifikasi Admin">
-                            <CheckCircle2 className="w-3 h-3 text-blue-600" />
-                            <span>Verifikasi Fakultas</span>
-                          </span>
-                        ) : doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi" ? (
+                        ) : adminStatus === "ditolak" || doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi" ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                             <XCircle className="w-3 h-3 text-rose-600" />
-                            <span>Ditolak</span>
+                            <span>Ditolak Admin</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                             <Clock className="w-3 h-3 text-amber-600" />
-                            <span>{isProdiUnit ? "Menunggu Verifikasi Fakultas" : "Belum Diverifikasi"}</span>
+                            <span>Belum Diverifikasi</span>
                           </span>
                         )}
                       </div>
@@ -1710,10 +1771,22 @@ export default function ProkerV3DokumenPage() {
                             • Catatan: {doc.Catatan || doc.Keterangan}
                           </span>
                         )}
-                        {(doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi") && (doc.CatatanPenolakan || doc.Catatan) && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 max-w-md truncate" title={doc.CatatanPenolakan || doc.Catatan}>
+                        {fakStatus === "ditolak" && fakTolakNote && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 max-w-md truncate" title={fakTolakNote}>
                             <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
-                            <span>Alasan Tolak: {doc.CatatanPenolakan || doc.Catatan}</span>
+                            <span>Alasan Tolak Fakultas: {fakTolakNote}</span>
+                          </span>
+                        )}
+                        {adminStatus === "ditolak" && adminTolakNote && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 max-w-md truncate" title={adminTolakNote}>
+                            <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                            <span>Alasan Tolak Admin: {adminTolakNote}</span>
+                          </span>
+                        )}
+                        {legacyTolakNote && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 max-w-md truncate" title={legacyTolakNote}>
+                            <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                            <span>Alasan Tolak: {legacyTolakNote}</span>
                           </span>
                         )}
                       </div>
@@ -1728,20 +1801,20 @@ export default function ProkerV3DokumenPage() {
                           <button
                             type="button"
                             onClick={() => handleVerifikasiDoc(doc)}
-                            disabled={updatingVerifikasi || doc.StatusVerifikasi === "terverifikasi"}
+                            disabled={updatingVerifikasi || adminStatus === "terverifikasi"}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
-                              doc.StatusVerifikasi === "terverifikasi"
+                              adminStatus === "terverifikasi"
                                 ? "bg-emerald-50 text-emerald-800 border border-emerald-300 opacity-90 cursor-default"
                                 : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200"
                             }`}
                             title={
-                              doc.StatusVerifikasi === "terverifikasi"
+                              adminStatus === "terverifikasi"
                                 ? "Dokumen ini sudah diverifikasi"
                                 : "Verifikasi dokumen ini"
                             }
                           >
                             <Check className="w-3.5 h-3.5" />
-                            <span>{doc.StatusVerifikasi === "terverifikasi" ? "Terverifikasi" : "Verifikasi"}</span>
+                            <span>{adminStatus === "terverifikasi" ? "Terverifikasi" : "Verifikasi"}</span>
                           </button>
 
                           {/* Tombol Tolak */}
@@ -1750,7 +1823,7 @@ export default function ProkerV3DokumenPage() {
                             onClick={() => openTolakModal(doc)}
                             disabled={updatingVerifikasi}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                              doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                              adminStatus === "ditolak" || doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
                                 ? "bg-rose-100 text-rose-800 border border-rose-300"
                                 : "bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
                             }`}
@@ -1758,7 +1831,7 @@ export default function ProkerV3DokumenPage() {
                           >
                             <X className="w-3.5 h-3.5 text-rose-600" />
                             <span>
-                              {doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                              {adminStatus === "ditolak" || doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
                                 ? "Ditolak (Ubah)"
                                 : "Tolak"}
                             </span>
@@ -1777,29 +1850,29 @@ export default function ProkerV3DokumenPage() {
                                 onClick={() => handleVerifikasiDoc(doc)}
                                 disabled={
                                   updatingVerifikasi ||
-                                  doc.StatusVerifikasi === "terverifikasi" ||
-                                  doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                  adminStatus === "terverifikasi" ||
+                                  fakStatus === "terverifikasi"
                                 }
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
-                                  doc.StatusVerifikasi === "terverifikasi"
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs ${
+                                  adminStatus === "terverifikasi"
                                     ? "bg-emerald-50 text-emerald-800 border border-emerald-300 opacity-90 cursor-default"
-                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    : fakStatus === "terverifikasi"
                                     ? "bg-blue-50 text-blue-800 border border-blue-300 opacity-90 cursor-default"
-                                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200"
+                                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 cursor-pointer"
                                 }`}
                                 title={
-                                  doc.StatusVerifikasi === "terverifikasi"
+                                  adminStatus === "terverifikasi"
                                     ? "Dokumen ini sudah diverifikasi penuh oleh Admin"
-                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
-                                    ? "Sudah diverifikasi Fakultas (Menunggu Verifikasi Admin)"
+                                    : fakStatus === "terverifikasi"
+                                    ? "Sudah diverifikasi Fakultas"
                                     : "Verifikasi dokumen prodi ini (Tahap Fakultas)"
                                 }
                               >
                                 <Check className="w-3.5 h-3.5" />
                                 <span>
-                                  {doc.StatusVerifikasi === "terverifikasi"
+                                  {adminStatus === "terverifikasi"
                                     ? "Terverifikasi"
-                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    : fakStatus === "terverifikasi"
                                     ? "Terverifikasi Fakultas"
                                     : "Verifikasi"}
                                 </span>
@@ -1808,11 +1881,11 @@ export default function ProkerV3DokumenPage() {
                               <button
                                 type="button"
                                 onClick={() => openTolakModal(doc)}
-                                disabled={updatingVerifikasi || doc.StatusVerifikasi === "terverifikasi"}
+                                disabled={updatingVerifikasi || adminStatus === "terverifikasi"}
                                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                                  doc.StatusVerifikasi === "terverifikasi"
+                                  adminStatus === "terverifikasi"
                                     ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-80"
-                                    : doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                                    : fakStatus === "ditolak"
                                     ? "bg-rose-100 text-rose-800 border border-rose-300 cursor-pointer"
                                     : "bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs cursor-pointer"
                                 }`}
@@ -1820,7 +1893,7 @@ export default function ProkerV3DokumenPage() {
                               >
                                 <X className="w-3.5 h-3.5 text-rose-600" />
                                 <span>
-                                  {doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                                  {fakStatus === "ditolak"
                                     ? "Ditolak (Ubah)"
                                     : "Tolak"}
                                 </span>
@@ -1836,46 +1909,50 @@ export default function ProkerV3DokumenPage() {
                                 onClick={() => handleVerifikasiDoc(doc)}
                                 disabled={
                                   updatingVerifikasi ||
-                                  doc.StatusVerifikasi === "terverifikasi" ||
-                                  doc.StatusVerifikasi !== "terverifikasi_fakultas"
+                                  adminStatus === "terverifikasi" ||
+                                  fakStatus !== "terverifikasi"
                                 }
                                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs ${
-                                  doc.StatusVerifikasi === "terverifikasi"
+                                  adminStatus === "terverifikasi"
                                     ? "bg-emerald-50 text-emerald-800 border border-emerald-300 opacity-90 cursor-default"
-                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    : fakStatus === "terverifikasi"
                                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 cursor-pointer"
                                     : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-80"
                                 }`}
                                 title={
-                                  doc.StatusVerifikasi === "terverifikasi"
+                                  adminStatus === "terverifikasi"
                                     ? "Dokumen ini sudah diverifikasi"
-                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    : fakStatus === "terverifikasi"
                                     ? "Verifikasi final dokumen prodi ini"
                                     : "Perlu verifikasi fakultas terlebih dahulu"
                                 }
                               >
                                 <Check className="w-3.5 h-3.5" />
                                 <span>
-                                  {doc.StatusVerifikasi === "terverifikasi"
+                                  {adminStatus === "terverifikasi"
                                     ? "Terverifikasi"
-                                    : doc.StatusVerifikasi === "terverifikasi_fakultas"
+                                    : fakStatus === "terverifikasi"
                                     ? "Verifikasi"
                                     : "Menunggu Fakultas"}
                                 </span>
                               </button>
 
                               {/* Tombol Tolak untuk Admin pada dokumen prodi hanya tampil setelah diverifikasi Fakultas */}
-                              {(doc.StatusVerifikasi === "terverifikasi_fakultas" ||
-                                doc.StatusVerifikasi === "terverifikasi") && (
+                              {(fakStatus === "terverifikasi" ||
+                                adminStatus === "terverifikasi") && (
                                 <button
                                   type="button"
                                   onClick={() => openTolakModal(doc)}
                                   disabled={updatingVerifikasi}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                                    adminStatus === "ditolak"
+                                      ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                      : "bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
+                                  }`}
                                   title="Tolak dokumen prodi ini dengan catatan alasan"
                                 >
                                   <X className="w-3.5 h-3.5 text-rose-600" />
-                                  <span>Tolak</span>
+                                  <span>{adminStatus === "ditolak" ? "Ditolak (Ubah)" : "Tolak"}</span>
                                 </button>
                               )}
                             </>

@@ -178,6 +178,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("token");
     localStorage.removeItem("refresh");
     localStorage.removeItem("positionYear");
+    localStorage.removeItem("appVersion");
     localStorage.removeItem("activeLevel");
     localStorage.removeItem("activeLevelYear");
     setUser(null);

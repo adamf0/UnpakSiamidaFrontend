@@ -13,7 +13,7 @@ export const ContentProvider = ({ children }) => {
   const { user } = useAuth();
   const [serverYears, setServerYears] = useState([]);
   const [positionYear, setPositionYear] = useState(() => {
-    return localStorage.getItem("positionYear") || "2026";
+    return localStorage.getItem("positionYear") || "2027";
   });
 
   /* ================= VERSIONING ================= */
@@ -23,7 +23,7 @@ export const ContentProvider = ({ children }) => {
     if (!isNaN(yNum)) {
       return yNum >= 2027 ? "v3" : yNum <= 2023 ? "v1" : "v2";
     }
-    return localStorage.getItem("appVersion") || "v2";
+    return localStorage.getItem("appVersion") || "v3";
   });
 
   const changeAppVersion = (verId) => {
@@ -124,7 +124,7 @@ export const ContentProvider = ({ children }) => {
       return String(availableYears[0].Tahun ?? availableYears[0].tahun);
     }
 
-    return "2026";
+    return "2027";
   }, [availableYears, user?.extra_role]);
 
   /* ================= LEVEL ================= */
