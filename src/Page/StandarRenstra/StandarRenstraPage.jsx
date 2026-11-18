@@ -12,7 +12,6 @@ import { useAuth } from "@/Providers/AuthProvider";
 import { isEmpty } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
-import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const StandarRenstraPage = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -21,7 +20,7 @@ const StandarRenstraPage = () => {
   const [modalMode, setModalMode] = useState("new");
   const [selectedRow, setSelectedRow] = useState(null);
   const { addToast } = useToast();
-  const {getValidToken} = useAuth()
+  const {getValidToken, user} = useAuth()
 
   const openNew = () => {
     setModalMode("new");
@@ -56,7 +55,8 @@ const StandarRenstraPage = () => {
     openChangeLevel,
     setOpenChangeLevel,
   } = useContent();
-  const canShowActions = useFeatureActionVisibility();
+  // Tombol tambah khusus admin, tidak terikat VITE_HIDE_NON_V3_ACTIONS
+  const isAdmin = level === "admin" || user?.level === "admin";
 
   return (
     <>
@@ -91,7 +91,7 @@ const StandarRenstraPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              canShowActions ? (
+              isAdmin ? (
                 <button 
                   type="button"
                   className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer" 

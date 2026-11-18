@@ -25,10 +25,8 @@ import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
 import SearchSelect from "@/Components/SearchSelect";
 import MultiSearchSelect from "@/Components/MultiSearchSelect";
-import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const IndikatorRenstraPage = () => {
-  const canShowActions = useFeatureActionVisibility();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const tableRef = useRef(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -425,7 +423,7 @@ const IndikatorRenstraPage = () => {
               console.error("TABLE ERROR:", err);
             }}
             renderAddAction={
-              canShowActions ? (
+              isAdmin ? (
                 <Tooltip content="Tambah Indikator Renstra">
                   <button
                     type="button"
