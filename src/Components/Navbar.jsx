@@ -178,64 +178,66 @@ const Navbar = ({ renderChangeLevelModal }) => {
             </Popover>
           )}
 
-          {/* Tahun selection (desktop only) */}
-          <Popover className="relative hidden sm:block">
-            {({ close }) => (
-              <>
-                <Popover.Button className="flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm hover:bg-gray-100 cursor-pointer">
-                  <Calendar size={16} />
-                  <span>{positionYear || activeYear || "2026"}</span>
-                  {String(positionYear) === String(activeYear) ? (
-                    <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                      Active
-                    </span>
-                  ) : (
-                    <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                      Open Now
-                    </span>
-                  )}
-                </Popover.Button>
+          {/* Tahun selection (desktop only) - Disembunyikan untuk admin */}
+          {!isAdmin && (
+            <Popover className="relative hidden sm:block">
+              {({ close }) => (
+                <>
+                  <Popover.Button className="flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm hover:bg-gray-100 cursor-pointer">
+                    <Calendar size={16} />
+                    <span>{positionYear || activeYear || "2026"}</span>
+                    {String(positionYear) === String(activeYear) ? (
+                      <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                        Open Now
+                      </span>
+                    )}
+                  </Popover.Button>
 
-                <Popover.Panel className="absolute left-0 mt-2 w-48 bg-white border rounded-md shadow-lg z-50">
-                  <ul className="text-sm max-h-64 overflow-y-auto">
-                    {(serverYears ?? []).map((item) => {
-                      const year = String(item.Tahun ?? item.tahun ?? "");
-                      const isActive =
-                        String(item.Status || item.status || "").toLowerCase() === "active" ||
-                        String(item.Status || item.status || "").toLowerCase() === "aktif";
-                      const isPosition = year === String(positionYear);
+                  <Popover.Panel className="absolute left-0 mt-2 w-48 bg-white border rounded-md shadow-lg z-50">
+                    <ul className="text-sm max-h-64 overflow-y-auto">
+                      {(serverYears ?? []).map((item) => {
+                        const year = String(item.Tahun ?? item.tahun ?? "");
+                        const isActive =
+                          String(item.Status || item.status || "").toLowerCase() === "active" ||
+                          String(item.Status || item.status || "").toLowerCase() === "aktif";
+                        const isPosition = year === String(positionYear);
 
-                      return (
-                        <li
-                          key={year}
-                          onClick={() => {
-                            if (changeYear) changeYear(year);
-                            else setPositionYear(year);
-                            close();
-                          }}
-                          className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center
-                            ${isPosition ? "bg-gray-100 font-medium" : ""}
-                          `}
-                        >
-                          <span>{year}</span>
-                          {isActive && (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 rounded-full">
-                              Active
-                            </span>
-                          )}
-                          {!isActive && isPosition && (
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 rounded-full">
-                              Open
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </Popover.Panel>
-              </>
-            )}
-          </Popover>
+                        return (
+                          <li
+                            key={year}
+                            onClick={() => {
+                              if (changeYear) changeYear(year);
+                              else setPositionYear(year);
+                              close();
+                            }}
+                            className={`px-3 py-2 cursor-pointer hover:bg-gray-100 flex justify-between items-center
+                              ${isPosition ? "bg-gray-100 font-medium" : ""}
+                            `}
+                          >
+                            <span>{year}</span>
+                            {isActive && (
+                              <span className="text-xs bg-green-100 text-green-700 px-2 rounded-full">
+                                Active
+                              </span>
+                            )}
+                            {!isActive && isPosition && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 rounded-full">
+                                Open
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </Popover.Panel>
+                </>
+              )}
+            </Popover>
+          )}
         </div>
 
         {/* RIGHT */}
@@ -335,19 +337,21 @@ const Navbar = ({ renderChangeLevelModal }) => {
 
                   {/* MENU */}
                   <div className="py-1 text-sm space-y-1">
-                    <button
-                      type="button"
-                      className="sm:hidden w-full rounded text-left px-3 py-1.5 hover:bg-gray-100 flex justify-between items-center cursor-pointer"
-                      onClick={() => {
-                        close();
-                        setYearModalOpen(true);
-                      }}
-                    >
-                      <span>Pilih Tahun</span>
-                      <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                        {positionYear}
-                      </span>
-                    </button>
+                    {!isAdmin && (
+                      <button
+                        type="button"
+                        className="sm:hidden w-full rounded text-left px-3 py-1.5 hover:bg-gray-100 flex justify-between items-center cursor-pointer"
+                        onClick={() => {
+                          close();
+                          setYearModalOpen(true);
+                        }}
+                      >
+                        <span>Pilih Tahun</span>
+                        <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                          {positionYear}
+                        </span>
+                      </button>
+                    )}
 
                     {isAdmin && (
                       <button

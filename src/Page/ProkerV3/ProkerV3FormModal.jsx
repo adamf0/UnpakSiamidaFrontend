@@ -35,6 +35,7 @@ export default function ProkerV3FormModal({
   tahunOptions = [],
   standarOptions = [],
   indikatorOptions = [],
+  loadingOptions = false,
   defaultYear,
   defaultUnit,
   onClose,
@@ -781,6 +782,7 @@ export default function ProkerV3FormModal({
                             Tahun Renstra <span className="text-rose-500">*</span>
                           </label>
                           <SearchSelect
+                            loading={loadingOptions}
                             options={tahunOptions}
                             value={selectedTahun}
                             onChange={(val) => {
@@ -798,6 +800,7 @@ export default function ProkerV3FormModal({
                             Fakultas / Unit Kerja <span className="text-rose-500">*</span>
                           </label>
                           <SearchSelect
+                            loading={loadingOptions}
                             options={unitOptions}
                             value={selectedUnit}
                             disabled={!isAdmin && Boolean(selectedUnit)}
@@ -956,6 +959,7 @@ export default function ProkerV3FormModal({
                                     )}
                                   </div>
                                   <SearchSelect
+                                    loading={loadingOptions}
                                     options={formattedStandarOptions}
                                     value={sc.selectedStandar}
                                     onChange={(item) => handleSelectStandar(index, item)}
@@ -977,6 +981,7 @@ export default function ProkerV3FormModal({
                                     )}
                                   </div>
                                   <SearchSelect
+                                    loading={loadingOptions}
                                     options={filteredIndikators}
                                     value={sc.selectedIndikator}
                                     onChange={(item) => handleSelectIndikator(index, item)}

@@ -8,7 +8,7 @@ import {
   size,
 } from "@floating-ui/react";
 import { Portal } from "@headlessui/react";
-import { Check, ChevronDown, X, Search, CheckSquare, Square, Loader2 } from "lucide-react";
+import { Check, ChevronDown, X, Search, CheckSquare, Square } from "lucide-react";
 
 const getItemId = (obj) => {
   if (!obj) return undefined;
@@ -147,6 +147,26 @@ export default function MultiSearchSelect({
     return `${value.length} IKU dipilih`;
   }, [value, placeholder]);
 
+  if (loading) {
+    return (
+      <div className="relative">
+        {label && (
+          <label className="block text-sm font-medium mb-1">
+            {label} {required && <span className="text-red-500">*</span>}
+          </label>
+        )}
+        <div
+          className="w-full h-[38px] px-3 py-2 rounded border border-gray-200 bg-gray-100 flex items-center justify-between animate-pulse"
+          aria-busy="true"
+          aria-label={`Memuat data ${label || "dropdown"}`}
+        >
+          <div className="h-4 w-2/3 bg-gray-200 rounded" />
+          <div className="h-3 w-3 bg-gray-200 rounded" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className="relative">
       {label && (
@@ -173,17 +193,13 @@ export default function MultiSearchSelect({
           {Icon && (
             <Icon className="w-4 h-4 text-gray-400 shrink-0 group-hover:text-purple-600" />
           )}
-          {loading && value.length === 0 ? (
-            <div className="h-3.5 bg-gray-200/80 rounded skeleton w-24" />
-          ) : (
-            <span
-              className={`truncate font-medium ${
-                value.length === 0 ? "text-gray-400" : "text-gray-800"
-              }`}
-            >
-              {triggerText}
-            </span>
-          )}
+          <span
+            className={`truncate font-medium ${
+              value.length === 0 ? "text-gray-400" : "text-gray-800"
+            }`}
+          >
+            {triggerText}
+          </span>
           {value.length > 0 && (
             <span className="px-1.5 py-0.2 rounded-full text-2xs font-extrabold bg-purple-100 text-purple-700 border border-purple-200 shrink-0">
               {value.length}
@@ -192,27 +208,21 @@ export default function MultiSearchSelect({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          {loading ? (
-            <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin shrink-0" />
-          ) : (
-            <>
-              {value.length > 0 && !disabled && (
-                <button
-                  type="button"
-                  onClick={handleClearAll}
-                  className="p-0.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 transition cursor-pointer"
-                  title="Reset pilihan"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-              <ChevronDown
-                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
-                  open ? "rotate-180 text-purple-600" : ""
-                }`}
-              />
-            </>
+          {value.length > 0 && !disabled && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="p-0.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 transition cursor-pointer"
+              title="Reset pilihan"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           )}
+          <ChevronDown
+            className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+              open ? "rotate-180 text-purple-600" : ""
+            }`}
+          />
         </div>
       </div>
 
@@ -237,7 +247,6 @@ export default function MultiSearchSelect({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Cari IKU..."
-                  disabled={loading}
                   className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition"
                 />
                 {query && (
@@ -256,10 +265,7 @@ export default function MultiSearchSelect({
                 <button
                   type="button"
                   onClick={handleSelectAll}
-                  disabled={loading}
-                  className={`text-purple-600 hover:text-purple-800 font-semibold ${
-                    loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:underline"
-                  }`}
+                  className="text-purple-600 hover:text-purple-800 font-semibold cursor-pointer hover:underline"
                 >
                   Pilih Semua ({options.length})
                 </button>
@@ -267,7 +273,6 @@ export default function MultiSearchSelect({
                   <button
                     type="button"
                     onClick={handleClearAll}
-                    disabled={loading}
                     className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer hover:underline"
                   >
                     Hapus Pilihan ({value.length})
@@ -278,29 +283,7 @@ export default function MultiSearchSelect({
 
             {/* List Items */}
             <div className="overflow-y-auto max-h-56 divide-y divide-gray-50 p-1">
-              {loading ? (
-                <div className="p-2 space-y-1.5" aria-busy="true">
-                  <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-purple-600 font-medium">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
-                    <span>Memuat data pilihan...</span>
-                  </div>
-                  {[70, 50, 85, 60].map((widthPercent, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-gray-50/70 border border-gray-100"
-                    >
-                      <div className="w-4 h-4 rounded border border-gray-200 bg-gray-100 skeleton shrink-0" />
-                      <div className="flex-1 space-y-1">
-                        <div
-                          className="h-3 bg-gray-200 rounded skeleton"
-                          style={{ width: `${widthPercent}%` }}
-                        />
-                        <div className="h-2.5 bg-gray-200/60 rounded skeleton w-1/3" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : filteredOptions.length === 0 ? (
+              {filteredOptions.length === 0 ? (
                 <div className="p-4 text-center text-gray-400">
                   Data IKU tidak ditemukan
                 </div>

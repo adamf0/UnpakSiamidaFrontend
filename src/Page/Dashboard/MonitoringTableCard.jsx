@@ -31,7 +31,7 @@ import {
 
 export default function MonitoringTableCard() {
   const { user, getValidToken } = useAuth();
-  const { positionYear, activeYear, setPositionYear, changeYear } = useContent();
+  const { positionYear, activeYear } = useContent();
   const { addToast } = useToast();
 
   /* =========================
@@ -51,12 +51,6 @@ export default function MonitoringTableCard() {
   const [errorTahun, setErrorTahun] = useState(null);
   const [loadingFakultasUnit, setLoadingFakultasUnit] = useState(false);
   const [errorFakultasUnit, setErrorFakultasUnit] = useState(null);
-
-  const prevPositionYearRef = useRef(positionYear);
-  const tahunRef = useRef(tahun);
-  tahunRef.current = tahun;
-  const unitRef = useRef(unlockedUnit || fakultasunit);
-  unitRef.current = unlockedUnit || fakultasunit;
 
   // Cek apakah user adalah auditee atau memiliki fakultas_unit
   const isAuditee = useMemo(() => {
@@ -127,19 +121,19 @@ export default function MonitoringTableCard() {
     }
   };
 
+  const fetchSeqRef = useRef(0);
+  const prevPositionYearRef = useRef(positionYear);
+
   const fetchMonitoringProker = useCallback(
-    async (targetTahun, targetUnit) => {
-      const effTahun = targetTahun || tahunRef.current;
-      const effUnit = targetUnit || unitRef.current;
-      const tahunUuid = effTahun?.UUID || effTahun?.uuid;
-      const unitUuid = effUnit?.UUID || effUnit?.uuid;
-      const unitId = effUnit?.ID || effUnit?.id || effUnit?.UUID;
-      const targetYearStr = String(
-        effTahun?.Tahun ?? effTahun?.nama ?? effTahun?.tahun ?? positionYear ?? "",
-      );
+    async (targetTahun = tahun, targetUnit = fakultasunit) => {
+      const tahunUuid = targetTahun?.UUID;
+      const unitUuid = targetUnit?.UUID;
+      const unitId = targetUnit?.ID || targetUnit?.id || targetUnit?.UUID;
+      const targetYearStr = String(targetTahun?.Tahun || targetTahun?.nama || "").trim();
 
       if (!tahunUuid || !unitUuid) return;
 
+      const reqSeq = ++fetchSeqRef.current;
       setLoading(true);
       try {
         const [resMonitoring, resRealDocs, resProkerV3] = await Promise.allSettled([
@@ -149,6 +143,7 @@ export default function MonitoringTableCard() {
             params: {
               mode: "all",
               filter_fakultas_unit: unitId,
+              // Kirim filter_tahun eksplisit agar backend tidak fallback ke header X-Active-Year (navbar)
               ...(targetYearStr ? { filter_tahun: targetYearStr } : {}),
             },
           }),
@@ -217,6 +212,8 @@ export default function MonitoringTableCard() {
           v3Docs = docResults.flat();
         }
 
+        if (reqSeq !== fetchSeqRef.current) return;
+
         // Gabungkan seluruh dokumen riil
         const combinedRealDocs = [...v3Docs, ...legacyDocs];
         setRealDocs(combinedRealDocs);
@@ -272,25 +269,25 @@ export default function MonitoringTableCard() {
             if (row) {
               row.SK = Math.max(row.SK || 0, skDocs.length);
               row.SKR0 = countR(skDocs, ["draft", "r0", ""]);
-              row.SKR1 = countR(skDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]);
+              row.SKR1 = countR(skDocs, ["belum_terverifikasi", "terverifikasi_fakultas", "menunggu", "proses", "r1"]);
               row.SKR2 = countR(skDocs, ["terverifikasi", "disetujui", "approved", "r2"]);
               row.SKR3 = countR(skDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]);
 
               row.SOP = Math.max(row.SOP || 0, sopDocs.length);
               row.SOPR0 = countR(sopDocs, ["draft", "r0", ""]);
-              row.SOPR1 = countR(sopDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]);
+              row.SOPR1 = countR(sopDocs, ["belum_terverifikasi", "terverifikasi_fakultas", "menunggu", "proses", "r1"]);
               row.SOPR2 = countR(sopDocs, ["terverifikasi", "disetujui", "approved", "r2"]);
               row.SOPR3 = countR(sopDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]);
 
               row.ProposalTOR = Math.max(row.ProposalTOR || 0, torDocs.length);
               row.ProposalTORR0 = countR(torDocs, ["draft", "r0", ""]);
-              row.ProposalTORR1 = countR(torDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]);
+              row.ProposalTORR1 = countR(torDocs, ["belum_terverifikasi", "terverifikasi_fakultas", "menunggu", "proses", "r1"]);
               row.ProposalTORR2 = countR(torDocs, ["terverifikasi", "disetujui", "approved", "r2"]);
               row.ProposalTORR3 = countR(torDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]);
 
               row.Laporan = Math.max(row.Laporan || 0, lapDocs.length);
               row.LaporanR0 = countR(lapDocs, ["draft", "r0", ""]);
-              row.LaporanR1 = countR(lapDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]);
+              row.LaporanR1 = countR(lapDocs, ["belum_terverifikasi", "terverifikasi_fakultas", "menunggu", "proses", "r1"]);
               row.LaporanR2 = countR(lapDocs, ["terverifikasi", "disetujui", "approved", "r2"]);
               row.LaporanR3 = countR(lapDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]);
             } else {
@@ -306,22 +303,22 @@ export default function MonitoringTableCard() {
                 TahunUuid: tahunUuid,
                 SK: skDocs.length,
                 SKR0: countR(skDocs, ["draft", "r0", ""]),
-                SKR1: countR(skDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]),
+                SKR1: countR(skDocs, ["belum_terverifikasi", "terverifikasi_fakultas", "menunggu", "proses", "r1"]),
                 SKR2: countR(skDocs, ["terverifikasi", "disetujui", "approved", "r2"]),
                 SKR3: countR(skDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]),
                 SOP: sopDocs.length,
                 SOPR0: countR(sopDocs, ["draft", "r0", ""]),
-                SOPR1: countR(sopDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]),
+                SOPR1: countR(sopDocs, ["belum_terverifikasi", "terverifikasi_fakultas", "menunggu", "proses", "r1"]),
                 SOPR2: countR(sopDocs, ["terverifikasi", "disetujui", "approved", "r2"]),
                 SOPR3: countR(sopDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]),
                 ProposalTOR: torDocs.length,
                 ProposalTORR0: countR(torDocs, ["draft", "r0", ""]),
-                ProposalTORR1: countR(torDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]),
+                ProposalTORR1: countR(torDocs, ["belum_terverifikasi", "terverifikasi_fakultas", "menunggu", "proses", "r1"]),
                 ProposalTORR2: countR(torDocs, ["terverifikasi", "disetujui", "approved", "r2"]),
                 ProposalTORR3: countR(torDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]),
                 Laporan: lapDocs.length,
                 LaporanR0: countR(lapDocs, ["draft", "r0", ""]),
-                LaporanR1: countR(lapDocs, ["belum_terverifikasi", "menunggu", "proses", "r1"]),
+                LaporanR1: countR(lapDocs, ["belum_terverifikasi", "terverifikasi_fakultas", "menunggu", "proses", "r1"]),
                 LaporanR2: countR(lapDocs, ["terverifikasi", "disetujui", "approved", "r2"]),
                 LaporanR3: countR(lapDocs, ["gagal_terverifikasi", "gagal_verifikasi", "ditolak", "revisi", "r3"]),
               });
@@ -329,18 +326,22 @@ export default function MonitoringTableCard() {
           });
         }
 
+        if (reqSeq !== fetchSeqRef.current) return;
         setRawData(rawRows);
       } catch (err) {
+        if (reqSeq !== fetchSeqRef.current) return;
         console.error("Fetch monitoring proker gagal:", err);
         addToast(
           "errors",
           "Gagal memuat data monitoring dokumen program kerja",
         );
       } finally {
-        setLoading(false);
+        if (reqSeq === fetchSeqRef.current) {
+          setLoading(false);
+        }
       }
     },
-    [getValidToken, addToast, positionYear],
+    [getValidToken, tahun, fakultasunit, addToast],
   );
 
   /* =========================
@@ -395,7 +396,6 @@ export default function MonitoringTableCard() {
       }
 
       if (matchedTahun) {
-        prevPositionYearRef.current = String(matchedTahun.Tahun ?? matchedTahun.nama);
         setTahun(matchedTahun);
         upsertFilter("tahun", matchedTahun);
       }
@@ -446,52 +446,26 @@ export default function MonitoringTableCard() {
   const handleTahunChange = useCallback(
     async (selectedTahun) => {
       if (!selectedTahun) return;
-      const targetYearStr = String(
-        selectedTahun.Tahun ?? selectedTahun.tahun ?? selectedTahun.nama ?? "",
-      );
-
-      // Tandai tahun ini di ref agar navbar sync effect tidak meng-override balik
-      prevPositionYearRef.current = targetYearStr;
-
       setTahun(selectedTahun);
       upsertFilter("tahun", selectedTahun);
-
-      // Sinkronkan ke context global (positionYear & appVersion)
-      if (targetYearStr) {
-        if (changeYear) {
-          changeYear(targetYearStr);
-        } else if (setPositionYear) {
-          setPositionYear(targetYearStr);
-        }
-      }
-
       const targetUnit = unlockedUnit || fakultasunit;
       if (targetUnit) {
         await fetchMonitoringProker(selectedTahun, targetUnit);
       }
     },
-    [unlockedUnit, fakultasunit, fetchMonitoringProker, changeYear, setPositionYear],
+    [unlockedUnit, fakultasunit, fetchMonitoringProker],
   );
 
-  // Update jika positionYear di navbar berubah
+  // Update hanya saat positionYear di navbar benar-benar berubah, agar tidak menimpa pilihan tahun manual user
   useEffect(() => {
     if (!positionYear || dataTahun.length === 0) return;
-
-    // Jika tahun sudah sesuai dengan positionYear, jangan lakukan apa-apa
-    if (
-      prevPositionYearRef.current === String(positionYear) &&
-      tahun &&
-      String(tahun.Tahun ?? tahun.nama) === String(positionYear)
-    ) {
-      return;
-    }
-
-    prevPositionYearRef.current = String(positionYear);
+    if (String(prevPositionYearRef.current) === String(positionYear)) return;
+    prevPositionYearRef.current = positionYear;
 
     const matchedTahun = dataTahun.find(
-      (t) => String(t.Tahun ?? t.nama) === String(positionYear),
+      (t) => String(t.Tahun) === String(positionYear),
     );
-    if (matchedTahun) {
+    if (matchedTahun && matchedTahun.UUID !== tahun?.UUID) {
       setTahun(matchedTahun);
       upsertFilter("tahun", matchedTahun);
       const targetUnit = unlockedUnit || fakultasunit;
@@ -499,7 +473,7 @@ export default function MonitoringTableCard() {
         fetchMonitoringProker(matchedTahun, targetUnit);
       }
     }
-  }, [positionYear, dataTahun, unlockedUnit, fakultasunit, fetchMonitoringProker, tahun]);
+  }, [positionYear, dataTahun, tahun, unlockedUnit, fakultasunit, fetchMonitoringProker]);
 
   // Update jika user info baru didapat setelah dataFakultasUnit ready
   useEffect(() => {
@@ -609,10 +583,10 @@ export default function MonitoringTableCard() {
               <select
                 id="monitoring-tahun-select"
                 aria-label="Filter Tahun Master Dokumen Program Kerja"
-                value={tahun?.UUID || tahun?.uuid || (tahun ? String(tahun.Tahun ?? tahun.nama) : "")}
+                value={tahun?.UUID || tahun?.uuid || ""}
                 onChange={(e) => {
                   const val = e.target.value;
-                  const selected = dataTahun.find((t) => (t.UUID || t.uuid) === val || String(t.Tahun ?? t.nama) === val);
+                  const selected = dataTahun.find((t) => (t.UUID || t.uuid) === val);
                   if (selected) {
                     handleTahunChange(selected);
                   }
@@ -620,7 +594,7 @@ export default function MonitoringTableCard() {
                 className="text-xs font-semibold text-gray-700 bg-transparent border-none outline-none cursor-pointer"
               >
                 {dataTahun.map((t) => (
-                  <option key={t.UUID || t.uuid || t.nama} value={t.UUID || t.uuid || String(t.Tahun ?? t.nama)}>
+                  <option key={t.UUID || t.uuid || t.nama} value={t.UUID || t.uuid}>
                     Tahun {t.nama || t.Tahun} {String(t.Status || t.status).toLowerCase().includes("aktif") ? "(Aktif)" : ""}
                   </option>
                 ))}

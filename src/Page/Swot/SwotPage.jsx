@@ -96,7 +96,8 @@ const SwotPage = () => {
   const [tahunList, setTahunList] = useState([]);
   const [fakultasList, setFakultasList] = useState([]);
   const [userUnitData, setUserUnitData] = useState(null);
-  const [loadingMetadata, setLoadingMetadata] = useState(true);
+  const [loadingTahun, setLoadingTahun] = useState(true);
+  const [loadingFakultas, setLoadingFakultas] = useState(true);
 
   // Loading & Counts for SWOT Cards
   const [loadingCards, setLoadingCards] = useState(true);
@@ -146,21 +147,27 @@ const SwotPage = () => {
     const fetchMetadata = async () => {
       const token = getValidToken();
       if (isEmpty(token)) {
-        setLoadingMetadata(false);
+        setLoadingTahun(false);
+        setLoadingFakultas(false);
         return;
       }
 
-      setLoadingMetadata(true);
+      setLoadingTahun(true);
+      setLoadingFakultas(true);
       try {
-        // Fetch Tahun
-        const resTahun = await apiClient.get("/tahunprokers?mode=all");
-        const jsonTahun = resTahun.data;
-        setTahunList(Array.isArray(jsonTahun) ? jsonTahun : []);
+        const [resTahun, resFu] = await Promise.allSettled([
+          apiClient.get("/tahunprokers?mode=all"),
+          apiClient.get("/fakultasunits?mode=all"),
+        ]);
 
-        // Fetch Unit List (All for admin, or finding user's unit name for auditee)
-        const resFu = await apiClient.get("/fakultasunits?mode=all");
-        const jsonFu = resFu.data;
-        const list = Array.isArray(jsonFu) ? jsonFu : [];
+        if (resTahun.status === "fulfilled") {
+          const jsonTahun = resTahun.value?.data;
+          setTahunList(Array.isArray(jsonTahun) ? jsonTahun : []);
+        }
+        setLoadingTahun(false);
+
+        const jsonFu = resFu.status === "fulfilled" ? resFu.value?.data : [];
+        const list = Array.isArray(jsonFu) ? jsonFu : (jsonFu?.data || []);
         setFakultasList(list);
 
         // Cari unit milik user
@@ -203,16 +210,16 @@ const SwotPage = () => {
         if (myFuId) {
           const myUnit = list.find(
             (u) =>
-              u.UUID === myFuId ||
-              String(u.ID) === String(myFuId)
+              (u.UUID || u.uuid) === myFuId ||
+              String(u.ID ?? u.id) === String(myFuId)
           );
           if (myUnit) {
             setUserUnitData({
-              id: myUnit.UUID,
-              UUID: myUnit.UUID,
-              rawId: myUnit.ID,
-              nama: `${myUnit.Nama || ""}${
-                myUnit.Jenjang ? ` (${myUnit.Jenjang})` : ""
+              id: myUnit.UUID || myUnit.uuid,
+              UUID: myUnit.UUID || myUnit.uuid,
+              rawId: myUnit.ID ?? myUnit.id,
+              nama: `${myUnit.Nama || myUnit.nama || ""}${
+                myUnit.Jenjang || myUnit.jenjang ? ` (${myUnit.Jenjang || myUnit.jenjang})` : ""
               }`.trim(),
             });
           } else {
@@ -226,7 +233,8 @@ const SwotPage = () => {
       } catch (err) {
         console.error("Gagal mengambil master data filter:", err);
       } finally {
-        setLoadingMetadata(false);
+        setLoadingTahun(false);
+        setLoadingFakultas(false);
       }
     };
 
@@ -519,8 +527,8 @@ const SwotPage = () => {
               <SearchSelect
                 icon={Calendar}
                 placeholder="Semua Tahun"
+                loading={loadingTahun}
                 options={tahunOptions}
-                loading={loadingMetadata}
                 value={selectedTahunObj}
                 onChange={(item) => {
                   setSelectedTahunObj(item);
@@ -536,8 +544,8 @@ const SwotPage = () => {
                 <SearchSelect
                   icon={Building2}
                   placeholder="Semua Fakultas/Unit"
+                  loading={loadingFakultas}
                   options={fakultasOptions}
-                  loading={loadingMetadata}
                   value={selectedFakultasObj}
                   onChange={(item) => {
                     setSelectedFakultasObj(item);
@@ -713,6 +721,7 @@ const SwotPage = () => {
           data={selectedRow}
           isAdmin={isAdmin}
           userUnit={userUnitData}
+          loadingUserUnit={loadingFakultas}
           onClose={() => setModalOpen(false)}
           onSuccess={() => {
             fetchSwotCounts();

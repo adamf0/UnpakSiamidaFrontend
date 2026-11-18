@@ -53,7 +53,7 @@ const IndikatorRenstraPage = () => {
   const [selectedStandarObj, setSelectedStandarObj] = useState(null);
   const [selectedIkus, setSelectedIkus] = useState([]);
 
-  // Options Lists & Loading States
+  // Options Lists
   const [tahunList, setTahunList] = useState([]);
   const [standarList, setStandarList] = useState([]);
   const [ikuList, setIkuList] = useState([]);
@@ -61,11 +61,10 @@ const IndikatorRenstraPage = () => {
   const [loadingStandar, setLoadingStandar] = useState(true);
   const [loadingIku, setLoadingIku] = useState(true);
 
-  // Fetch filter metadata in parallel (Tahun, Standar & Master IKU)
+  // Fetch filter metadata (Tahun, Standar & Master IKU) secara paralel
   useEffect(() => {
-    let isMounted = true;
+    let active = true;
 
-    // 1. Fetch Tahun
     const fetchTahun = async () => {
       setLoadingTahun(true);
       try {
@@ -107,15 +106,12 @@ const IndikatorRenstraPage = () => {
           }
         }
         uniqueYears.sort((a, b) => Number(b.Tahun) - Number(a.Tahun));
-        if (isMounted) setTahunList(uniqueYears);
-      } catch (err) {
-        console.error("Gagal mengambil tahun renstra:", err);
+        if (active) setTahunList(uniqueYears);
       } finally {
-        if (isMounted) setLoadingTahun(false);
+        if (active) setLoadingTahun(false);
       }
     };
 
-    // 2. Fetch Standar Renstra
     const fetchStandar = async () => {
       setLoadingStandar(true);
       try {
@@ -128,27 +124,26 @@ const IndikatorRenstraPage = () => {
           nama: s.Nama || s.nama || "",
           ...s,
         }));
-        if (isMounted) setStandarList(mappedStandar);
+        if (active) setStandarList(mappedStandar);
       } catch (err) {
         console.error("Gagal mengambil standar renstra:", err);
       } finally {
-        if (isMounted) setLoadingStandar(false);
+        if (active) setLoadingStandar(false);
       }
     };
 
-    // 3. Fetch Master IKU
     const fetchIku = async () => {
       setLoadingIku(true);
       try {
         const resIku = await apiClient.get("/master_iku");
         const dataIku = resIku?.data ?? resIku;
-        if (Array.isArray(dataIku)) {
-          if (isMounted) setIkuList(dataIku);
+        if (active && Array.isArray(dataIku)) {
+          setIkuList(dataIku);
         }
       } catch (e) {
         console.warn("Gagal fetch master_iku:", e);
       } finally {
-        if (isMounted) setLoadingIku(false);
+        if (active) setLoadingIku(false);
       }
     };
 
@@ -157,7 +152,7 @@ const IndikatorRenstraPage = () => {
     fetchIku();
 
     return () => {
-      isMounted = false;
+      active = false;
     };
   }, []);
 
@@ -378,8 +373,8 @@ const IndikatorRenstraPage = () => {
               <SearchSelect
                 icon={Calendar}
                 placeholder="Semua Tahun"
-                options={tahunList}
                 loading={loadingTahun}
+                options={tahunList}
                 value={selectedTahunObj}
                 onChange={(item) => {
                   setSelectedTahunObj(item);
@@ -396,8 +391,8 @@ const IndikatorRenstraPage = () => {
               <SearchSelect
                 icon={Layers}
                 placeholder="Semua Standar"
-                options={standarList}
                 loading={loadingStandar}
+                options={standarList}
                 value={selectedStandarObj}
                 onChange={(item) => {
                   setSelectedStandarObj(item);
@@ -414,8 +409,8 @@ const IndikatorRenstraPage = () => {
               <MultiSearchSelect
                 icon={BookmarkCheck}
                 placeholder="Semua IKU"
-                options={ikuList}
                 loading={loadingIku}
+                options={ikuList}
                 value={selectedIkus}
                 onChange={(items) => setSelectedIkus(items)}
                 className="!py-1.5 !text-xs !rounded-xl !bg-gray-50/80 hover:!bg-white focus:!bg-white !border-gray-200"

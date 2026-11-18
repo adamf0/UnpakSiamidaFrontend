@@ -199,7 +199,7 @@ export default function RubberStamp({
       >
         <div className="flex items-center gap-1 opacity-70">
           <span className={isSm ? "text-[6px]" : isLg ? "text-[8.5px]" : "text-[7px]"}>
-            {headerText || "PORTOFOLIO KOSONG"}
+            {headerText || ""}
           </span>
         </div>
 

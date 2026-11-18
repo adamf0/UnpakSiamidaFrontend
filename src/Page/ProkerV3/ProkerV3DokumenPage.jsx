@@ -114,46 +114,6 @@ export default function ProkerV3DokumenPage() {
   const [documents, setDocuments] = useState([]);
   const [activeTab, setActiveTab] = useState("all");
 
-  const isProdiUnit = useMemo(() => {
-    return (
-      (proker?.TypeFakultasUnit || proker?.type_fakultas_unit || "").toLowerCase() === "prodi" ||
-      (proker?.NamaFakultasUnit || proker?.nama_fakultas_unit || "").toLowerCase().includes("prodi")
-    );
-  }, [proker]);
-
-  // Cek apakah user role fakultas sesuai dengan fakultas prodi ini
-  const isUserMatchingFaculty = useMemo(() => {
-    if (isAdmin) return true;
-    if (!isFakultas) return false;
-    if (!proker) return false;
-
-    const parentFak = String(proker.ParentFakultas || proker.parent_fakultas || "").trim().toLowerCase();
-    const prokerFuName = String(proker.NamaFakultasUnit || proker.nama_fakultas_unit || "").trim().toLowerCase();
-    const prokerFuId = String(proker.IdFakultasUnit || proker.id_fakultas_unit || "").trim();
-
-    if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
-      const match = user.extra_role.some((r) => {
-        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
-        if (rRole && rRole !== "fakultas" && rRole !== "upmf") return false;
-
-        const rFuName = String(r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "").trim().toLowerCase();
-        if (rFuName && parentFak && (rFuName === parentFak || parentFak.includes(rFuName) || rFuName.includes(parentFak))) return true;
-        if (rFuName && (rFuName === prokerFuName || prokerFuName.includes(rFuName))) return true;
-
-        const rFuId = String(r.id_fakultas_unit ?? r.IdFakultasUnit ?? "").trim();
-        if (rFuId && prokerFuId && rFuId === prokerFuId) return true;
-
-        return false;
-      });
-      if (match) return true;
-    }
-
-    const userFuName = String(user?.nama_fakultas_unit || user?.NamaFakultasUnit || "").trim().toLowerCase();
-    if (userFuName && parentFak && (userFuName === parentFak || parentFak.includes(userFuName) || userFuName.includes(parentFak))) return true;
-
-    return true;
-  }, [isAdmin, isFakultas, proker, user]);
-
   // Izin unggah dokumen: user yang memiliki fakultas_unit (admin & verifikator tidak dapat mengunggah)
   const canUploadDokumen = useMemo(() => {
     if (isAdmin || isVerifierRole || !hasFakultasUnit) return false;
@@ -244,6 +204,35 @@ export default function ProkerV3DokumenPage() {
   const [docToDelete, setDocToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Cek apakah unit pengusul bertipe prodi (perlu verifikasi fakultas -> verifikasi admin)
+  const isProdiUnit = useMemo(() => {
+    if (!proker) return false;
+    const t = String(proker.TypeFakultasUnit || proker.type_fakultas_unit || "").toLowerCase().trim();
+    const n = String(proker.NamaFakultasUnit || proker.nama_fakultas_unit || "").toLowerCase().trim();
+    return t === "prodi" || n.includes("prodi");
+  }, [proker]);
+
+  // Cek apakah user fakultas membawahi prodi ini
+  const isUserMatchingFaculty = useMemo(() => {
+    if (!isFakultas || !proker) return false;
+    const parentFak = String(proker.ParentFakultas || proker.parent_fakultas || "").toLowerCase().trim();
+    if (!parentFak) return true;
+    const names = [];
+    if (Array.isArray(user?.extra_role)) {
+      user.extra_role.forEach((r) => {
+        const rRole = String(r.role ?? r.Role ?? "").toLowerCase().trim();
+        if (rRole === "fakultas" || rRole === "upmf") {
+          const nm = String(r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "").toLowerCase().trim();
+          if (nm) names.push(nm);
+        }
+      });
+    }
+    const directNm = String(user?.nama_fakultas_unit || user?.NamaFakultasUnit || user?.fakultas || "").toLowerCase().trim();
+    if (directNm) names.push(directNm);
+    if (names.length === 0) return true;
+    return names.some((nm) => nm === parentFak || parentFak.includes(nm) || nm.includes(parentFak));
+  }, [isFakultas, proker, user]);
+
   // Verification states & handlers
   const [updatingVerifikasi, setUpdatingVerifikasi] = useState(false);
   const [tolakModalOpen, setTolakModalOpen] = useState(false);
@@ -251,7 +240,7 @@ export default function ProkerV3DokumenPage() {
   const [catatanTolak, setCatatanTolak] = useState("");
 
   const handleVerifikasiDoc = async (doc) => {
-    if (!isAdmin && !(isFakultas && isProdiUnit)) {
+    if (!isAdmin && !(isFakultas && isProdiUnit && isUserMatchingFaculty)) {
       addToast(
         "warning",
         isProdiUnit
@@ -271,7 +260,7 @@ export default function ProkerV3DokumenPage() {
       const fd = new FormData();
       fd.append("status_verifikasi", targetStatus);
       fd.append("catatan", "");
-      const res = await apiClient.put(`/proker_v3/dokumen/${doc.UUID}/verifikasi`, fd);
+      await apiClient.put(`/proker_v3/dokumen/${doc.UUID}/verifikasi`, fd);
       addToast(
         "success",
         isFakultas && isProdiUnit
@@ -287,8 +276,17 @@ export default function ProkerV3DokumenPage() {
   };
 
   const openTolakModal = (doc) => {
-    if (!isAdmin && !(isFakultas && isProdiUnit)) {
+    if (!isAdmin && !(isFakultas && isProdiUnit && isUserMatchingFaculty)) {
       addToast("warning", "Anda tidak memiliki hak akses untuk menolak dokumen ini");
+      return;
+    }
+    if (
+      isAdmin &&
+      isProdiUnit &&
+      doc?.StatusVerifikasi !== "terverifikasi_fakultas" &&
+      doc?.StatusVerifikasi !== "terverifikasi"
+    ) {
+      addToast("warning", "Dokumen prodi harus diverifikasi oleh fakultas terlebih dahulu");
       return;
     }
     setDocToTolak(doc);
@@ -298,8 +296,17 @@ export default function ProkerV3DokumenPage() {
 
   const handleConfirmTolak = async (e) => {
     if (e) e.preventDefault();
-    if (!isAdmin && !(isFakultas && isProdiUnit)) {
+    if (!isAdmin && !(isFakultas && isProdiUnit && isUserMatchingFaculty)) {
       addToast("warning", "Anda tidak memiliki hak akses untuk menolak dokumen ini");
+      return;
+    }
+    if (
+      isAdmin &&
+      isProdiUnit &&
+      docToTolak?.StatusVerifikasi !== "terverifikasi_fakultas" &&
+      docToTolak?.StatusVerifikasi !== "terverifikasi"
+    ) {
+      addToast("warning", "Dokumen prodi harus diverifikasi oleh fakultas terlebih dahulu");
       return;
     }
     if (!docToTolak?.UUID) return;
@@ -1802,10 +1809,12 @@ export default function ProkerV3DokumenPage() {
                                 type="button"
                                 onClick={() => openTolakModal(doc)}
                                 disabled={updatingVerifikasi || doc.StatusVerifikasi === "terverifikasi"}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                  doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
-                                    ? "bg-rose-100 text-rose-800 border border-rose-300"
-                                    : "bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                                  doc.StatusVerifikasi === "terverifikasi"
+                                    ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-80"
+                                    : doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
+                                    ? "bg-rose-100 text-rose-800 border border-rose-300 cursor-pointer"
+                                    : "bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs cursor-pointer"
                                 }`}
                                 title="Tolak dokumen prodi ini dengan catatan alasan"
                               >
@@ -1855,24 +1864,20 @@ export default function ProkerV3DokumenPage() {
                                 </span>
                               </button>
 
-                              <button
-                                type="button"
-                                onClick={() => openTolakModal(doc)}
-                                disabled={updatingVerifikasi}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                                  doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
-                                    ? "bg-rose-100 text-rose-800 border border-rose-300"
-                                    : "bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
-                                }`}
-                                title="Tolak dokumen prodi ini dengan catatan alasan"
-                              >
-                                <X className="w-3.5 h-3.5 text-rose-600" />
-                                <span>
-                                  {doc.StatusVerifikasi === "ditolak" || doc.StatusVerifikasi === "gagal_terverifikasi"
-                                    ? "Ditolak (Ubah)"
-                                    : "Tolak"}
-                                </span>
-                              </button>
+                              {/* Tombol Tolak untuk Admin pada dokumen prodi hanya tampil setelah diverifikasi Fakultas */}
+                              {(doc.StatusVerifikasi === "terverifikasi_fakultas" ||
+                                doc.StatusVerifikasi === "terverifikasi") && (
+                                <button
+                                  type="button"
+                                  onClick={() => openTolakModal(doc)}
+                                  disabled={updatingVerifikasi}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs"
+                                  title="Tolak dokumen prodi ini dengan catatan alasan"
+                                >
+                                  <X className="w-3.5 h-3.5 text-rose-600" />
+                                  <span>Tolak</span>
+                                </button>
+                              )}
                             </>
                           )}
                         </>

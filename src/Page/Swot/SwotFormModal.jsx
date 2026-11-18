@@ -1,5 +1,5 @@
 import { Dialog, Transition } from "@headlessui/react";
-import { Fragment, useEffect, useState, useMemo } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import TextInput from "@/Components/TextInput";
 import SearchSelect from "@/Components/SearchSelect";
@@ -57,6 +57,7 @@ export default function SwotFormModal({
   onSuccess,
   isAdmin = false,
   userUnit = null,
+  loadingUserUnit = false,
 }) {
   const { addToast } = useToast();
   const { getValidToken, user } = useAuth();
@@ -121,56 +122,11 @@ export default function SwotFormModal({
   useEffect(() => {
     if (open) {
       fetchTahunOptions();
-      fetchFakultasOptions();
+      if (isAdmin) {
+        fetchFakultasOptions();
+      }
     }
-  }, [open]);
-
-  // Filter options for non-admin to assigned units
-  const availableFakultasOptions = useMemo(() => {
-    if (isAdmin) return fakultasOptions;
-    if (fakultasOptions.length === 0) {
-      if (userUnit) return [userUnit];
-      return [];
-    }
-
-    const assignedIds = new Set();
-    const assignedNames = new Set();
-
-    if (userUnit?.id) assignedIds.add(String(userUnit.id));
-    if (userUnit?.UUID) assignedIds.add(String(userUnit.UUID));
-    if (userUnit?.rawId) assignedIds.add(String(userUnit.rawId));
-    if (user?.fakultas_unit) assignedIds.add(String(user?.fakultas_unit));
-    if (user?.id_fakultas_unit) assignedIds.add(String(user?.id_fakultas_unit));
-    if (user?.FakultasUnit) assignedIds.add(String(user?.FakultasUnit));
-    if (user?.uuid_fakultas_unit) assignedIds.add(String(user?.uuid_fakultas_unit));
-
-    if (userUnit?.nama) assignedNames.add(userUnit.nama.toLowerCase().trim());
-    if (user?.nama_fakultas_unit) assignedNames.add(user.nama_fakultas_unit.toLowerCase().trim());
-    if (user?.NamaFakultasUnit) assignedNames.add(user.NamaFakultasUnit.toLowerCase().trim());
-
-    if (Array.isArray(user?.extra_role)) {
-      user.extra_role.forEach((r) => {
-        const uId = r.id_fakultas_unit ?? r.IdFakultasUnit ?? r.uuid_fakultas_unit;
-        if (uId) assignedIds.add(String(uId));
-        const uName = r.nama_fakultas_unit ?? r.NamaFakultasUnit;
-        if (uName) assignedNames.add(String(uName).toLowerCase().trim());
-      });
-    }
-
-    const filtered = fakultasOptions.filter((opt) => {
-      const optId = String(opt.id || opt.UUID || opt.rawId || "");
-      const optName = String(opt.nama || opt.label || "").toLowerCase().trim();
-      if (assignedIds.has(optId)) return true;
-      if (opt.rawId && assignedIds.has(String(opt.rawId))) return true;
-      if (opt.UUID && assignedIds.has(String(opt.UUID))) return true;
-      if (optName && assignedNames.has(optName)) return true;
-      return false;
-    });
-
-    if (filtered.length > 0) return filtered;
-    if (userUnit) return [userUnit];
-    return [];
-  }, [isAdmin, fakultasOptions, user, userUnit]);
+  }, [open, isAdmin]);
 
   // Sync form values on open / data change
   useEffect(() => {
@@ -183,27 +139,23 @@ export default function SwotFormModal({
             ? { id: targetTahunUuid, UUID: targetTahunUuid, nama: data.Tahun }
             : null);
 
-        const targetUnitUuid = data.UuidFakultasUnit;
-        const selectedUnit =
-          availableFakultasOptions.find(
-            (item) =>
-              item.UUID === targetUnitUuid ||
-              String(item.rawId) === String(data.IdFakultasUnit) ||
-              String(item.id) === String(data.IdFakultasUnit)
-          ) ||
-          fakultasOptions.find(
-            (item) =>
-              item.UUID === targetUnitUuid ||
-              String(item.rawId) === String(data.IdFakultasUnit) ||
-              String(item.id) === String(data.IdFakultasUnit)
-          ) ||
-          (data.NamaFakultasUnit
-            ? {
-                id: targetUnitUuid || data.IdFakultasUnit,
-                UUID: targetUnitUuid,
-                nama: data.NamaFakultasUnit,
-              }
-            : null);
+        let selectedUnit = null;
+        if (isAdmin) {
+          const targetUnitUuid = data.UuidFakultasUnit;
+          selectedUnit =
+            fakultasOptions.find(
+              (item) =>
+                item.UUID === targetUnitUuid ||
+                String(item.rawId) === String(data.IdFakultasUnit)
+            ) ||
+            (data.NamaFakultasUnit
+              ? {
+                  id: targetUnitUuid || data.IdFakultasUnit,
+                  UUID: targetUnitUuid,
+                  nama: data.NamaFakultasUnit,
+                }
+              : null);
+        }
 
         reset({
           tahun: selectedTahun,
@@ -213,20 +165,15 @@ export default function SwotFormModal({
         });
       } else {
         // Mode new
-        const defaultUnit =
-          !isAdmin && availableFakultasOptions.length > 0
-            ? availableFakultasOptions[0]
-            : null;
-
         reset({
           tahun: tahunOptions[0] || null,
-          fakultas_unit: defaultUnit,
+          fakultas_unit: null,
           kategori: "Kekuatan",
           faktor: "",
         });
       }
     }
-  }, [mode, data, open, tahunOptions, availableFakultasOptions, fakultasOptions, isAdmin, reset]);
+  }, [mode, data, open, tahunOptions, fakultasOptions, isAdmin, reset]);
 
   const onSubmit = async (form) => {
     const token = getValidToken();
@@ -250,13 +197,16 @@ export default function SwotFormModal({
       fd.append("kategori", form.kategori || "Kekuatan");
       fd.append("faktor", form.faktor || "");
 
-      if (form.fakultas_unit) {
-        fd.append(
-          "fakultas_unit",
-          form.fakultas_unit.UUID || form.fakultas_unit.id || ""
-        );
+      if (isAdmin) {
+        if (form.fakultas_unit) {
+          fd.append(
+            "fakultas_unit",
+            form.fakultas_unit.UUID || form.fakultas_unit.id || ""
+          );
+        }
       } else {
-        const myUnit = userUnit?.UUID || userUnit?.id || user?.fakultas_unit || "";
+        // Auditee: otomatis terisi unit auditee
+        const myUnit = user?.fakultas_unit || userUnit?.UUID || userUnit?.id || "";
         if (myUnit) {
           fd.append("fakultas_unit", String(myUnit));
         }
@@ -285,6 +235,8 @@ export default function SwotFormModal({
       setSubmitting(false);
     }
   };
+
+  const isLoadingUnitField = !isAdmin && loadingUserUnit && !userUnit?.nama && !data?.NamaFakultasUnit;
 
   return (
     <Transition appear show={open} as={Fragment}>
@@ -327,13 +279,9 @@ export default function SwotFormModal({
                   <p className="text-xs text-gray-500 mt-0.5">
                     {isAdmin
                       ? "Sebagai Admin, Anda dapat mengelola SWOT untuk seluruh fakultas/unit."
-                      : `Analisis SWOT khusus untuk unit kerja Anda${
-                          watch("fakultas_unit")?.nama
-                            ? ` (${watch("fakultas_unit").nama})`
-                            : userUnit?.nama
-                            ? ` (${userUnit.nama})`
-                            : ""
-                        }.`}
+                      : isLoadingUnitField
+                        ? "Analisis SWOT khusus untuk unit kerja Anda."
+                        : `Analisis SWOT khusus untuk unit kerja Anda (${userUnit?.nama || user?.nama_fakultas_unit || user?.fakultas_unit || "Unit Anda"}).`}
                   </p>
                 </div>
                 <button
@@ -371,17 +319,43 @@ export default function SwotFormModal({
                       </div>
 
                       <div>
-                        <SearchSelect
-                          label="Fakultas / Unit Kerja"
-                          required
-                          icon={Building2}
-                          options={availableFakultasOptions}
-                          placeholder="Pilih Fakultas / Unit"
-                          loading={loadingFakultas}
-                          disabled={!isAdmin && availableFakultasOptions.length <= 1}
-                          value={watch("fakultas_unit")}
-                          onChange={(item) => setValue("fakultas_unit", item)}
-                        />
+                        {isAdmin ? (
+                          <SearchSelect
+                            label="Fakultas / Unit Kerja"
+                            required
+                            options={fakultasOptions}
+                            placeholder="Pilih Fakultas / Unit"
+                            loading={loadingFakultas}
+                            value={watch("fakultas_unit")}
+                            onChange={(item) => setValue("fakultas_unit", item)}
+                          />
+                        ) : (
+                          <div>
+                            <label className="block text-sm font-medium mb-1 text-gray-700">
+                              Fakultas / Unit Kerja
+                            </label>
+                            {isLoadingUnitField ? (
+                              <div
+                                className="w-full h-[38px] px-3 py-2 rounded-lg border border-gray-200 bg-gray-100 flex items-center justify-between animate-pulse"
+                                aria-busy="true"
+                                aria-label="Memuat data Fakultas / Unit Kerja"
+                              >
+                                <div className="h-4 w-2/3 bg-gray-200 rounded" />
+                                <div className="h-4 w-16 bg-gray-200 rounded-full" />
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-700 shadow-2xs">
+                                <Building2 className="w-4 h-4 text-purple-600 shrink-0" />
+                                <span className="font-semibold text-gray-800">
+                                  {userUnit?.nama || data?.NamaFakultasUnit || user?.nama_fakultas_unit || user?.fakultas_unit || "Unit Terdaftar"}
+                                </span>
+                                <span className="ml-auto text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">
+                                  Unit Anda
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

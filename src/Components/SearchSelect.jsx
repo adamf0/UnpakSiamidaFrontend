@@ -8,7 +8,7 @@ import {
   size,
 } from "@floating-ui/react";
 import { Portal } from "@headlessui/react";
-import { Check, AlertCircle, ChevronDown, X, Loader2 } from "lucide-react";
+import { Check, AlertCircle, ChevronDown, X } from "lucide-react";
 import { formatFetchError } from "@/Common/Utils";
 
 const getItemId = (obj) => {
@@ -139,6 +139,26 @@ const SearchSelect = ({
       document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
+  if (loading) {
+    return (
+      <div className="relative">
+        {label && (
+          <label className="block text-sm font-medium mb-1">
+            {label} {required && <span className="text-red-500">*</span>}
+          </label>
+        )}
+        <div
+          className="w-full h-[38px] px-3 py-2 rounded border border-gray-200 bg-gray-100 flex items-center justify-between animate-pulse"
+          aria-busy="true"
+          aria-label={`Memuat data ${label || "dropdown"}`}
+        >
+          <div className="h-4 w-2/3 bg-gray-200 rounded" />
+          <div className="h-3 w-3 bg-gray-200 rounded" />
+        </div>
+      </div>
+    );
+  }
+
   const displayValue = isSearching ? query : getItemLabel(value) || query;
 
   return (
@@ -158,7 +178,7 @@ const SearchSelect = ({
         <input
           ref={refs.setReference}
           value={displayValue}
-          placeholder={loading && !value ? "" : placeholder}
+          placeholder={placeholder}
           disabled={disabled}
           onClick={() => {
             if (!disabled) {
@@ -200,23 +220,8 @@ const SearchSelect = ({
             ${className}
           `}
         />
-
-        {/* Shimmer skeleton placeholder when loading and no value selected */}
-        {loading && !value && !isSearching && (
-          <div
-            onClick={() => {
-              if (!disabled) setOpen(true);
-            }}
-            className={`absolute inset-0 rounded-xl overflow-hidden pointer-events-none flex items-center ${
-              Icon ? "pl-9" : "pl-3"
-            } pr-10`}
-          >
-            <div className="h-3.5 bg-gray-200/80 rounded skeleton w-24" />
-          </div>
-        )}
-
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-          {Boolean(value) && !disabled && !loading && (
+          {Boolean(value) && !disabled && (
             <button
               type="button"
               onMouseDown={(e) => {
@@ -232,15 +237,11 @@ const SearchSelect = ({
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-          {loading ? (
-            <Loader2 className="w-4 h-4 text-purple-600 animate-spin" />
-          ) : (
-            <ChevronDown
-              className={`w-4 h-4 text-gray-400 pointer-events-none transition-transform duration-200 ${
-                open ? "rotate-180 text-purple-700" : ""
-              }`}
-            />
-          )}
+          <ChevronDown
+            className={`w-4 h-4 text-gray-400 pointer-events-none transition-transform duration-200 ${
+              open ? "rotate-180 text-purple-700" : ""
+            }`}
+          />
         </div>
       </div>
 
@@ -270,25 +271,6 @@ const SearchSelect = ({
                   Coba Lagi
                 </button>
               )}
-            </div>
-          ) : loading ? (
-            <div className="p-2 space-y-1.5" aria-busy="true">
-              <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-purple-600 font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
-                <span>Memuat data pilihan...</span>
-              </div>
-              {[70, 55, 85, 60].map((widthPercent, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-gray-50/70 border border-gray-100"
-                >
-                  <div className="w-3.5 h-3.5 rounded bg-gray-200 skeleton shrink-0" />
-                  <div
-                    className="h-3.5 bg-gray-200 rounded skeleton"
-                    style={{ width: `${widthPercent}%` }}
-                  />
-                </div>
-              ))}
             </div>
           ) : filtered.length > 0 ? (
             filtered.map((item, idx) => {
