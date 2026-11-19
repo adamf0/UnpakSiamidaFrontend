@@ -514,16 +514,28 @@ export default function IndikatorRenstraFormModal({
 
                 <TextInput
                   label="Target Unpak"
+                  required
                   placeholder="Contoh: 15 % Dosen / >= 80%"
                   error={errors.target_unpak?.message}
-                  {...register("target_unpak", { required: false })}
+                  {...register("target_unpak", {
+                    required: "Target Unpak wajib diisi",
+                    validate: (v) =>
+                      String(v || "").trim() !== "" ||
+                      "Target Unpak wajib diisi",
+                  })}
                 />
 
                 <TextInput
                   label="Target Unit Kerja"
+                  required
                   placeholder="Contoh: (5) Maintenance rutin terdokumentasi / 80%"
                   error={errors.target_unit?.message}
-                  {...register("target_unit", { required: false })}
+                  {...register("target_unit", {
+                    required: "Target Unit Kerja wajib diisi",
+                    validate: (v) =>
+                      String(v || "").trim() !== "" ||
+                      "Target Unit Kerja wajib diisi",
+                  })}
                 />
 
                 <SearchSelect
