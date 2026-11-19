@@ -127,12 +127,12 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
               icon: <Calendar size={18} strokeWidth={1.5} />,
             },
             {
-              name: "Standar Renstra",
+              name: "Standar IKU/IKT",
               path: "/standar_renstra",
               icon: <Layers size={18} strokeWidth={1.5} />,
             },
             {
-              name: "Indikator Renstra",
+              name: "Indikator",
               path: "/indikator_renstra",
               icon: <Target size={18} strokeWidth={1.5} />,
             },
