@@ -51,7 +51,7 @@ export default function ConfirmSendEmailDialog({
                       Kirim Email Akun SIAMIDA V3
                     </Dialog.Title>
                     <p className="text-xs text-gray-500 mt-1">
-                      Kredensial username, password, dan role akan dikirimkan melalui antrean background job (Outbox Pattern).
+                      Kredensial username, password, dan role akan dikirimkan melalui antrean background job.
                     </p>
                   </div>
                 </div>

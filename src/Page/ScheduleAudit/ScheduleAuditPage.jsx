@@ -1334,7 +1334,7 @@ const ScheduleAuditPage = () => {
               </div>
 
               <div className="p-5 space-y-3 text-xs text-gray-600">
-                <p>Notifikasi email kode akses jadwal audit akan dikirimkan via background job (Outbox Pattern) kepada:</p>
+                <p>Notifikasi email kode akses jadwal audit akan dikirimkan via background job kepada:</p>
                 <div className="space-y-2 p-3 bg-gray-50 rounded-xl border border-gray-150">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Auditee:</span>

@@ -459,33 +459,68 @@ export default function ProkerV3TimelinePage() {
   }, [canManageTimeline, isStatusDraftOrDiajukan]);
 
   const isDiterimaAnggaran = useMemo(() => {
+    // 1. Cek langsung timestamp ACC Anggaran pada aktivitas (V3 standar)
+    if (Boolean(aktivitas?.terima_anggaran_at || aktivitas?.TerimaAnggaranAt)) {
+      return true;
+    }
+
     const sAnggAct = String(
       aktivitas?.StatusAnggaran || aktivitas?.status_anggaran || "",
     )
       .toLowerCase()
       .trim();
+    if (
+      sAnggAct === "terima_anggaran" ||
+      sAnggAct === "terima anggaran" ||
+      sAnggAct === "diterima" ||
+      sAnggAct === "disetujui" ||
+      sAnggAct === "acc" ||
+      sAnggAct.includes("terima")
+    ) {
+      return true;
+    }
+
     const sMainAct = String(aktivitas?.Status || aktivitas?.status || "")
       .toLowerCase()
       .trim();
+    if (
+      sMainAct === "terima_anggaran" ||
+      sMainAct === "terima anggaran"
+    ) {
+      return true;
+    }
+
     const sAnggProker = String(
       proker?.StatusAnggaran || proker?.status_anggaran || "",
     )
       .toLowerCase()
       .trim();
+    if (
+      !sAnggProker.includes("ditolak") &&
+      !sAnggProker.includes("revisi") &&
+      (sAnggProker === "terima_anggaran" ||
+        sAnggProker === "terima anggaran" ||
+        sAnggProker === "diterima" ||
+        sAnggProker === "disetujui" ||
+        sAnggProker === "acc" ||
+        sAnggProker.includes("parsial") ||
+        sAnggProker.includes("terima") ||
+        sAnggProker.includes("diterima"))
+    ) {
+      return true;
+    }
+
     const sMainProker = String(proker?.Status || proker?.status || "")
       .toLowerCase()
       .trim();
-
-    return (
-      sAnggAct === "terima_anggaran" ||
-      sAnggAct === "disetujui" ||
-      sMainAct === "terima_anggaran" ||
-      sMainAct === "terima anggaran" ||
-      sAnggProker === "terima_anggaran" ||
-      sAnggProker === "disetujui" ||
+    if (
       sMainProker === "terima_anggaran" ||
       sMainProker === "terima anggaran"
-    );
+    ) {
+      return true;
+    }
+
+    return false;
   }, [aktivitas, proker]);
 
   const isTimelineRabDisabled = isAdmin || !isDiterimaAnggaran;
@@ -689,6 +724,7 @@ export default function ProkerV3TimelinePage() {
       pStatus.includes("terima_anggaran");
 
     const isActLocked =
+      Boolean(aktivitas.TerimaAnggaranAt || aktivitas.terima_anggaran_at) ||
       (isVerifApproved(actVerif) && isAnggaranApproved(actAngg)) ||
       actStatus.includes("terima_anggaran") ||
       isAnggaranApproved(actAngg);

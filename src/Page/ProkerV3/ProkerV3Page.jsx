@@ -1767,6 +1767,7 @@ export default function ProkerV3Page() {
       !sAngg.includes("parsial") &&
       (sAngg === "terima_anggaran" ||
         sAngg === "terima anggaran" ||
+        sAngg === "diterima" ||
         sAngg === "disetujui" ||
         sMain === "terima_anggaran" ||
         sMain === "terima anggaran");
@@ -2432,6 +2433,7 @@ export default function ProkerV3Page() {
                 !sAngg.includes("parsial") &&
                 (sAngg === "terima_anggaran" ||
                   sAngg === "terima anggaran" ||
+                  sAngg === "diterima" ||
                   sAngg === "disetujui" ||
                   sMain === "terima_anggaran" ||
                   sMain === "terima anggaran");
@@ -2799,6 +2801,8 @@ export default function ProkerV3Page() {
         const sMain = (r.Status || "").toLowerCase().trim();
         const isDiterimaAnggaran =
           sAngg === "terima_anggaran" ||
+          sAngg === "terima anggaran" ||
+          sAngg === "diterima" ||
           sAngg === "disetujui" ||
           sMain === "terima_anggaran" ||
           sMain === "terima anggaran";
