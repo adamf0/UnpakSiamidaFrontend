@@ -581,7 +581,12 @@ export default function ProkerV3AktivitasPage() {
   );
 
   // Pengaturan tanggal aktif Proker / Aktivitas Batal (global app setting)
-  const isProkerBatalActive = Boolean(prokerBatalStatus?.is_active);
+  const isProkerBatalActive = Boolean(
+    prokerBatalStatus?.is_active ||
+      prokerBatalStatus?.data?.is_active ||
+      prokerBatalStatus?.data?.IsActive ||
+      prokerBatalStatus?.IsActive,
+  );
 
   // Tombol tambah aktivitas HANYA muncul dan open jika jadwal proker ada dan sedang dibuka
   const isAktivitasScheduleOpen = Boolean(
@@ -1776,8 +1781,10 @@ export default function ProkerV3AktivitasPage() {
     (pVerif === "diterima evaluator" ||
       pVerif === "terima_verifikator" ||
       pVerif === "disetujui" ||
+      pVerif === "diterima" ||
       pVerif.includes("diverifikasi") ||
       pMain === "disetujui" ||
+      pMain === "diterima" ||
       pMain === "terima_anggaran" ||
       pMain.includes("diverifikasi"));
 
@@ -1786,8 +1793,11 @@ export default function ProkerV3AktivitasPage() {
     !pAngg.includes("parsial") &&
     (pAngg === "terima_anggaran" ||
       pAngg === "terima anggaran" ||
+      pAngg === "diterima" ||
+      pAngg === "disetujui" ||
       pMain === "terima_anggaran" ||
       pMain === "terima anggaran" ||
+      pMain === "diterima" ||
       pMain === "disetujui");
 
   // Syarat mutlak: di mata proker berhasil di acc verifikator dan anggaran
@@ -3357,7 +3367,9 @@ export default function ProkerV3AktivitasPage() {
                       canRevisiActDraft && actStatusStr !== "draft";
                     const isTerimaAnggaranAct =
                       isProkerAccAnggaran ||
-                      actStatusStr === "terima_anggaran";
+                      actStatusStr === "terima_anggaran" ||
+                      actStatusStr === "diterima" ||
+                      Boolean(act.TerimaAnggaranAt || act.terima_anggaran_at);
                     const canShowBatalActSwitch =
                       !isAdmin &&
                       isLevelUser &&
