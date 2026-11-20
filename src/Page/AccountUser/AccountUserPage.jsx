@@ -185,7 +185,9 @@ export default function AccountUserPage() {
 
     setSendingEmail(true);
     try {
-      const res = await apiClient.post("/users/send-email", { user_uuids: uuids });
+      const formData = new FormData();
+      formData.append("user_uuids", JSON.stringify(uuids));
+      const res = await apiClient.post("/users/send-email", formData);
       const msg = res?.data?.message || res?.message || "Pengiriman email akun telah dimasukkan ke antrean outbox.";
       addToast("success", msg);
       setSelectedRows([]);
