@@ -631,7 +631,16 @@ const RemoteTable = forwardRef(function RemoteTable(
                           ...(c.maxWidth ? { maxWidth: c.maxWidth } : {}),
                         }}
                       >
-                        {c.renderKey ? c.renderKey(r) : (typeof c.render === "function" ? c.render(r) : r[c.key])}
+                        {c.renderKey
+                          ? c.renderKey(r, {
+                              search,
+                              filterValue: draftFilters[c.key]?.value || filters[c.key]?.value || "",
+                              filters,
+                              draftFilters,
+                            })
+                          : typeof c.render === "function"
+                          ? c.render(r)
+                          : r[c.key]}
                       </td>
                     );
                   })}

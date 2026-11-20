@@ -8,7 +8,6 @@ import { Plus, Eye, Pencil, Trash2, LayoutTemplate, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/Components/PageHeader";
 import { apiClient } from "@/Common/api";
-import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const FIXED_TARGET_GROUPS = [
   {
@@ -79,7 +78,7 @@ const TemplateRenstraPage = () => {
   const [drawerTitle, setDrawerTitle] = useState("");
   const [drawerTargets, setDrawerTargets] = useState([]);
   const [drawerMode, setDrawerMode] = useState("detail");
-  const { getValidToken } = useAuth();
+  const { getValidToken, user } = useAuth();
 
   const [tahunList, setTahunList] = useState([]);
   const [selectedTahun, setSelectedTahun] = useState("");
@@ -347,7 +346,11 @@ const TemplateRenstraPage = () => {
   };
 
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
-  const canShowActions = useFeatureActionVisibility();
+  const isAdmin =
+    level === "admin" ||
+    user?.level === "admin" ||
+    String(user?.level || "").toLowerCase().trim() === "admin" ||
+    String(level || "").toLowerCase().trim() === "admin";
 
   return (
     <>
@@ -504,10 +507,11 @@ const TemplateRenstraPage = () => {
           <RemoteTable
             endpoint="/templaterenstras"
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
+            forceShowActions={isAdmin}
             token={getValidToken()}
             filterFn={filterTableRow}
             renderAddAction={
-              canShowActions ? (
+              isAdmin ? (
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -627,36 +631,40 @@ const TemplateRenstraPage = () => {
                 searchable: false,
               },
             ]}
-            renderAction={({ row, close }) => (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition-all cursor-pointer text-left group"
-                  onClick={() => {
-                    navigate(
-                      `/template_renstra/${row.Tahun}/${row.IndikatorRenstraUuid}`
-                    );
-                    close();
-                  }}
-                >
-                  <Pencil className="w-4 h-4 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
-                  <span>Edit</span>
-                </button>
+            renderAction={
+              isAdmin
+                ? ({ row, close }) => (
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                        onClick={() => {
+                          navigate(
+                            `/template_renstra/${row.Tahun}/${row.IndikatorRenstraUuid}`
+                          );
+                          close();
+                        }}
+                      >
+                        <Pencil className="w-4 h-4 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span>Edit</span>
+                      </button>
 
-                <div className="my-1 border-t border-gray-150" />
+                      <div className="my-1 border-t border-gray-150" />
 
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition-all cursor-pointer text-left group"
-                  onClick={() => {
-                    close();
-                  }}
-                >
-                  <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
-                  <span>Hapus</span>
-                </button>
-              </div>
-            )}
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                        onClick={() => {
+                          close();
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span>Hapus</span>
+                      </button>
+                    </div>
+                  )
+                : null
+            }
           />
         </div>
 

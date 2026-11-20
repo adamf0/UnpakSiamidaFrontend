@@ -906,7 +906,14 @@ export default function ProkerV3DokumenPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => navigate(`/proker_v3/${prokerUuid}/aktivitas`)}
+                onClick={() => {
+                  const fuUuid =
+                    proker?.UuidFakultasUnit ||
+                    proker?.uuid_fakultas_unit ||
+                    proker?.FakultasUnit;
+                  const q = fuUuid ? `?fakultas_unit=${fuUuid}` : "";
+                  navigate(`/proker_v3/${prokerUuid}/aktivitas${q}`);
+                }}
                 className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1.5 border border-purple-200 transition cursor-pointer shadow-2xs"
                 title="Pindah ke halaman kelola aktivitas program kerja"
               >

@@ -35,6 +35,7 @@ import {
   Layers,
   FileSpreadsheet,
   CheckCircle2,
+  CheckCheck,
   Clock,
   RotateCcw,
   Sparkles,
@@ -859,16 +860,35 @@ export default function ProkerV3Page() {
     try {
       const res = await apiClient.get("/proker_v3_options");
       const data = res.data;
-      const units = (data.units || []).map((u) => ({
-        ...u,
-        raw_nama: u.nama,
-        label: u.nama,
-        name: u.nama,
-        type: (u.type || "").toLowerCase(),
-        fakultas: u.fakultas || "",
-        jenjang: u.jenjang || "",
-        kode_fakultas: u.kode_fakultas || "",
-      }));
+      const units = (data.units || []).map((u) => {
+        const type = (u.type || "").toLowerCase().trim();
+        const jenjang = (u.jenjang || "").trim();
+        const cleanName = cleanDuplicateJenjang(u.nama || "");
+        const displayName = formatProdiWithJenjang(cleanName, jenjang, type);
+        const isFakultas = type === "fakultas" || type === "sekolah";
+        const isProdi = type === "prodi";
+        const typeLabel = isFakultas ? "FAKULTAS" : isProdi ? "PRODI" : "UNIT";
+        const badgeClass = isFakultas
+          ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+          : isProdi
+          ? "bg-purple-50 text-purple-700 border border-purple-200"
+          : "bg-emerald-50 text-emerald-700 border border-emerald-200";
+
+        return {
+          ...u,
+          raw_nama: cleanName,
+          nama: displayName,
+          label: displayName,
+          name: displayName,
+          display_name: displayName,
+          type: type,
+          fakultas: u.fakultas || "",
+          jenjang: jenjang,
+          kode_fakultas: u.kode_fakultas || "",
+          badge: typeLabel,
+          badgeClass: badgeClass,
+        };
+      });
       setUnitOptions(units);
 
       const rawTahuns = data.tahuns || [];
@@ -940,12 +960,8 @@ export default function ProkerV3Page() {
     return isUpm;
   }, [isLevelUser, isUpm]);
 
-  const canAddProker =
-    isAdmin ||
-    (isLevelUser &&
-      !isUpmUser &&
-      hasTarget &&
-      !excludedAddRoles.includes(curRole));
+  // Tombol tambah program kerja ditiadakan; unit user mengambil top-down dari mata program
+  const canAddProker = false;
 
   const isUnitUser = isLevelUser && !isUpmUser && hasTarget;
   const isVerifikatorUser = isVerifier || isUpm;
@@ -1336,7 +1352,16 @@ export default function ProkerV3Page() {
 
   const openAktivitas = (row) => {
     if (row?.UUID) {
-      navigate(`/proker_v3/${row.UUID}/aktivitas`);
+      const fuUuid =
+        row?.UuidFakultasUnit ||
+        row?.uuid_fakultas_unit ||
+        row?.FakultasUnit;
+      const fuQuery = fuUuid
+        ? `?fakultas_unit=${fuUuid}`
+        : row?.IdFakultasUnit
+          ? `?id_fakultas_unit=${row.IdFakultasUnit}`
+          : "";
+      navigate(`/proker_v3/${row.UUID}/aktivitas${fuQuery}`);
     }
   };
 
@@ -1723,11 +1748,14 @@ export default function ProkerV3Page() {
     const sAngg = (row.StatusAnggaran || "").toLowerCase().trim();
 
     const isVerifierApproved =
+      !sVerif.includes("parsial") &&
       sVerif !== "revisi" &&
       sMain !== "revisi" &&
       sVerif !== "ditolak" &&
+      !sVerif.includes("ditolak") &&
       !sMain.includes("ditolak") &&
-      (sVerif === "terima_verifikator" ||
+      (sVerif === "diterima evaluator" ||
+        sVerif === "terima_verifikator" ||
         sVerif === "disetujui" ||
         sVerif.includes("diverifikasi") ||
         sMain === "disetujui" ||
@@ -1736,19 +1764,31 @@ export default function ProkerV3Page() {
         sMain.includes("diverifikasi"));
 
     const isAnggaranApproved =
-      sAngg === "terima_anggaran" ||
-      sAngg === "disetujui" ||
-      sMain === "terima_anggaran" ||
-      sMain === "terima anggaran";
+      !sAngg.includes("parsial") &&
+      (sAngg === "terima_anggaran" ||
+        sAngg === "terima anggaran" ||
+        sAngg === "disetujui" ||
+        sMain === "terima_anggaran" ||
+        sMain === "terima anggaran");
 
     // 1. User yang memiliki fakultas_unit (Operator / Pengusul)
     if (isUnitUser) {
       if (!canManageProker(row)) return false;
+      const totalAct = Number(row.TotalAktivitas || 0);
+      const terimaAct = Number(row.TotalAktivitasTerimaVerifikator || 0);
+      const diajukanAct = Number(row.TotalAktivitasDiajukanVerifikator || 0);
+      const isParsial =
+        sMain === "diterima_parsial" || sVerif.includes("parsial");
+      const hasPartialPendingSubmit =
+        isParsial && totalAct > terimaAct + diajukanAct;
       return (
         sMain === "draft" ||
         sMain === "ditolak" ||
         sMain.includes("ditolak") ||
-        sMain === "revisi"
+        sMain === "revisi" ||
+        hasPartialPendingSubmit ||
+        sVerif === "revisi" ||
+        sVerif.includes("ditolak")
       );
     }
 
@@ -1767,6 +1807,9 @@ export default function ProkerV3Page() {
       }
       if (activeTab === "terima") {
         return isVerifierApproved;
+      }
+      if (activeTab === "terima_parsial") {
+        return sVerif === "diterima_parsial" || sMain === "diterima_parsial";
       }
       if (activeTab === "tolak") {
         return sVerif === "ditolak" || sMain.includes("ditolak");
@@ -1796,6 +1839,9 @@ export default function ProkerV3Page() {
       if (activeTab === "terima") {
         return isAnggaranApproved;
       }
+      if (activeTab === "terima_parsial") {
+        return sAngg === "diterima_parsial";
+      }
       if (activeTab === "tolak") {
         return sAngg === "ditolak";
       }
@@ -1819,6 +1865,9 @@ export default function ProkerV3Page() {
       }
       if (activeTab === "terima") {
         return isVerifierApproved;
+      }
+      if (activeTab === "terima_parsial") {
+        return sVerif === "diterima_parsial" || sMain === "diterima_parsial";
       }
       if (activeTab === "tolak") {
         return sVerif === "ditolak" || sMain.includes("ditolak");
@@ -2208,8 +2257,8 @@ export default function ProkerV3Page() {
                 )}
               </div>
 
-              {/* Khusus Level Anggaran: Total Anggaran Keseluruhan & Total Realisasi */}
-              {isAnggaran && (
+              {/* Khusus Level Anggaran & Admin: Total Anggaran Keseluruhan & Total Realisasi */}
+              {(isAnggaran || isAdmin) && (
                 <div className="flex flex-wrap items-center gap-2">
                   <div
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-50/90 border border-purple-200 text-xs shadow-2xs font-mono"
@@ -2364,11 +2413,14 @@ export default function ProkerV3Page() {
               const sAngg = (r.StatusAnggaran || "").toLowerCase().trim();
 
               const isVerifierApproved =
+                !sVerif.includes("parsial") &&
                 sVerif !== "revisi" &&
                 sMain !== "revisi" &&
                 sVerif !== "ditolak" &&
+                !sVerif.includes("ditolak") &&
                 !sMain.includes("ditolak") &&
-                (sVerif === "terima_verifikator" ||
+                (sVerif === "diterima evaluator" ||
+                  sVerif === "terima_verifikator" ||
                   sVerif === "disetujui" ||
                   sVerif.includes("diverifikasi") ||
                   sMain === "disetujui" ||
@@ -2377,10 +2429,12 @@ export default function ProkerV3Page() {
                   sMain.includes("diverifikasi"));
 
               const isAnggaranApproved =
-                sAngg === "terima_anggaran" ||
-                sAngg === "disetujui" ||
-                sMain === "terima_anggaran" ||
-                sMain === "terima anggaran";
+                !sAngg.includes("parsial") &&
+                (sAngg === "terima_anggaran" ||
+                  sAngg === "terima anggaran" ||
+                  sAngg === "disetujui" ||
+                  sMain === "terima_anggaran" ||
+                  sMain === "terima anggaran");
 
               // Button State History (Always present)
               const historyBtn = (
@@ -2406,6 +2460,15 @@ export default function ProkerV3Page() {
                       <Trash2 className="w-3 h-3 text-rose-700 shrink-0" />
                       <span>Dihapus</span>
                     </span>
+                    {historyBtn}
+                  </div>
+                );
+              }
+
+              // Khusus level Admin: hanya menampilkan riwayat (history) saja
+              if (isAdmin) {
+                return (
+                  <div className="flex items-center gap-1.5 flex-nowrap">
                     {historyBtn}
                   </div>
                 );
@@ -2497,7 +2560,16 @@ export default function ProkerV3Page() {
                 );
               }
 
-              // 2. Role Verifier (upml, upmf, upms, fakultas, evaluator) & Admin:
+              // Evaluator memverifikasi di level aktivitas, bukan di level program kerja
+              if (isEvaluator) {
+                return (
+                  <div className="flex items-center gap-1.5 flex-nowrap">
+                    {historyBtn}
+                  </div>
+                );
+              }
+
+              // 2. Role Verifier (upml, upmf, upms, fakultas) & Admin:
               // TOMBOL "TERIMA VERIFIKATOR" DAN "TOLAK VERIFIKATOR" HANYA MUNCUL DI LEVEL VERIFIKATOR / ADMIN
               if (isVerifier || isAdmin) {
                 if (isVerifierApproved) {
@@ -2609,14 +2681,30 @@ export default function ProkerV3Page() {
 
               // 3. Level Pengelola Target Unit (User)
               const userCanManage = canManageProker(r);
+              const totalAct = Number(r.TotalAktivitas || 0);
+              const terimaAct = Number(r.TotalAktivitasTerimaVerifikator || 0);
+              const diajukanAct = Number(
+                r.TotalAktivitasDiajukanVerifikator || 0,
+              );
+              const isParsial =
+                sMain === "diterima_parsial" || sVerif.includes("parsial");
+              const hasPartialPendingSubmit =
+                isParsial && totalAct > terimaAct + diajukanAct;
+              const isPartialAllSubmitted =
+                isParsial &&
+                diajukanAct > 0 &&
+                totalAct <= terimaAct + diajukanAct;
 
               return (
                 <div className="flex items-center gap-1.5 flex-nowrap">
-                  {/* Tombol Ajukan HANYA muncul di level user yg memiliki target fakultas_unit (Edit & Hapus di-hide karena pengajuan unik per program/unit/tahun) */}
+                  {/* Tombol Ajukan / Ajukan Kembali HANYA muncul di level user yg memiliki target fakultas_unit */}
                   {userCanManage &&
                     (sMain === "draft" ||
                       sMain === "ditolak" ||
-                      sMain === "revisi") && (
+                      sMain === "revisi" ||
+                      hasPartialPendingSubmit ||
+                      sVerif === "revisi" ||
+                      sVerif.includes("ditolak")) && (
                       <button
                         type="button"
                         onClick={() => handleUpdateStatus(r, "diajukan")}
@@ -2624,32 +2712,44 @@ export default function ProkerV3Page() {
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-2xs transition shrink-0 whitespace-nowrap ${
                           isScheduleLocked
                             ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
+                            : isParsial || sVerif === "revisi" || sMain === "revisi" || sVerif.includes("ditolak")
+                            ? "bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
                             : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                         }`}
                         title={
                           isScheduleLocked
                             ? jadwalStatus?.message ||
                               "Pengajuan ditutup sesuai jadwal"
+                            : isParsial || sVerif === "revisi" || sMain === "revisi" || sVerif.includes("ditolak")
+                            ? "Ajukan kembali perbaikan aktivitas ke evaluator"
                             : "Ajukan program kerja ke pimpinan/verifikator"
                         }
                       >
                         <Send className="w-3 h-3" />
-                        <span>Ajukan</span>
+                        <span>
+                          {isParsial || sVerif === "revisi" || sMain === "revisi" || sVerif.includes("ditolak")
+                            ? "Ajukan Kembali"
+                            : "Ajukan"}
+                        </span>
                       </button>
                     )}
 
                   {/* Level User: Batal Pengajuan (kembalikan ke Draft) */}
-                  {userCanManage && sMain === "diajukan" && (
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(r, "draft")}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 transition cursor-pointer shrink-0 whitespace-nowrap"
-                      title="Batalkan pengajuan dan kembalikan ke Draf"
-                    >
-                      <RotateCcw className="w-3 h-3 text-gray-500" />
-                      <span>Batal</span>
-                    </button>
-                  )}
+                  {userCanManage &&
+                    ((sMain === "diajukan" || sVerif === "diajukan") &&
+                      !isVerifierApproved &&
+                      !isParsial ||
+                      isPartialAllSubmitted) && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus(r, "draft")}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 transition cursor-pointer shrink-0 whitespace-nowrap"
+                        title="Batalkan pengajuan dan kembalikan ke Draf"
+                      >
+                        <RotateCcw className="w-3 h-3 text-gray-500" />
+                        <span>Batal</span>
+                      </button>
+                    )}
 
                   {historyBtn}
                 </div>
@@ -2809,13 +2909,35 @@ export default function ProkerV3Page() {
         );
 
         let badgeUpm = null;
-        if (sVerif === "revisi" || sMain === "revisi") {
+        if (sVerif.includes("parsial") || sMain.includes("parsial")) {
           badgeUpm = (
-            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
-              REVISI EVALUATOR
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
+              <AlertCircle className="w-3 h-3 text-amber-600" />
+              <span>
+                {sMain.includes("parsial")
+                  ? "DITERIMA PARSIAL"
+                  : (r.StatusVerifikator || "PARSIAL").toUpperCase()}
+              </span>
             </span>
           );
         } else if (
+          sVerif === "diterima evaluator" ||
+          sVerif === "terima_verifikator" ||
+          sVerif === "disetujui" ||
+          sVerif === "diterima" ||
+          sMain === "disetujui" ||
+          sMain === "diterima" ||
+          sMain === "terima_anggaran" ||
+          sMain === "terima anggaran"
+        ) {
+          badgeUpm = (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span>DITERIMA EVALUATOR</span>
+            </span>
+          );
+        } else if (
+          sVerif === "ditolak evaluator" ||
           sVerif === "ditolak" ||
           (sMain.includes("ditolak") &&
             (catatanVerif || !sAngg.includes("ditolak")))
@@ -2826,16 +2948,13 @@ export default function ProkerV3Page() {
             </span>
           );
         } else if (
-          sVerif === "terima_verifikator" ||
-          sVerif === "disetujui" ||
-          sMain === "disetujui" ||
-          sMain === "terima_anggaran" ||
-          sMain === "terima anggaran"
+          sVerif === "revisi evaluator" ||
+          sVerif === "revisi" ||
+          sMain === "revisi"
         ) {
           badgeUpm = (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-300 bg-emerald-50 text-emerald-800 uppercase tracking-wider">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-              <span>DITERIMA VERIFIKATOR</span>
+            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
+              REVISI EVALUATOR
             </span>
           );
         } else if (
@@ -2866,7 +2985,11 @@ export default function ProkerV3Page() {
               </span>
             </div>
           );
-        } else if (sVerif === "diajukan" || sMain === "diajukan") {
+        } else if (
+          sVerif === "diajukan evaluator" ||
+          sVerif === "diajukan" ||
+          sMain === "diajukan"
+        ) {
           badgeUpm = (
             <div className="flex flex-col gap-0.5 items-start">
               <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-300 bg-blue-50 text-blue-800 uppercase tracking-wider">
@@ -2883,11 +3006,14 @@ export default function ProkerV3Page() {
         }
 
         const isVerifierApproved =
+          !sVerif.includes("parsial") &&
           sVerif !== "revisi" &&
           sMain !== "revisi" &&
           sVerif !== "ditolak" &&
+          !sVerif.includes("ditolak") &&
           !sMain.includes("ditolak") &&
-          (sVerif === "terima_verifikator" ||
+          (sVerif === "diterima evaluator" ||
+            sVerif === "terima_verifikator" ||
             sVerif === "disetujui" ||
             sVerif.includes("diverifikasi") ||
             sMain === "disetujui" ||
@@ -2896,9 +3022,22 @@ export default function ProkerV3Page() {
             sMain.includes("diverifikasi"));
 
         let badgeAnggaran = null;
-        if (
+        if (sAngg.includes("parsial")) {
+          badgeAnggaran = (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
+              <DollarSign className="w-3 h-3 text-amber-600" />
+              <span>
+                {sAngg === "diterima_parsial" || sAngg === "diterima parsial"
+                  ? "DITERIMA PARSIAL"
+                  : r.StatusAnggaran.toUpperCase()}
+              </span>
+            </span>
+          );
+        } else if (
           sAngg === "terima_anggaran" ||
+          sAngg === "terima anggaran" ||
           sAngg === "disetujui" ||
+          sAngg === "diterima" ||
           sMain === "terima_anggaran" ||
           sMain === "terima anggaran"
         ) {
@@ -2910,6 +3049,7 @@ export default function ProkerV3Page() {
           );
         } else if (
           sAngg === "ditolak" ||
+          sAngg === "ditolak anggaran" ||
           (sMain.includes("ditolak") && catatanAngg)
         ) {
           badgeAnggaran = (
@@ -2917,7 +3057,11 @@ export default function ProkerV3Page() {
               DITOLAK ANGGARAN
             </span>
           );
-        } else if (sAngg === "menunggu_anggaran" || isVerifierApproved) {
+        } else if (
+          sAngg === "menunggu_anggaran" ||
+          sAngg === "menunggu anggaran" ||
+          isVerifierApproved
+        ) {
           badgeAnggaran = (
             <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-300 bg-amber-50 text-amber-800 uppercase tracking-wider">
               MENUNGGU ANGGARAN
@@ -2990,15 +3134,19 @@ export default function ProkerV3Page() {
                   </div>
                 </div>
               )}
-              {(sVerif === "revisi" || sMain === "revisi") && catatanVerif && (
+              {(sVerif.includes("parsial") ||
+                sVerif.includes("revisi") ||
+                sVerif === "revisi" ||
+                sMain === "revisi") &&
+                catatanVerif && (
                 <div
                   className="flex items-start gap-1.5 p-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] leading-tight w-full max-w-[220px] shadow-2xs"
-                  title={`Catatan Revisi: ${catatanVerif}`}
+                  title={`Catatan Evaluator: ${catatanVerif}`}
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="font-bold text-amber-700 text-[9px] uppercase tracking-wider">
-                      Catatan Revisi:
+                      Catatan Evaluator:
                     </span>
                     <span className="italic line-clamp-3 break-words">
                       "{catatanVerif}"
@@ -3052,54 +3200,6 @@ export default function ProkerV3Page() {
                 )}
               </div>
             )}
-
-            {(() => {
-              const isTerimaAnggaran =
-                sAngg === "terima_anggaran" ||
-                sAngg === "terima anggaran" ||
-                sMain === "terima_anggaran" ||
-                sMain === "terima anggaran";
-              const isProkerBatalActive = Boolean(prokerBatalStatus?.is_active);
-              const canBatalSwitch =
-                !isAdmin &&
-                isLevelUser &&
-                !isUpmUser &&
-                canManageProker(r) &&
-                isTerimaAnggaran &&
-                isProkerBatalActive;
-
-              if (!canBatalSwitch) return null;
-
-              return (
-                <div className="flex items-center gap-2 pt-1 border-t border-gray-100 w-full mt-0.5">
-                  <label className="text-[11px] font-medium text-gray-700 select-none cursor-pointer flex items-center gap-1.5">
-                    <span className="text-[10px] text-gray-600 font-semibold">Proker Batal:</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={Boolean(r.IsBatal)}
-                      onClick={() => handleToggleBatalProker(r)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
-                        r.IsBatal ? "bg-rose-600" : "bg-gray-300"
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                          r.IsBatal ? "translate-x-4" : "translate-x-0"
-                        }`}
-                      />
-                    </button>
-                    <span
-                      className={`text-[10px] font-bold ${
-                        r.IsBatal ? "text-rose-600" : "text-gray-500"
-                      }`}
-                    >
-                      {r.IsBatal ? "Ya" : "Tidak"}
-                    </span>
-                  </label>
-                </div>
-              );
-            })()}
           </div>
         );
       },
@@ -3276,15 +3376,7 @@ export default function ProkerV3Page() {
             </div>
 
             {/* Indikator Status Pagu Anggaran Unit */}
-            {Boolean(r.BebanYayasan) ? (
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200"
-                title="Program kerja ini dibebankan ke yayasan (tidak memotong pagu anggaran unit)"
-              >
-                <CheckCircle2 className="w-3 h-3 text-purple-600 shrink-0" />
-                <span>Beban Yayasan</span>
-              </span>
-            ) : !hasPagu ? (
+            {!hasPagu ? (
               <span
                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"
                 title={`Pagu anggaran unit tahun ${r.Tahun || ""} belum ditentukan (tidak sesuai pagu)`}
@@ -3310,65 +3402,6 @@ export default function ProkerV3Page() {
               </span>
             )}
           </div>
-        );
-      },
-    },
-    {
-      key: "beban_yayasan",
-      label: "Beban Yayasan",
-      minWidth: "120px",
-      renderKey: (r) => {
-        const isTrashed = activeTab === "buang" || Boolean(r.DeletedAt);
-        const canEditBeban =
-          !isTrashed && !isAdmin && isLevelUser && !isUpmUser && canManageProker(r);
-        const isUpdating = Boolean(updatingBebanUuids[r.UUID]);
-        const isBeban = Boolean(r.BebanYayasan);
-
-        if (canEditBeban) {
-          return (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={isBeban}
-                disabled={isUpdating}
-                onClick={() => handleToggleBebanYayasan(r)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isBeban ? "bg-purple-600" : "bg-gray-200"
-                }`}
-                title={
-                  isBeban
-                    ? "Beban Yayasan Aktif (Klik untuk nonaktifkan)"
-                    : "Beban Yayasan Nonaktif (Klik untuk aktifkan)"
-                }
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                    isBeban ? "translate-x-4" : "translate-x-0"
-                  }`}
-                />
-              </button>
-              <span
-                className={`text-[11px] font-semibold whitespace-nowrap ${
-                  isBeban ? "text-purple-700" : "text-gray-400"
-                }`}
-              >
-                {isBeban ? "Yayasan" : "Non-Yayasan"}
-              </span>
-            </div>
-          );
-        }
-
-        return (
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold border ${
-              isBeban
-                ? "bg-purple-50 text-purple-700 border-purple-200"
-                : "bg-gray-50 text-gray-500 border-gray-200"
-            }`}
-          >
-            {isBeban ? "Ya" : "Tidak"}
-          </span>
         );
       },
     },
@@ -3852,7 +3885,9 @@ export default function ProkerV3Page() {
                     : curRole === "upmf"
                       ? `Menampilkan data program kerja ${selectedUnitObj?.nama || "Fakultas"} dan seluruh program studi di bawahnya.`
                       : `Menampilkan data program kerja unit penugasan (${selectedUnitObj?.nama || "Unit Terpilih"}).`
-                  : curRole === "evaluator" || curRole === "fakultas"
+                  : curRole === "evaluator"
+                    ? "Lingkup verifikasi aktivitas kegiatan program kerja. Klik 'Kelola' pada kolom Aktivitas & Dokumen untuk memverifikasi aktivitas unit."
+                    : curRole === "fakultas"
                     ? "Lingkup verifikasi program kerja. Anda dapat menyetujui (Terima Verifikator) atau menolak (Tolak Verifikator) program kerja yang diajukan."
                     : isAnggaran
                       ? "Verifikasi dan persetujuan alokasi anggaran program kerja seluruh unit/fakultas setelah diverifikasi oleh verifikator UPM."
@@ -3937,110 +3972,66 @@ export default function ProkerV3Page() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-3 sm:px-5 sm:py-3.5 rounded-2xl border border-gray-200 shadow-xs">
             {/* Segmented Tab Controls */}
             <div className="inline-flex flex-wrap p-1 bg-gray-100/90 rounded-xl border border-gray-200/80 gap-1 shrink-0 self-start sm:self-auto">
-              {(isAdmin ||
-                (!isVerifier && !isAnggaran && !isUpm && !isUpmUser)) && (
-                <button
-                  type="button"
-                  onClick={() => handleTabChange("semua")}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === "semua"
-                      ? "bg-purple-600 text-white shadow-xs"
-                      : "text-gray-600 hover:text-purple-700 hover:bg-purple-50"
-                  }`}
-                >
-                  <Layers
-                    className={`w-3.5 h-3.5 ${activeTab === "semua" ? "text-white" : "text-purple-600"}`}
-                  />
-                  <span>Semua Data</span>
-                </button>
-              )}
-              {(isAdmin ||
-                isVerifier ||
-                isAnggaran ||
-                isUpm ||
-                isUpmUser ||
-                isUserWithFakultasUnit ||
-                isLevelUser) && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange("menunggu")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      activeTab === "menunggu"
-                        ? isVerifier || isUpmUser
-                          ? "bg-white text-purple-700 shadow-xs border border-gray-200/80"
-                          : "bg-amber-500 text-white shadow-xs"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
-                    }`}
-                  >
-                    <Clock
-                      className={`w-3.5 h-3.5 ${
-                        activeTab === "menunggu"
-                          ? isVerifier || isUpmUser
-                            ? "text-purple-600"
-                            : "text-white"
-                          : "text-gray-400"
-                      }`}
-                    />
-                    <span>Menunggu</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange("revisi")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      activeTab === "revisi"
-                        ? "bg-amber-500 text-white shadow-xs"
-                        : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
-                    }`}
-                  >
-                    <RotateCcw
-                      className={`w-3.5 h-3.5 ${activeTab === "revisi" ? "text-white" : "text-amber-600"}`}
-                    />
-                    <span>Revisi</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange("terima")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      activeTab === "terima"
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
-                    }`}
-                  >
-                    <CheckCircle2
-                      className={`w-3.5 h-3.5 ${activeTab === "terima" ? "text-white" : "text-emerald-600"}`}
-                    />
-                    <span>Terima</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange("tolak")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      activeTab === "tolak"
-                        ? "bg-rose-600 text-white shadow-xs"
-                        : "text-gray-600 hover:text-rose-700 hover:bg-rose-50"
-                    }`}
-                  >
-                    <XCircle
-                      className={`w-3.5 h-3.5 ${activeTab === "tolak" ? "text-white" : "text-rose-600"}`}
-                    />
-                    <span>Tolak</span>
-                  </button>
-                </>
-              )}
               <button
                 type="button"
-                onClick={() => handleTabChange("buang")}
+                onClick={() => handleTabChange("semua")}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === "buang"
-                    ? "bg-rose-700 text-white shadow-xs"
-                    : "text-gray-600 hover:text-rose-800 hover:bg-rose-50"
+                  activeTab === "semua"
+                    ? "bg-purple-600 text-white shadow-xs"
+                    : "text-gray-600 hover:text-purple-700 hover:bg-purple-50"
                 }`}
               >
-                <Trash2
-                  className={`w-3.5 h-3.5 ${activeTab === "buang" ? "text-white" : "text-rose-700"}`}
+                <Layers
+                  className={`w-3.5 h-3.5 ${activeTab === "semua" ? "text-white" : "text-purple-600"}`}
                 />
-                <span>Buang</span>
+                <span>Semua Data</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange("menunggu")}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "menunggu"
+                    ? "bg-amber-500 text-white shadow-xs"
+                    : "text-gray-600 hover:text-amber-700 hover:bg-amber-50"
+                }`}
+              >
+                <Clock
+                  className={`w-3.5 h-3.5 ${
+                    activeTab === "menunggu" ? "text-white" : "text-amber-500"
+                  }`}
+                />
+                <span>Menunggu</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange("terima")}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "terima"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-gray-600 hover:text-emerald-700 hover:bg-emerald-50"
+                }`}
+              >
+                <CheckCircle2
+                  className={`w-3.5 h-3.5 ${activeTab === "terima" ? "text-white" : "text-emerald-600"}`}
+                />
+                <span>Terima</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange("terima_parsial")}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "terima_parsial"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-gray-600 hover:text-indigo-700 hover:bg-indigo-50"
+                }`}
+              >
+                <CheckCheck
+                  className={`w-3.5 h-3.5 ${activeTab === "terima_parsial" ? "text-white" : "text-indigo-600"}`}
+                />
+                <span>Terima Parsial</span>
               </button>
             </div>
 
@@ -4051,42 +4042,36 @@ export default function ProkerV3Page() {
                 className={`px-2.5 py-1 rounded-lg font-bold text-xs ${
                   activeTab === "semua"
                     ? "bg-purple-50 text-purple-700 border border-purple-200"
-                    : activeTab === "buang"
-                      ? "bg-rose-50 text-rose-800 border border-rose-200"
-                      : activeTab === "menunggu"
-                        ? "bg-amber-50 text-amber-800 border border-amber-200"
-                        : activeTab === "revisi"
-                          ? "bg-amber-100 text-amber-900 border border-amber-300"
-                          : activeTab === "terima"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-rose-50 text-rose-700 border border-rose-200"
+                    : activeTab === "menunggu"
+                      ? "bg-amber-50 text-amber-800 border border-amber-200"
+                      : activeTab === "terima"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : activeTab === "terima_parsial"
+                          ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                          : "bg-gray-50 text-gray-700 border border-gray-200"
                 }`}
               >
                 {activeTab === "semua"
                   ? "Semua Program Kerja Aktif"
-                  : activeTab === "buang"
-                    ? "Data Dihapus / Tab Buang (Soft Delete)"
-                    : activeTab === "menunggu"
+                  : activeTab === "menunggu"
+                    ? isAnggaran
+                      ? "Menunggu Persetujuan Anggaran"
+                      : isAdmin || isUserWithFakultasUnit || isLevelUser
+                        ? "Menunggu Verifikasi"
+                        : "Menunggu Verifikasi UPM"
+                    : activeTab === "terima"
                       ? isAnggaran
-                        ? "Menunggu Persetujuan Anggaran"
+                        ? "Diterima Anggaran"
                         : isAdmin || isUserWithFakultasUnit || isLevelUser
-                          ? "Menunggu Verifikasi"
-                          : "Menunggu Verifikasi UPM"
-                      : activeTab === "revisi"
+                          ? "Diterima / Disetujui"
+                          : "Diterima Verifikator"
+                      : activeTab === "terima_parsial"
                         ? isAnggaran
-                          ? "Perlu Revisi Anggaran"
-                          : "Perlu Revisi Pengusul"
-                        : activeTab === "terima"
-                          ? isAnggaran
-                            ? "Diterima Anggaran"
-                            : isAdmin || isUserWithFakultasUnit || isLevelUser
-                              ? "Diterima / Disetujui"
-                              : "Diterima Verifikator"
-                          : isAnggaran
-                            ? "Ditolak Anggaran"
-                            : isAdmin || isUserWithFakultasUnit || isLevelUser
-                              ? "Ditolak"
-                              : "Ditolak Verifikator"}
+                          ? "Diterima Anggaran (Parsial)"
+                          : isAdmin || isUserWithFakultasUnit || isLevelUser
+                            ? "Diterima Evaluator (Parsial)"
+                            : "Diterima Verifikator (Parsial)"
+                        : "Semua Program Kerja Aktif"}
               </span>
             </div>
           </div>
@@ -4330,8 +4315,8 @@ export default function ProkerV3Page() {
                   </button>
                 )}
 
-                {/* 2. User level verifikator (UPM / Evaluator / Fakultas) & Admin: Tombol Terima & Tolak Verifikator */}
-                {(isVerifikatorUser || isAdmin) &&
+                {/* 2. User level verifikator (UPM / Fakultas) & Admin: Tombol Terima & Tolak Verifikator (Evaluator verifikasi di aktivitas) */}
+                {((isVerifikatorUser && !isEvaluator) || isAdmin) &&
                   activeTab !== "terima" &&
                   activeTab !== "tolak" && (
                     <>
@@ -4428,7 +4413,7 @@ export default function ProkerV3Page() {
             token={getValidToken()}
             listcolumns={listColumns}
             groupBy={
-              isEvaluator || isAnggaran
+              isEvaluator || isAnggaran || isAdmin
                 ? (r) =>
                     r.UuidFakultasUnit ||
                     r.IdFakultasUnit ||
@@ -4437,24 +4422,22 @@ export default function ProkerV3Page() {
                 : null
             }
             renderGroupHeader={
-              isEvaluator || isAnggaran ? renderGroupHeader : null
+              isEvaluator || isAnggaran || isAdmin ? renderGroupHeader : null
             }
             onDataLoaded={(rows) => setCurrentPageRows(rows || [])}
             disableGlobalSearch={false}
             searchable={true}
             searchPlaceholder="Cari nama program kerja, PIC..."
             emptyMessage={
-              activeTab === "buang"
-                ? "Belum ada program kerja yang dihapus pada tab Buang."
-                : activeTab === "menunggu"
-                  ? "Tidak ada program kerja yang sedang menunggu verifikasi."
-                  : activeTab === "revisi"
-                    ? "Tidak ada program kerja yang sedang dalam status revisi."
-                    : activeTab === "terima"
-                      ? "Belum ada program kerja yang berstatus diterima."
-                      : activeTab === "tolak"
-                        ? "Tidak ada program kerja yang berstatus ditolak."
-                        : "Belum ada program kerja yang tercatat untuk filter ini."
+              activeTab === "menunggu"
+                ? "Tidak ada program kerja yang sedang menunggu verifikasi."
+                : activeTab === "terima"
+                  ? "Belum ada program kerja yang berstatus diterima."
+                  : activeTab === "terima_parsial"
+                    ? "Belum ada program kerja yang berstatus diterima parsial."
+                    : activeTab === "buang"
+                      ? "Belum ada program kerja yang dihapus pada tab Buang."
+                      : "Belum ada program kerja yang tercatat untuk filter ini."
             }
           />
         </div>

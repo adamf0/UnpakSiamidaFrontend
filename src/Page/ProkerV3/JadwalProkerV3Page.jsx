@@ -4,6 +4,7 @@ import ChangeLevelModal from "@/Components/ChangeLevelModal";
 import PageHeader from "@/Components/PageHeader";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 import Tooltip from "@/Components/Tooltip";
+import AdminOnlyBlockCard from "@/Components/AdminOnlyBlockCard";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import { useAuth } from "@/Providers/AuthProvider";
@@ -46,6 +47,20 @@ export default function JadwalProkerV3Page() {
     .toLowerCase()
     .trim();
   const isAdmin = curRole === "admin";
+
+  const activeRoleUnit = useMemo(() => {
+    const list = Array.isArray(listLevel) ? listLevel : [];
+    const matched = list.find((item) => {
+      const code = String(item?.role || item?.level || item?.Role || item?.Level || "").toLowerCase().trim();
+      return code === String(curRole || "").toLowerCase().trim();
+    });
+    return {
+      id: matched?.id_fakultas_unit ?? user?.id_fakultas_unit ?? null,
+      uuid: matched?.uuid_fakultas_unit ?? user?.uuid_fakultas_unit ?? "",
+      name: matched?.fakultas_unit ?? user?.fakultas_unit ?? user?.nama_fakultas_unit ?? "",
+      type: matched?.type_fakultas_unit ?? user?.type_fakultas_unit ?? "",
+    };
+  }, [listLevel, curRole, user]);
 
   // Data & loading states
   const [loading, setLoading] = useState(false);
@@ -431,8 +446,17 @@ export default function JadwalProkerV3Page() {
           subtitle="Pengaturan periode waktu pengajuan program kerja (berlaku untuk perencanaan audit 2027 / V3)"
         />
 
-        {/* Info Banner */}
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {!isAdmin ? (
+          <AdminOnlyBlockCard
+            pageTitle="Jadwal Program Kerja"
+            curRole={curRole}
+            activeRoleUnit={activeRoleUnit}
+            onChangeLevel={() => setOpenChangeLevel(true)}
+          />
+        ) : (
+          <>
+            {/* Info Banner */}
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
               <Calendar className="w-5 h-5" />
@@ -677,7 +701,9 @@ export default function JadwalProkerV3Page() {
              </table>
            </div>
          </div>
-      </main>
+       </>
+     )}
+   </main>
 
       {/* MODAL FORM TAMBAH / EDIT JADWAL */}
       {isModalOpen && (

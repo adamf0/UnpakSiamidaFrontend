@@ -568,7 +568,6 @@ export default function ProkerV3FormModal({
       }
       fd.append("tahun", String(currentTahun));
       fd.append("pic", pic.trim());
-      fd.append("beban_yayasan", bebanYayasan ? "1" : "0");
 
       // Dynamic scopes JSON
       fd.append("scopes", JSON.stringify(scopesPayload));
@@ -724,53 +723,16 @@ export default function ProkerV3FormModal({
                         className={`text-[11px] font-bold transition ${
                           step === 2
                             ? "text-purple-700"
-                            : step > 2
-                            ? "text-emerald-700"
                             : "text-gray-400"
                         }`}
                       >
                         2. Standar & Target
                       </span>
                     </button>
-
-                    {/* Connecting Line 2-3 */}
-                    <div className="flex-1 h-0.5 mx-3 -mt-3.5 bg-gray-200">
-                      <div
-                        className={`h-full transition-all duration-300 ${
-                          step >= 3 ? "bg-emerald-500 w-full" : "w-0"
-                        }`}
-                      />
-                    </div>
-
-                    {/* Step 3 */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (validateStep1() && validateStep2()) setStep(3);
-                      }}
-                      className="flex flex-col items-center gap-1 group cursor-pointer"
-                    >
-                      <div
-                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-2xs ${
-                          step === 3
-                            ? "bg-purple-600 text-white ring-4 ring-purple-100 scale-105"
-                            : "bg-white text-gray-400 border border-gray-300"
-                        }`}
-                      >
-                        3
-                      </div>
-                      <span
-                        className={`text-[11px] font-bold transition ${
-                          step === 3 ? "text-purple-700" : "text-gray-400"
-                        }`}
-                      >
-                        3. Luaran & Dampak
-                      </span>
-                    </button>
                   </div>
                 </div>
 
-                {/* Form Body with 3 Step Views */}
+                {/* Form Body with 2 Step Views */}
                 <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                   {/* ======================================================== */}
                   {/* STEP 1: IDENTITAS UNIT & PROGRAM KERJA                   */}
@@ -858,35 +820,6 @@ export default function ProkerV3FormModal({
                               onChange={(e) => setPic(e.target.value)}
                               className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                             />
-                          </div>
-                        </div>
-
-                        {/* Toggle Beban Yayasan */}
-                        <div className="sm:col-span-12">
-                          <div className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-gray-50 transition">
-                            <div>
-                              <div className="text-xs font-semibold text-gray-800">
-                                Beban Yayasan
-                              </div>
-                              <p className="text-[11px] text-gray-500 mt-0.5">
-                                Aktifkan jika pembiayaan program kerja ini ditanggung oleh Yayasan
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={bebanYayasan}
-                              onClick={() => setBebanYayasan((prev) => !prev)}
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${
-                                bebanYayasan ? "bg-purple-600" : "bg-gray-200"
-                              }`}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                                  bebanYayasan ? "translate-x-5" : "translate-x-0"
-                                }`}
-                              />
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -1113,116 +1046,6 @@ export default function ProkerV3FormModal({
                     </div>
                   )}
 
-                  {/* ======================================================== */}
-                  {/* STEP 3: LUARAN & DAMPAK PROGRAM (OUTPUT & OUTCOME)       */}
-                  {/* ======================================================== */}
-                  {step === 3 && (
-                    <div className="space-y-4 animate-in fade-in duration-200">
-                      <div className="flex items-center gap-2 pb-2 border-b border-gray-100 text-xs font-bold uppercase tracking-wider text-purple-700">
-                        <CheckCircle2 className="w-4 h-4 text-purple-600" />
-                        <span>3. Luaran & Dampak Program ({scopes.length} Lingkup Output & Outcome)</span>
-                      </div>
-
-                      <div className="space-y-4">
-                        {scopes.map((sc, index) => (
-                          <div
-                            key={index}
-                            className="p-4 rounded-xl border border-gray-200 bg-gray-50/50 space-y-3"
-                          >
-                            <div className="flex items-center justify-between pb-2 border-b border-gray-200">
-                              <div className="flex items-center gap-2">
-                                <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[11px] font-bold flex items-center justify-center shadow-2xs">
-                                  {index + 1}
-                                </span>
-                                <span className="text-xs font-bold text-gray-900">
-                                  Lingkup #{index + 1}: {sc.indikatorKinerja || sc.standarSubStandar || "Standar & Indikator"}
-                                </span>
-                              </div>
-                              {sc.standarSubStandar && (
-                                <span className="text-[10px] text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded-full font-medium">
-                                  {sc.standarSubStandar}
-                                </span>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                                  Output (Hasil Langsung)
-                                </label>
-                                <textarea
-                                  rows={3}
-                                  placeholder="Contoh: Modul CDC berjalan; dokumentasi integrasi database."
-                                  value={sc.output}
-                                  onChange={(e) => updateScopeField(index, "output", e.target.value)}
-                                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 leading-relaxed"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                                  Outcome (Dampak / Manfaat)
-                                </label>
-                                <textarea
-                                  rows={3}
-                                  placeholder="Contoh: Efisiensi sinkronisasi data civitas akademika tanpa jeda."
-                                  value={sc.outcome}
-                                  onChange={(e) => updateScopeField(index, "outcome", e.target.value)}
-                                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 leading-relaxed"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Ringkasan / Summary Card Sebelum Kirim */}
-                      <div className="p-4 bg-purple-50/50 rounded-xl border border-purple-100 space-y-3">
-                        <div className="flex items-center gap-2 text-xs font-bold text-purple-900">
-                          <Sparkles className="w-4 h-4 text-purple-600" />
-                          <span>Ringkasan Data Program Kerja ({scopes.length} Lingkup):</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-gray-700 pt-1">
-                          <div>
-                            <span className="text-gray-400">Program Kerja:</span>{" "}
-                            <b className="text-gray-900">{namaProgram || "-"}</b>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Tahun & Unit:</span>{" "}
-                            <b className="text-gray-900">{tahun}</b> • {selectedUnit?.nama || selectedUnit?.label || "-"}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 pt-2 border-t border-purple-200/50">
-                          {scopes.map((sc, idx) => (
-                            <div key={idx} className="p-2.5 rounded-lg bg-white/80 border border-purple-100 text-[11px] space-y-1">
-                              <div className="flex items-center justify-between font-bold text-gray-900">
-                                <span>#{idx + 1} {sc.standarSubStandar || "-"}</span>
-                                <span className="text-purple-700 font-semibold">{sc.indikatorKinerja || "-"}</span>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 text-gray-600 pt-0.5">
-                                <div><span className="text-gray-400">Target Unpak:</span> <b className="text-emerald-700">{sc.targetUnpak || "-"}</b></div>
-                                <div><span className="text-gray-400">Target Unit:</span> <b className="text-purple-700">{sc.targetUnit || "-"}</b></div>
-                                {sc.output && <div className="col-span-2 text-gray-500"><span className="text-gray-400">Output:</span> {sc.output}</div>}
-                                {sc.outcome && <div className="col-span-2 text-gray-500"><span className="text-gray-400">Outcome:</span> {sc.outcome}</div>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Catatan Terkait Aktivitas & Status */}
-                      <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-200/80 flex items-start gap-2.5 text-xs text-blue-800">
-                        <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-semibold">Alur Pengisian Aktivitas:</p>
-                          <p className="text-[11px] text-blue-700 mt-0.5 leading-relaxed">
-                            Data program kerja di atas akan disimpan ke tabel <b>matrix_proker</b> dan <b>matrix_proker_scope</b>.
-                            Setelah tersimpan, klik tombol <b>"Aktivitas"</b> pada baris tabel untuk menambah detail kegiatan, anggaran, luaran produk, dan jadwal mingguan [RK] & [R].
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Wizard Action Buttons */}
                   <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1269,32 +1092,20 @@ export default function ProkerV3FormModal({
                       {step === 2 && (
                         <button
                           type="button"
-                          onClick={handleNextStep2}
-                          disabled={isNextStep2Disabled}
-                          className={`px-5 py-2 text-xs font-bold rounded-xl transition flex items-center gap-1.5 ${
-                            isNextStep2Disabled
+                          onClick={handleSubmit}
+                          disabled={submitting || isNextStep2Disabled}
+                          className={`px-5 py-2 text-xs font-bold rounded-xl transition flex items-center gap-2 ${
+                            isNextStep2Disabled || submitting
                               ? "bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none"
-                              : "bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-200 cursor-pointer"
+                              : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 cursor-pointer"
                           }`}
                           title={
                             hasUnmappedRenstra
                               ? "Tombol dinonaktifkan: terdapat indikator yang belum mapping renstra"
                               : hasLoadingTarget
                               ? "Sedang memuat data target renstra..."
-                              : "Lanjut ke Luaran & Dampak"
+                              : "Simpan Matriks Proker"
                           }
-                        >
-                          <span>Lanjut ke Luaran & Dampak</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      {step === 3 && (
-                        <button
-                          type="button"
-                          onClick={handleSubmit}
-                          disabled={submitting}
-                          className="px-5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 transition disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                         >
                           {submitting ? (
                             <>

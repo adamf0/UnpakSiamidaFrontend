@@ -193,7 +193,7 @@ export default function MataProgramV2Page() {
         <PageHeader
           icon={Layers}
           title="Mata Program"
-          subtitle="Kelola master mata program kerja per fakultas / prodi / unit kerja"
+          subtitle="Kelola master mata program kerja dan hubungkan dengan Template Renstra"
         />
 
         {showDeleted && (
@@ -201,7 +201,7 @@ export default function MataProgramV2Page() {
             <div className="flex items-center gap-2">
               <Archive className="w-4 h-4 text-rose-600 shrink-0" />
               <span>
-                Menampilkan <strong>data mata program yang di-softdelete</strong>. Klik tombol pulihkan pada badge untuk restore per-unit, atau menu aksi untuk restore seluruh unit program.
+                Menampilkan <strong>data mata program yang di-softdelete</strong>. Klik menu aksi untuk memulihkan data.
               </span>
             </div>
             <button
@@ -266,90 +266,148 @@ export default function MataProgramV2Page() {
               { key: "Tahun", label: "Tahun", searchable: true, width: "w-24 text-center" },
               { key: "MataProgram", label: "Nama Program Kerja", searchable: true, width: "w-64" },
               {
-                key: "FakultasUnit",
-                label: "Fakultas / Prodi / Unit",
+                key: "TemplateRenstraSasaran",
+                label: "Template Renstra Sasaran",
                 searchable: true,
-                renderKey: (row) => {
-                  const units = Array.isArray(row.Units) ? row.Units : [];
-                  if (units.length === 0) {
-                    return renderLabelFakultasUnit(row);
+                renderKey: (row, ctx) => {
+                  const colFilterVal = String(ctx?.filterValue || "").toLowerCase().trim();
+                  const globalSearchVal = String(ctx?.search || "").toLowerCase().trim();
+                  const templates = Array.isArray(row.TemplateRenstras) ? row.TemplateRenstras : [];
+                  if (templates.length > 0) {
+                    const groupedIndikators = {};
+                    templates.forEach((t) => {
+                      const key = t.Indikator || `Indikator #${t.IndikatorRenstraID}`;
+                      if (!groupedIndikators[key]) {
+                        groupedIndikators[key] = {
+                          name: key,
+                          standar: t.StandarRenstra,
+                          targets: [],
+                        };
+                      }
+                      groupedIndikators[key].targets.push(t);
+                    });
+
+                    let displayItems = Object.values(groupedIndikators);
+                    if (colFilterVal) {
+                      displayItems = displayItems.filter((item) => {
+                        const matchName = (item.name || "").toLowerCase().includes(colFilterVal);
+                        const matchStandar = (item.standar || "").toLowerCase().includes(colFilterVal);
+                        const matchUnit = item.targets.some((tg) =>
+                          (tg.FakultasUnit || "").toLowerCase().includes(colFilterVal)
+                        );
+                        return matchName || matchStandar || matchUnit;
+                      });
+                    } else if (globalSearchVal) {
+                      const matched = displayItems.filter((item) => {
+                        const matchName = (item.name || "").toLowerCase().includes(globalSearchVal);
+                        const matchStandar = (item.standar || "").toLowerCase().includes(globalSearchVal);
+                        const matchUnit = item.targets.some((tg) =>
+                          (tg.FakultasUnit || "").toLowerCase().includes(globalSearchVal)
+                        );
+                        return matchName || matchStandar || matchUnit;
+                      });
+                      if (matched.length > 0) {
+                        displayItems = matched;
+                      }
+                    }
+
+                    if (displayItems.length === 0) {
+                      return (
+                        <span className="text-xs text-gray-400 italic">
+                          Tidak ada indikator yang sesuai pencarian
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <div className="flex flex-col gap-2 py-1 max-w-xl">
+                        {displayItems.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded-xl border bg-purple-50/50 border-purple-200/80 shadow-2xs space-y-1 transition hover:bg-purple-50"
+                            title={`${item.standar ? `[${item.standar}]\n` : ""}${item.name}\n\nSasaran Unit (${item.targets.length}):\n${item.targets.map((t) => `• ${t.FakultasUnit || "Unit"} (Target: ${t.Target || "-"} ${t.Satuan || ""})`).join("\n")}`}
+                          >
+                            {item.standar && (
+                              <div className="text-[10px] font-semibold text-purple-700 leading-tight">
+                                {item.standar}
+                              </div>
+                            )}
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="text-xs font-bold text-gray-900 leading-snug">
+                                {item.name}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-100 text-purple-900 border-purple-300 shrink-0 whitespace-nowrap">
+                                {item.targets.length} unit sasaran
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
                   }
 
                   return (
-                    <div className="flex flex-wrap items-center gap-1.5 py-1">
-                      {units.map((u) => {
-                        const rawType = String(u.Type || "").toLowerCase().trim();
-                        let badgeStyle = "bg-purple-50 text-purple-700 border-purple-200";
-                        if (rawType === "fakultas") {
-                          badgeStyle = "bg-indigo-50 text-indigo-700 border-indigo-200";
-                        } else if (rawType === "unit" || rawType.includes("lembaga")) {
-                          badgeStyle = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                        }
+                    <span className="text-xs text-gray-400 italic">
+                      Belum ada template renstra sasaran
+                    </span>
+                  );
+                },
+              },
+              {
+                key: "Informasi",
+                label: "Info",
+                searchable: true,
+                width: "w-72",
+                renderKey: (row, ctx) => {
+                  const colFilterVal = String(ctx?.filterValue || "").toLowerCase().trim();
+                  const globalSearchVal = String(ctx?.search || "").toLowerCase().trim();
+                  const pUnits = Array.isArray(row.ProkerUnits) ? row.ProkerUnits : [];
+                  if (pUnits.length === 0) {
+                    return (
+                      <span className="text-xs text-gray-400 italic">
+                        Belum ada unit proker
+                      </span>
+                    );
+                  }
 
-                        if (showDeleted) {
-                          badgeStyle = "bg-rose-50/60 text-gray-700 border-rose-200";
-                        }
+                  let displayUnits = pUnits;
+                  if (colFilterVal) {
+                    displayUnits = pUnits.filter(
+                      (u) =>
+                        (u.Label || "").toLowerCase().includes(colFilterVal) ||
+                        (u.NamaFakultasUnit || "").toLowerCase().includes(colFilterVal)
+                    );
+                  } else if (globalSearchVal) {
+                    const matched = pUnits.filter(
+                      (u) =>
+                        (u.Label || "").toLowerCase().includes(globalSearchVal) ||
+                        (u.NamaFakultasUnit || "").toLowerCase().includes(globalSearchVal)
+                    );
+                    if (matched.length > 0) {
+                      displayUnits = matched;
+                    }
+                  }
 
-                        const hasProker = (u.ProkerCount || 0) > 0;
+                  if (displayUnits.length === 0) {
+                    return (
+                      <span className="text-xs text-gray-400 italic">
+                        Tidak ada unit yang sesuai pencarian
+                      </span>
+                    );
+                  }
 
-                        return (
-                          <span
-                            key={u.UUID || u.Id}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border shadow-2xs transition-all ${badgeStyle}`}
-                            title={`${u.FakultasUnit} (${u.ProkerCount || 0} Matrix Proker)${showDeleted ? " - Terhapus" : ""}`}
-                          >
-                            <span>{u.FakultasUnit}</span>
-                            <span
-                              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border transition ${
-                                showDeleted
-                                  ? "bg-rose-100 text-rose-800 border-rose-200"
-                                  : hasProker
-                                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                  : "bg-gray-100 text-gray-500 border-gray-200"
-                              }`}
-                            >
-                              {showDeleted ? "Terhapus" : `${u.ProkerCount || 0} proker`}
-                            </span>
-
-                            {isAdmin && (
-                              showDeleted ? (
-                                <button
-                                  type="button"
-                                  title={`Pulihkan ${u.FakultasUnit} (restore)`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRestoreSingleUnit(u, row);
-                                  }}
-                                  className="ml-1 p-0.5 rounded text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900 transition cursor-pointer"
-                                >
-                                  <RotateCcw className="w-3 h-3" />
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={hasProker}
-                                  title={
-                                    hasProker
-                                      ? `Tidak dapat dihapus karena sudah ada ${u.ProkerCount} matrix proker terhubung`
-                                      : `Hapus ${u.FakultasUnit} dari program ini`
-                                  }
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveSingleUnit(u, row);
-                                  }}
-                                  className={`ml-0.5 p-0.5 rounded transition ${
-                                    hasProker
-                                      ? "opacity-30 cursor-not-allowed text-gray-400"
-                                      : "hover:bg-rose-100 hover:text-rose-700 text-gray-400 cursor-pointer"
-                                  }`}
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              )
-                            )}
-                          </span>
-                        );
-                      })}
+                  return (
+                    <div className="flex flex-wrap items-center gap-1.5 py-1 max-w-sm">
+                      {displayUnits.map((u, idx) => (
+                        <span
+                          key={u.UUID || u.Id || idx}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border shadow-2xs bg-emerald-50 text-emerald-800 border-emerald-200"
+                          title={`${u.Label || u.NamaFakultasUnit}${u.Status ? ` • Status: ${u.Status}` : ""}`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span>{u.Label || u.NamaFakultasUnit}</span>
+                        </span>
+                      ))}
                     </div>
                   );
                 },
@@ -367,7 +425,7 @@ export default function MataProgramV2Page() {
                     }}
                   >
                     <RotateCcw className="w-4 h-4 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
-                    <span>Pulihkan Semua Unit</span>
+                    <span>Pulihkan Mata Program</span>
                   </button>
                 ) : (
                   <>
@@ -375,8 +433,7 @@ export default function MataProgramV2Page() {
                       type="button"
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition-all cursor-pointer text-left group"
                       onClick={() => {
-                        setSelectedRow(row);
-                        setEditModalOpen(true);
+                        navigate(`/mata_programv3/${row.UUID || row.uuid}/edit`);
                         close();
                       }}
                     >

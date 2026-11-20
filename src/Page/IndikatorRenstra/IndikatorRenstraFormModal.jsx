@@ -51,8 +51,6 @@ export default function IndikatorRenstraFormModal({
       tahun: "",
       tipe_target: null,
       operator: null,
-      target_unpak: "",
-      target_unit: "",
     },
   });
 
@@ -86,8 +84,6 @@ export default function IndikatorRenstraFormModal({
         tahun: data.Tahun ? String(data.Tahun) : "",
         tipe_target: targetSelected,
         operator: data.Operator || null,
-        target_unpak: data.TargetUnpak ?? data.target_unpak ?? "",
-        target_unit: data.TargetUnit ?? data.target_unit ?? "",
       });
 
       if (data.Tahun) {
@@ -101,8 +97,6 @@ export default function IndikatorRenstraFormModal({
         tahun: "",
         tipe_target: null,
         operator: null,
-        target_unpak: "",
-        target_unit: "",
       });
       setIndikatorOptions([]);
     }
@@ -359,8 +353,6 @@ export default function IndikatorRenstraFormModal({
       fd.append("tahun", form?.tahun ?? "");
       fd.append("tipe_target", rawTipeTarget);
       fd.append("operator", form?.operator ?? "");
-      fd.append("target_unpak", form?.target_unpak ?? "");
-      fd.append("target_unit", form?.target_unit ?? "");
 
       if (mode === "edit") {
         await apiClient.put(
@@ -412,7 +404,7 @@ export default function IndikatorRenstraFormModal({
                   </div>
                   <div>
                     <Dialog.Title className="text-base font-bold text-gray-900">
-                      {mode === "edit" ? "Edit" : "Tambah"} Indikator Renstra
+                      {mode === "edit" ? "Edit" : "Tambah"} Indikator IKU/IKT
                     </Dialog.Title>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Kelola target capaian dan butir indikator mutu
@@ -510,32 +502,6 @@ export default function IndikatorRenstraFormModal({
                   placeholder=">=, <=, =, dll."
                   error={errors.operator?.message}
                   {...register("operator", { required: false })}
-                />
-
-                <TextInput
-                  label="Target Unpak"
-                  required
-                  placeholder="Contoh: 15 % Dosen / >= 80%"
-                  error={errors.target_unpak?.message}
-                  {...register("target_unpak", {
-                    required: "Target Unpak wajib diisi",
-                    validate: (v) =>
-                      String(v || "").trim() !== "" ||
-                      "Target Unpak wajib diisi",
-                  })}
-                />
-
-                <TextInput
-                  label="Target Unit Kerja"
-                  required
-                  placeholder="Contoh: (5) Maintenance rutin terdokumentasi / 80%"
-                  error={errors.target_unit?.message}
-                  {...register("target_unit", {
-                    required: "Target Unit Kerja wajib diisi",
-                    validate: (v) =>
-                      String(v || "").trim() !== "" ||
-                      "Target Unit Kerja wajib diisi",
-                  })}
                 />
 
                 <SearchSelect

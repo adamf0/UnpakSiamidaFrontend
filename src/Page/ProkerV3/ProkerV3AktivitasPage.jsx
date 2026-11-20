@@ -5,7 +5,7 @@ import React, {
   useCallback,
   Fragment,
 } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Dialog, Transition } from "@headlessui/react";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useToast } from "@/Providers/ToastProvider";
@@ -33,7 +33,12 @@ import {
   getTimelineRkSlots,
   getTimelineRSlots,
 } from "./prokerConstants";
-import { formatTanggalBulanTahun, isValidUuid } from "@/Common/Utils";
+import {
+  formatTanggalBulanTahun,
+  isValidUuid,
+  cleanDuplicateJenjang,
+  formatProdiWithJenjang,
+} from "@/Common/Utils";
 import {
   ArrowLeft,
   Building2,
@@ -105,6 +110,7 @@ const parseIkuString = (rawIku) => {
 export default function ProkerV3AktivitasPage() {
   const { uuid: prokerUuid } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { getValidToken, user } = useAuth();
   const { addToast } = useToast();
   const {
@@ -231,6 +237,11 @@ export default function ProkerV3AktivitasPage() {
 
       const prokerUnitId =
         rawProker.IdFakultasUnit != null ? Number(rawProker.IdFakultasUnit) : null;
+      const prokerUnitUuid = String(
+        rawProker.UuidFakultasUnit || rawProker.uuid_fakultas_unit || "",
+      )
+        .trim()
+        .toLowerCase();
       const prokerUnitName = String(
         rawProker.NamaFakultasUnit || rawProker.nama_fakultas_unit || "",
       )
@@ -244,20 +255,56 @@ export default function ProkerV3AktivitasPage() {
 
       const assignedId =
         activeRoleUnit.id != null ? Number(activeRoleUnit.id) : null;
+      const assignedUuid = String(activeRoleUnit.uuid || "")
+        .trim()
+        .toLowerCase();
       const assignedName = String(activeRoleUnit.name || "")
         .trim()
         .toLowerCase();
 
-      // 1. Direct match dengan unit penugasan aktif
+      // 1. Direct match dengan unit penugasan aktif (ID, UUID, atau Nama)
       if (assignedId && prokerUnitId && assignedId === prokerUnitId) {
+        return true;
+      }
+      if (assignedUuid && prokerUnitUuid && assignedUuid === prokerUnitUuid) {
         return true;
       }
       if (
         assignedName &&
         prokerUnitName &&
-        (assignedName === prokerUnitName || prokerUnitName.includes(assignedName))
+        (assignedName === prokerUnitName ||
+          prokerUnitName.includes(assignedName) ||
+          assignedName.includes(prokerUnitName))
       ) {
         return true;
+      }
+
+      // Cek extra_role user jika penugasan ada di daftar role tahun aktif
+      if (Array.isArray(user?.extra_role) && user.extra_role.length > 0) {
+        const extraMatch = user.extra_role.some((r) => {
+          const rYear = String(r.tahun ?? r.Tahun ?? "").trim();
+          const targetYear = String(rawProker.Tahun || rawProker.tahun || positionYear || "").trim();
+          if (rYear && targetYear && rYear !== targetYear) return false;
+
+          const rId = r.id_fakultas_unit ?? r.IdFakultasUnit;
+          if (rId && prokerUnitId && Number(rId) === prokerUnitId) return true;
+
+          const rUuid = String(r.uuid_fakultas_unit ?? r.UuidFakultasUnit ?? "").trim().toLowerCase();
+          if (rUuid && prokerUnitUuid && rUuid === prokerUnitUuid) return true;
+
+          const rName = String(r.nama_fakultas_unit ?? r.NamaFakultasUnit ?? "").trim().toLowerCase();
+          if (
+            rName &&
+            prokerUnitName &&
+            (rName === prokerUnitName ||
+              prokerUnitName.includes(rName) ||
+              rName.includes(prokerUnitName))
+          ) {
+            return true;
+          }
+          return false;
+        });
+        if (extraMatch) return true;
       }
 
       // 2. Strict scoping untuk UPML, UPMS, dan normal user
@@ -281,7 +328,7 @@ export default function ProkerV3AktivitasPage() {
 
       return false;
     },
-    [isAdmin, isAnggaran, curRole, activeRoleUnit],
+    [isAdmin, isAnggaran, curRole, activeRoleUnit, user, positionYear],
   );
 
   // Multi-scope support for Standar, Target, and Luaran
@@ -461,7 +508,11 @@ export default function ProkerV3AktivitasPage() {
   const [actCapaian, setActCapaian] = useState("");
   const [actMasalah, setActMasalah] = useState("");
   const [actPemecahan, setActPemecahan] = useState("");
+  const [actOutput, setActOutput] = useState("");
+  const [actOutcome, setActOutcome] = useState("");
   const [actStatus, setActStatus] = useState("draft");
+  const [actBebanYayasan, setActBebanYayasan] = useState(false);
+  const [updatingBebanActUuid, setUpdatingBebanActUuid] = useState(null);
   const [showEvaluasi, setShowEvaluasi] = useState(false);
   const [savingAct, setSavingAct] = useState(false);
 
@@ -537,6 +588,15 @@ export default function ProkerV3AktivitasPage() {
     jadwalProkerStatus?.has_schedule && jadwalProkerStatus?.is_open,
   );
 
+  // Helper untuk membaca query params baik dari URL search maupun dari hash (misal #/proker_v3/.../aktivitas?fakultas_unit=...)
+  const getSearchString = () => {
+    if (location?.search) return location.search;
+    if (window.location.search) return window.location.search;
+    const hash = window.location.hash || "";
+    const qIdx = hash.indexOf("?");
+    return qIdx !== -1 ? hash.slice(qIdx) : "";
+  };
+
   // Fetch Data (Proker, Activities & Documents)
   const fetchData = async () => {
     if (!prokerUuid) return;
@@ -544,7 +604,22 @@ export default function ProkerV3AktivitasPage() {
     setIsAccessBlocked(false);
     setAccessBlockInfo(null);
     try {
-      const res = await apiClient.get(`/proker_v3/${prokerUuid}/aktivitas`);
+      const searchParams = new URLSearchParams(getSearchString());
+      const fuUuidParam = searchParams.get("fakultas_unit");
+      const fuIdParam =
+        searchParams.get("id_fakultas_unit") ||
+        searchParams.get("filter_fakultas_unit");
+      let queryStr = "";
+      if (fuUuidParam) {
+        queryStr = `?fakultas_unit=${encodeURIComponent(fuUuidParam)}`;
+      } else if (fuIdParam) {
+        queryStr = `?id_fakultas_unit=${encodeURIComponent(fuIdParam)}`;
+      } else if (activeRoleUnit?.uuid) {
+        queryStr = `?fakultas_unit=${encodeURIComponent(activeRoleUnit.uuid)}`;
+      }
+      const res = await apiClient.get(
+        `/proker_v3/${prokerUuid}/aktivitas${queryStr}`,
+      );
       const json = res.data;
       const rawProker = json.proker || null;
       if (rawProker) {
@@ -552,11 +627,19 @@ export default function ProkerV3AktivitasPage() {
         rawProker.tahun = rawProker.tahun || rawProker.Tahun;
         rawProker.NamaProgram = rawProker.NamaProgram || rawProker.nama_program;
         rawProker.NamaFakultasUnit = rawProker.NamaFakultasUnit || rawProker.nama_fakultas_unit;
+        rawProker.TypeFakultasUnit = rawProker.TypeFakultasUnit || rawProker.type_fakultas_unit;
+        rawProker.JenjangFakultasUnit = rawProker.JenjangFakultasUnit || rawProker.jenjang_fakultas_unit;
         rawProker.IdFakultasUnit = rawProker.IdFakultasUnit ?? rawProker.id_fakultas_unit;
         rawProker.UuidFakultasUnit = rawProker.UuidFakultasUnit || rawProker.uuid_fakultas_unit;
         rawProker.PIC = rawProker.PIC || rawProker.pic;
         rawProker.Status = rawProker.Status || rawProker.status;
         rawProker.ParentFakultas = rawProker.ParentFakultas || rawProker.parent_fakultas;
+
+        // Sinkronkan query URL browser ke ?fakultas_unit=<UUID>
+        const targetFuUuid = rawProker.UuidFakultasUnit || rawProker.uuid_fakultas_unit;
+        if (targetFuUuid && (!fuUuidParam || fuIdParam)) {
+          navigate(`/proker_v3/${prokerUuid}/aktivitas?fakultas_unit=${targetFuUuid}`, { replace: true });
+        }
       }
 
       // Validasi hak akses klien
@@ -611,7 +694,7 @@ export default function ProkerV3AktivitasPage() {
 
   useEffect(() => {
     fetchData();
-  }, [prokerUuid, curRole, positionYear]);
+  }, [prokerUuid, curRole, positionYear, location.search]);
 
   useEffect(() => {
     let cancel = false;
@@ -822,7 +905,10 @@ export default function ProkerV3AktivitasPage() {
     setActCapaian("");
     setActMasalah("");
     setActPemecahan("");
+    setActOutput("");
+    setActOutcome("");
     setActStatus("draft");
+    setActBebanYayasan(false);
     setShowEvaluasi(false);
     setActModalOpen(true);
   };
@@ -932,11 +1018,38 @@ export default function ProkerV3AktivitasPage() {
     setActCapaian(act.Capaian || "");
     setActMasalah(act.Masalah || "");
     setActPemecahan(act.PemecahanMasalah || "");
+    setActOutput(act.Output || act.output || "");
+    setActOutcome(act.Outcome || act.outcome || "");
     setActStatus(act.Status || "draft");
+    setActBebanYayasan(Boolean(act.BebanYayasan || act.beban_yayasan));
     setShowEvaluasi(
       Boolean(act.Capaian || act.Masalah || act.PemecahanMasalah),
     );
     setActModalOpen(true);
+  };
+
+  const handleToggleBebanYayasanAct = async (act) => {
+    if (!act?.UUID) return;
+    const currentVal = Boolean(act.BebanYayasan || act.beban_yayasan);
+    const nextVal = !currentVal;
+    setUpdatingBebanActUuid(act.UUID);
+    try {
+      const fd = new FormData();
+      fd.append("beban_yayasan", nextVal ? "1" : "0");
+      await apiClient.put(`/proker_v3/aktivitas/${act.UUID}/beban_yayasan`, fd);
+      act.BebanYayasan = nextVal;
+      act.beban_yayasan = nextVal;
+      addToast(
+        "success",
+        `Beban Yayasan untuk aktivitas "${act.Aktivitas || ""}" berhasil ${nextVal ? "diaktifkan" : "dinonaktifkan"}`
+      );
+      fetchData();
+    } catch (err) {
+      console.error("Gagal toggle beban yayasan:", err);
+      addToast("error", err?.response?.data?.error || err?.message || "Gagal mengubah beban yayasan");
+    } finally {
+      setUpdatingBebanActUuid(null);
+    }
   };
 
   const handleSaveActivity = async (e) => {
@@ -967,14 +1080,18 @@ export default function ProkerV3AktivitasPage() {
     );
 
     // Validasi pembatasan pagu unit (Case 2: jika pagu ada > 0 dan BUKAN beban yayasan)
-    const isBebanYayasan = Boolean(
-      proker?.BebanYayasan || proker?.beban_yayasan,
-    );
+    const isBebanYayasan = Boolean(actBebanYayasan);
     if (!isBebanYayasan && proker?.HasPagu && Number(proker?.PaguUnit) > 0) {
       const paguUnit = Number(proker.PaguUnit);
       const totalTerpakai = Number(proker.TotalAnggaranUnit) || 0;
+      const wasBebanYayasan =
+        actModalMode === "edit"
+          ? Boolean(selectedAct?.BebanYayasan || selectedAct?.beban_yayasan)
+          : false;
       const oldActAnggaran =
-        actModalMode === "edit" ? Number(selectedAct?.Anggaran) || 0 : 0;
+        actModalMode === "edit" && !wasBebanYayasan
+          ? Number(selectedAct?.Anggaran) || 0
+          : 0;
       const delta = calculatedTotalAnggaran - oldActAnggaran;
       if (delta > 0 && totalTerpakai + delta > paguUnit) {
         const sisaAllowed = Math.max(
@@ -1000,11 +1117,26 @@ export default function ProkerV3AktivitasPage() {
       fd.append("capaian", actCapaian.trim());
       fd.append("masalah", actMasalah.trim());
       fd.append("pemecahan_masalah", actPemecahan.trim());
+      fd.append("output", actOutput.trim());
+      fd.append("outcome", actOutcome.trim());
+      fd.append("beban_yayasan", actBebanYayasan ? "1" : "0");
+
+      const searchParams = new URLSearchParams(getSearchString());
+      const targetFuUuid =
+        proker?.UuidFakultasUnit ||
+        proker?.uuid_fakultas_unit ||
+        searchParams.get("fakultas_unit") ||
+        activeRoleUnit?.uuid ||
+        "";
+      if (targetFuUuid) {
+        fd.append("fakultas_unit", targetFuUuid);
+      }
+      const fuQuery = targetFuUuid ? `?fakultas_unit=${encodeURIComponent(targetFuUuid)}` : "";
 
       const url =
         actModalMode === "edit"
           ? `/proker_v3/aktivitas/${selectedAct.UUID}`
-          : `/proker_v3/${prokerUuid}/aktivitas`;
+          : `/proker_v3/${prokerUuid}/aktivitas${fuQuery}`;
 
       const res =
         actModalMode === "edit"
@@ -1442,7 +1574,7 @@ export default function ProkerV3AktivitasPage() {
 
     // Validasi pembatasan pagu unit (Case 2: jika pagu ada > 0 dan BUKAN beban yayasan)
     const isBebanYayasan = Boolean(
-      proker?.BebanYayasan || proker?.beban_yayasan,
+      rabDetailAct?.BebanYayasan || rabDetailAct?.beban_yayasan,
     );
     if (!isBebanYayasan && proker?.HasPagu && Number(proker?.PaguUnit) > 0) {
       const paguUnit = Number(proker.PaguUnit);
@@ -1640,18 +1772,23 @@ export default function ProkerV3AktivitasPage() {
 
   // Proker berhasil di acc verifikator
   const isProkerAccVerifikator =
-    pVerif === "terima_verifikator" ||
-    pVerif === "disetujui" ||
-    pVerif.includes("diverifikasi") ||
-    pMain === "disetujui" ||
-    pMain === "terima_anggaran" ||
-    pMain.includes("diverifikasi");
+    !pVerif.includes("parsial") &&
+    (pVerif === "diterima evaluator" ||
+      pVerif === "terima_verifikator" ||
+      pVerif === "disetujui" ||
+      pVerif.includes("diverifikasi") ||
+      pMain === "disetujui" ||
+      pMain === "terima_anggaran" ||
+      pMain.includes("diverifikasi"));
 
   // Proker berhasil di acc anggaran
   const isProkerAccAnggaran =
-    pAngg === "terima_anggaran" ||
-    pMain === "terima_anggaran" ||
-    pMain === "disetujui";
+    !pAngg.includes("parsial") &&
+    (pAngg === "terima_anggaran" ||
+      pAngg === "terima anggaran" ||
+      pMain === "terima_anggaran" ||
+      pMain === "terima anggaran" ||
+      pMain === "disetujui");
 
   // Syarat mutlak: di mata proker berhasil di acc verifikator dan anggaran
   const isProkerFullyApproved =
@@ -1671,13 +1808,16 @@ export default function ProkerV3AktivitasPage() {
       const pVerifStr = (proker?.StatusVerifikator || "").toLowerCase().trim();
       const actMain = (act?.Status || "").toLowerCase().trim();
       const actVerif = (act?.StatusVerifikator || "").toLowerCase().trim();
+      const actEval = (act?.StatusEvaluator || act?.status_evaluator || "").toLowerCase().trim();
       const actLpm = (act?.StatusLpm || "").toLowerCase().trim();
       const actAngg = (act?.StatusAnggaran || "").toLowerCase().trim();
 
       const isParentApproved =
         !["draft", "revisi", "ditolak"].includes(pMainStr) &&
         !["draft", "revisi", "ditolak"].includes(pVerifStr) &&
+        !pVerifStr.includes("parsial") &&
         (isProkerAccVerifikator ||
+          pVerifStr === "diterima evaluator" ||
           pVerifStr === "terima_verifikator" ||
           pVerifStr === "disetujui" ||
           pMainStr === "disetujui" ||
@@ -1686,8 +1826,12 @@ export default function ProkerV3AktivitasPage() {
       const isRowApproved =
         !["draft", "revisi", "ditolak"].includes(actMain) &&
         !["draft", "revisi", "ditolak"].includes(actVerif) &&
-        (actVerif === "terima_verifikator" ||
+        !["draft", "revisi", "ditolak"].includes(actEval) &&
+        (actEval === "diterima" ||
+          actEval === "disetujui" ||
+          actVerif === "diterima" ||
           actVerif === "disetujui" ||
+          actVerif === "terima_verifikator" ||
           actVerif.includes("diverifikasi") ||
           actLpm === "disetujui" ||
           actMain === "disetujui" ||
@@ -1707,6 +1851,12 @@ export default function ProkerV3AktivitasPage() {
         String(v || "")
           .toLowerCase()
           .trim();
+
+      // Jika baris aktivitas ini sudah memiliki timestamp terima_anggaran_at, maka sudah disetujui anggaran dan terkunci!
+      if (Boolean(act.TerimaAnggaranAt || act.terima_anggaran_at)) {
+        return true;
+      }
+
       const isVerifApproved = (v) => {
         const val = normalize(v);
         return (
@@ -1719,6 +1869,7 @@ export default function ProkerV3AktivitasPage() {
 
       const isAnggaranApproved = (v) => {
         const val = normalize(v);
+        if (val.includes("parsial")) return false;
         return (
           val.includes("terima_anggaran") ||
           val.includes("disetujui") ||
@@ -1731,7 +1882,6 @@ export default function ProkerV3AktivitasPage() {
       const actVerif = normalize(
         act.StatusVerifikator || act.status_verifikator,
       );
-      const actAngg = normalize(act.StatusAnggaran || act.status_anggaran);
 
       const pStatus = normalize(proker?.Status || proker?.status);
       const pVerif = normalize(
@@ -1742,13 +1892,14 @@ export default function ProkerV3AktivitasPage() {
       );
 
       const isProkerLocked =
-        (isVerifApproved(pVerif) && isAnggaranApproved(pAngg)) ||
-        pStatus.includes("terima_anggaran");
+        !pAngg.includes("parsial") &&
+        ((isVerifApproved(pVerif) && isAnggaranApproved(pAngg)) ||
+          pStatus === "terima_anggaran" ||
+          pStatus === "terima anggaran");
 
       const isActLocked =
-        (isVerifApproved(actVerif) && isAnggaranApproved(actAngg)) ||
-        actStatus.includes("terima_anggaran") ||
-        isAnggaranApproved(actAngg);
+        (isVerifApproved(actVerif) && isAnggaranApproved(pAngg)) ||
+        actStatus.includes("terima_anggaran");
 
       return isProkerLocked || isActLocked;
     },
@@ -1787,6 +1938,28 @@ export default function ProkerV3AktivitasPage() {
     pMain,
   ]);
 
+  // Tombol Terima Anggaran di header card untuk role anggaran / admin jika ada aktivitas yang sudah disetujui evaluator tapi belum di-ACC anggaran
+  const canAnggaranVerifyProker = useMemo(() => {
+    if (!isAnggaran && !isAdmin) return false;
+    const hasUnapprovedAct = activities.some(
+      (a) =>
+        !a.IsBatal &&
+        !Boolean(a.TerimaAnggaranAt || a.terima_anggaran_at) &&
+        ["diterima", "disetujui", "terima_verifikator"].includes(
+          (
+            a.StatusEvaluator ||
+            a.status_evaluator ||
+            a.StatusVerifikator ||
+            a.status_verifikator ||
+            ""
+          )
+            .toLowerCase()
+            .trim(),
+        ),
+    );
+    return hasUnapprovedAct;
+  }, [isAnggaran, isAdmin, activities]);
+
   // Tombol revisi aktivitas ke draft di tabel: TIDAK ada pada role upml, upmf, upms, dan level anggaran (Gambar 1)
   const canRevisiActDraft = useMemo(() => {
     if (isAnggaran) return false;
@@ -1795,15 +1968,19 @@ export default function ProkerV3AktivitasPage() {
   }, [curRole, isAdmin, isAnggaran]);
 
   // Verifikator (upml, upmf, upms, fakultas, evaluator, lpm, admin) yang memverifikasi aktivitas
-  const canVerify = isVerifier || curRole === "lpm" || curRole === "evaluator" || isAdmin;
+  const canVerify =
+    isVerifier ||
+    curRole === "lpm" ||
+    curRole === "evaluator" ||
+    isAdmin;
   const showBatchCheckbox = canVerify || canRevisiActDraft;
 
   // Next verification status label and value
   let nextVerifyStatus = "disetujui";
   let nextVerifyStatusLabel = "Disetujui";
-  if (isAnggaran) {
-    nextVerifyStatus = "terima_anggaran";
-    nextVerifyStatusLabel = "Terima Anggaran";
+  if (curRole === "evaluator") {
+    nextVerifyStatus = "disetujui";
+    nextVerifyStatusLabel = "Verifikasi Evaluator";
   } else if (curRole === "upml") {
     nextVerifyStatus = "diverifikasi_upml";
     nextVerifyStatusLabel = "Verifikasi UPML";
@@ -1862,14 +2039,107 @@ export default function ProkerV3AktivitasPage() {
     }
   };
 
+  const handleVerifyAnggaranProker = async () => {
+    try {
+      setIsVerifying(true);
+      const fd = new FormData();
+      fd.append("status", "terima_anggaran");
+      const targetUuid = proker?.UUID || prokerUuid;
+      await apiClient.put(`/proker_v3/${targetUuid}/status`, fd);
+      addToast(
+        "success",
+        `Program kerja "${proker?.NamaProgram || ""}" berhasil disetujui (Terima Anggaran)`,
+      );
+      fetchData();
+    } catch (err) {
+      addToast(
+        "error",
+        err?.response?.data?.error ||
+          err?.message ||
+          "Gagal memverifikasi anggaran program kerja",
+      );
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   // ==========================================
   // BATCH & SINGLE ROW VERIFICATION HANDLERS
   // ==========================================
+  const getEvaluatorActionState = useCallback((act) => {
+    if (!act) {
+      return { canAct: false, isAccepted: false, isAwaitingResubmit: false };
+    }
+    const sMain = String(act.Status || act.status || "draft")
+      .toLowerCase()
+      .trim();
+    const sVerif = String(act.StatusVerifikator || act.status_verifikator || "")
+      .toLowerCase()
+      .trim();
+    const sEval = String(
+      act.StatusEvaluator || act.status_evaluator || sVerif || "",
+    )
+      .toLowerCase()
+      .trim();
+    const isAccepted =
+      sEval === "disetujui" ||
+      sEval === "diterima" ||
+      sEval === "terima_verifikator" ||
+      sVerif === "diterima" ||
+      sVerif === "disetujui";
+    if (isAccepted) {
+      return { canAct: true, isAccepted: true, isAwaitingResubmit: false };
+    }
+    const isDraft =
+      sMain === "draft" ||
+      sVerif === "draft" ||
+      sEval === "draft" ||
+      sEval === "";
+    const isAwaitingResubmit =
+      sEval === "ditolak" ||
+      sEval === "revisi" ||
+      sVerif === "ditolak" ||
+      sVerif === "revisi";
+    return {
+      canAct: !isDraft && !isAwaitingResubmit,
+      isAccepted: false,
+      isAwaitingResubmit,
+    };
+  }, []);
+
+  const isActSelectableForBatch = useCallback(
+    (act) => {
+      if (!act) return false;
+      if (!isAdmin && curRole === "evaluator") {
+        return getEvaluatorActionState(act).canAct;
+      }
+      if (
+        !isAdmin &&
+        ["upml", "upmf", "fakultas", "upms", "lpm"].includes(curRole)
+      ) {
+        const sMain = String(act.Status || act.status || "draft")
+          .toLowerCase()
+          .trim();
+        return sMain !== "draft";
+      }
+      return true;
+    },
+    [isAdmin, curRole, getEvaluatorActionState],
+  );
+
+  const selectableActivities = useMemo(
+    () => activities.filter(isActSelectableForBatch),
+    [activities, isActSelectableForBatch],
+  );
+
   const handleToggleSelectAll = () => {
-    if (selectedActUuids.length === activities.length) {
+    if (
+      selectableActivities.length > 0 &&
+      selectedActUuids.length === selectableActivities.length
+    ) {
       setSelectedActUuids([]);
     } else {
-      setSelectedActUuids(activities.map((a) => a.UUID));
+      setSelectedActUuids(selectableActivities.map((a) => a.UUID));
     }
   };
 
@@ -2106,7 +2376,7 @@ export default function ProkerV3AktivitasPage() {
   // Single Row Accept
   const handleVerifySingleRow = async (act, targetRole) => {
     if (!canVerify || !act?.UUID) return;
-    const roleToUse = targetRole || (isAdmin ? "lpm" : isAnggaran ? "anggaran" : curRole);
+    const roleToUse = targetRole || (isAdmin ? "lpm" : curRole);
     setVerifyingRowUuid(act.UUID);
     setRowErrors((prev) => {
       const next = { ...prev };
@@ -2141,7 +2411,7 @@ export default function ProkerV3AktivitasPage() {
   const handleOpenSingleRejectModal = (act, targetRole) => {
     if (!canVerify) return;
     setActToReject(act);
-    setRejectRole(targetRole || (isAdmin ? "lpm" : isAnggaran ? "anggaran" : curRole));
+    setRejectRole(targetRole || (isAdmin ? "lpm" : curRole));
     setSingleRejectReason("");
     setSingleRejectModalOpen(true);
   };
@@ -2192,56 +2462,59 @@ export default function ProkerV3AktivitasPage() {
     }
   };
 
-  const renderStatusStamp = (statusStr) => {
-    const s = (statusStr || "draft").toLowerCase().replace(/_/g, " ").trim();
+  const renderEvaluatorStamp = () => {
+    const sVerif = (proker?.StatusVerifikator || "").toLowerCase().trim();
+    const sMain = (proker?.Status || "draft").toLowerCase().trim();
+    const sAngg = (proker?.StatusAnggaran || "").toLowerCase().trim();
+
     let statusType = "kosong";
     let mainText = "DRAF";
-    let headerText = "★ STATUS PROKER ★";
+    let headerText = "★ VERIFIKATOR EVALUATOR ★";
     let subText = "BELUM DIAJUKAN";
 
-    if (s === "terima anggaran") {
+    if (sVerif.includes("parsial") || sMain.includes("parsial")) {
+      statusType = "verifikasi";
+      mainText = "DITERIMA PARSIAL";
+      headerText = "★ VERIFIKATOR EVALUATOR ★";
+      subText = "SEBAGIAN DISETUJUI";
+    } else if (
+      sVerif === "diterima evaluator" ||
+      sVerif === "terima_verifikator" ||
+      sVerif === "disetujui" ||
+      sVerif === "diterima" ||
+      sMain === "disetujui" ||
+      sMain === "diterima" ||
+      sMain === "terima_anggaran" ||
+      sMain === "terima anggaran"
+    ) {
       statusType = "terverifikasi";
-      mainText = "TERIMA ANGGARAN";
-      headerText = "★ LPMI UNPAK ★";
-      subText = "SAH & DITERIMA";
-    } else if (s === "disetujui") {
-      statusType = "terverifikasi";
-      mainText = "DISETUJUI";
-      headerText = "★ LPMI UNPAK ★";
-      subText = "SAH & MEMENUHI STANDAR";
-    } else if (s === "selesai") {
-      statusType = "terverifikasi";
-      mainText = "SELESAI";
-      headerText = "★ PROGRAM RESMI ★";
-      subText = "TELAH TERLAKSANA";
-    } else if (s.includes("ditolak")) {
+      mainText = "DITERIMA";
+      headerText = "★ VERIFIKATOR EVALUATOR ★";
+      subText = "SEMUA DISETUJUI";
+    } else if (
+      sVerif.includes("ditolak") ||
+      (sMain.includes("ditolak") &&
+        (proker?.CatatanVerifikator || !sAngg.includes("ditolak")))
+    ) {
       statusType = "gagal";
       mainText = "DITOLAK";
-      headerText = "✖ TIM AUDITOR ✖";
+      headerText = "✖ TIM EVALUATOR ✖";
       subText =
-        proker?.CatatanPenolakan ||
         proker?.CatatanVerifikator ||
-        proker?.CatatanAnggaran ||
+        proker?.CatatanPenolakan ||
         "PERLU PERBAIKAN";
-    } else if (s === "menunggu upms" || s === "diverifikasi upmf") {
-      statusType = "verifikasi";
-      mainText = "MENUNGGU UPMS";
-      headerText = "★ AUDIT PRODI ★";
-      subText = "EVALUASI UPMS";
-    } else if (s === "menunggu upmf" || s === "diverifikasi upml") {
-      statusType = "verifikasi";
-      mainText = "MENUNGGU UPMF";
-      headerText = "★ AUDIT FAKULTAS ★";
-      subText = "EVALUASI UPMF";
-    } else if (s === "menunggu upml") {
-      statusType = "verifikasi";
-      mainText = "MENUNGGU UPML";
-      headerText = "★ AUDIT LEMBAGA ★";
-      subText = "EVALUASI UPML";
-    } else if (s === "diajukan") {
+    } else if (sVerif.includes("revisi") || sMain === "revisi") {
+      statusType = "gagal";
+      mainText = "REVISI";
+      headerText = "✖ TIM EVALUATOR ✖";
+      subText =
+        proker?.CatatanVerifikator ||
+        proker?.CatatanPenolakan ||
+        "PERLU PERBAIKAN";
+    } else if (sVerif.includes("diajukan") || sMain === "diajukan") {
       statusType = "verifikasi";
       mainText = "DIAJUKAN";
-      headerText = "★ VERIFIKASI PROKER ★";
+      headerText = "★ VERIFIKASI EVALUATOR ★";
       subText = "MENUNGGU REVIEW";
     }
 
@@ -2252,7 +2525,89 @@ export default function ProkerV3AktivitasPage() {
         customText={mainText}
         headerText={headerText}
         subText={subText}
-        delay={0.1}
+        delay={0.08}
+      />
+    );
+  };
+
+  const renderAnggaranStamp = () => {
+    const sVerif = (proker?.StatusVerifikator || "").toLowerCase().trim();
+    const sAngg = (proker?.StatusAnggaran || "").toLowerCase().trim();
+    const sMain = (proker?.Status || "draft").toLowerCase().trim();
+
+    const isVerifierApproved =
+      !sVerif.includes("parsial") &&
+      sVerif !== "revisi" &&
+      sMain !== "revisi" &&
+      sVerif !== "ditolak" &&
+      !sVerif.includes("ditolak") &&
+      !sMain.includes("ditolak") &&
+      (sVerif === "diterima evaluator" ||
+        sVerif === "terima_verifikator" ||
+        sVerif === "disetujui" ||
+        sVerif.includes("diverifikasi") ||
+        sMain === "disetujui" ||
+        sMain === "terima_anggaran" ||
+        sMain === "terima anggaran" ||
+        sMain.includes("diverifikasi"));
+
+    let statusType = "kosong";
+    let mainText = "DRAF";
+    let headerText = "★ TIM ANGGARAN ★";
+    let subText = "MENUNGGU EVALUATOR";
+
+    if (sAngg.includes("parsial")) {
+      statusType = "verifikasi";
+      mainText = "DITERIMA PARSIAL";
+      headerText = "★ TIM ANGGARAN ★";
+      subText = "SEBAGIAN DISETUJUI";
+    } else if (
+      sAngg === "terima_anggaran" ||
+      sAngg === "terima anggaran" ||
+      sAngg === "disetujui" ||
+      sAngg === "diterima" ||
+      sMain === "terima_anggaran" ||
+      sMain === "terima anggaran"
+    ) {
+      statusType = "terverifikasi";
+      mainText = "TERIMA ANGGARAN";
+      headerText = "★ TIM ANGGARAN ★";
+      subText = "SAH & DISETUJUI";
+    } else if (sAngg.includes("ditolak")) {
+      statusType = "gagal";
+      mainText = "DITOLAK";
+      headerText = "✖ TIM ANGGARAN ✖";
+      subText =
+        proker?.CatatanAnggaran ||
+        proker?.CatatanPenolakan ||
+        "PERLU PERBAIKAN";
+    } else if (sAngg.includes("revisi")) {
+      statusType = "gagal";
+      mainText = "REVISI";
+      headerText = "✖ TIM ANGGARAN ✖";
+      subText =
+        proker?.CatatanAnggaran ||
+        proker?.CatatanPenolakan ||
+        "PERLU PERBAIKAN";
+    } else if (
+      sAngg === "menunggu_anggaran" ||
+      sAngg === "menunggu" ||
+      isVerifierApproved
+    ) {
+      statusType = "verifikasi";
+      mainText = "MENUNGGU";
+      headerText = "★ TIM ANGGARAN ★";
+      subText = "MENUNGGU ANGGARAN";
+    }
+
+    return (
+      <RubberStamp
+        status={statusType}
+        size="sm"
+        customText={mainText}
+        headerText={headerText}
+        subText={subText}
+        delay={0.16}
       />
     );
   };
@@ -2287,7 +2642,12 @@ export default function ProkerV3AktivitasPage() {
     let topHeader = `★ AUDIT ${roleCode} ★`;
     let bottomSub = "BELUM DIAJUKAN";
 
-    if (s === "disetujui") {
+    if (
+      s === "disetujui" ||
+      s === "diterima" ||
+      s === "terima_verifikator" ||
+      s === "terima_anggaran"
+    ) {
       statusType = "terverifikasi";
       mainText = "DISETUJUI";
       topHeader = `★ VERIFIKATOR ${roleCode} ★`;
@@ -2423,12 +2783,46 @@ export default function ProkerV3AktivitasPage() {
                   <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
                     Tahun {proker.Tahun || proker.tahun || "2027"}
                   </span>
-                  {proker.NamaFakultasUnit && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                      <Building2 className="w-3.5 h-3.5" />
-                      {proker.NamaFakultasUnit}
-                    </span>
-                  )}
+                  {proker.NamaFakultasUnit && (() => {
+                    const type = (proker.TypeFakultasUnit || "").toLowerCase();
+                    const isFak = type === "fakultas" || type === "sekolah";
+                    const isProdi = type === "prodi";
+                    const cleanName = cleanDuplicateJenjang(
+                      proker.NamaFakultasUnit || "",
+                    );
+                    const displayUnit =
+                      (isProdi
+                        ? formatProdiWithJenjang(
+                            cleanName,
+                            proker.JenjangFakultasUnit,
+                          )
+                        : cleanName) || "Target Tidak Diketahui";
+                    const badgeType = isFak
+                      ? "Fakultas"
+                      : isProdi
+                        ? "Prodi"
+                        : "Unit / Lembaga";
+
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <Building2 className="w-3.5 h-3.5" />
+                          {displayUnit}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            isFak
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                              : isProdi
+                                ? "bg-purple-50 text-purple-700 border-purple-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          }`}
+                        >
+                          {badgeType}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   <button
                     type="button"
@@ -2448,7 +2842,24 @@ export default function ProkerV3AktivitasPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  {renderStatusStamp(prokerStatusClean)}
+                  {renderEvaluatorStamp()}
+                  {renderAnggaranStamp()}
+                  {canAnggaranVerifyProker && (
+                    <button
+                      type="button"
+                      onClick={handleVerifyAnggaranProker}
+                      disabled={isVerifying}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50 ml-1"
+                      title="Verifikasi & Terima Anggaran Program Kerja ini"
+                    >
+                      {isVerifying ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Terima Anggaran</span>
+                    </button>
+                  )}
                   {canRevisiDraftProker && (
                     <button
                       type="button"
@@ -2466,10 +2877,12 @@ export default function ProkerV3AktivitasPage() {
                 </div>
               </div>
 
-              {prokerStatusClean.includes("ditolak") &&
-                (proker.CatatanVerifikator ||
-                  proker.CatatanAnggaran ||
-                  proker.CatatanPenolakan) && (
+              {(pVerif.includes("ditolak") ||
+                pAngg.includes("ditolak") ||
+                prokerStatusClean.includes("ditolak")) &&
+                (proker?.CatatanVerifikator ||
+                  proker?.CatatanAnggaran ||
+                  proker?.CatatanPenolakan) && (
                   <div className="flex items-start gap-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs shadow-2xs">
                     <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                     <div className="flex flex-col gap-0.5">
@@ -2494,7 +2907,7 @@ export default function ProkerV3AktivitasPage() {
               </div>
 
               {/* Grid Metadata Matriks */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-2">
                 {/* Standar & Indikator */}
                 <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 space-y-2">
                   <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">
@@ -2552,7 +2965,7 @@ export default function ProkerV3AktivitasPage() {
                               )}
                             </div>
                           </div>
-                          {ikus.length > 0 && (
+                          {ikus.length > 0 ? (
                             <div
                               className={`flex flex-wrap items-center gap-1 ${
                                 scopesList.length > 1 ? "pl-6" : ""
@@ -2569,6 +2982,14 @@ export default function ProkerV3AktivitasPage() {
                                   {it.iku}
                                 </span>
                               ))}
+                            </div>
+                          ) : (
+                            <div
+                              className={`text-[10px] text-gray-400 italic ${
+                                scopesList.length > 1 ? "pl-6" : ""
+                              }`}
+                            >
+                              - Tidak ada IKU -
                             </div>
                           )}
                         </div>
@@ -2627,61 +3048,6 @@ export default function ProkerV3AktivitasPage() {
                           <span className="italic">Capaian Lalu:</span>
                           <span className="text-gray-600 text-right">
                             {sc.CapaianUnitLalu || sc.capaian_unit_lalu || "-"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Output & Outcome */}
-                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-2">
-                  <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Luaran & Dampak</span>
-                    </div>
-                    {scopesList.length > 1 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[9px] font-mono font-bold">
-                        {scopesList.length} Luaran
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    className={`space-y-2.5 max-h-56 overflow-y-auto pr-1 ${
-                      scopesList.length > 1
-                        ? "divide-y divide-indigo-200/70"
-                        : ""
-                    }`}
-                  >
-                    {scopesList.map((sc, idx) => (
-                      <div
-                        key={idx}
-                        className={idx > 0 ? "pt-2 space-y-1" : "space-y-1"}
-                      >
-                        {scopesList.length > 1 && (
-                          <div className="flex items-center gap-1 mb-1">
-                            <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-indigo-100/80 text-indigo-800 border border-indigo-200">
-                              #{idx + 1}
-                            </span>
-                          </div>
-                        )}
-                        <div className="text-xs text-gray-700">
-                          <b className="text-indigo-900">Output:</b>{" "}
-                          <span
-                            className="line-clamp-2"
-                            title={sc.Output || sc.output}
-                          >
-                            {sc.Output || sc.output || "-"}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          <b className="text-indigo-900">Outcome:</b>{" "}
-                          <span
-                            className="line-clamp-2"
-                            title={sc.Outcome || sc.outcome}
-                          >
-                            {sc.Outcome || sc.outcome || "-"}
                           </span>
                         </div>
                       </div>
@@ -2873,18 +3239,20 @@ export default function ProkerV3AktivitasPage() {
                       <input
                         type="checkbox"
                         checked={
-                          activities.length > 0 &&
-                          selectedActUuids.length === activities.length
+                          selectableActivities.length > 0 &&
+                          selectedActUuids.length === selectableActivities.length
                         }
+                        disabled={selectableActivities.length === 0}
                         ref={(el) => {
                           if (el) {
                             el.indeterminate =
                               selectedActUuids.length > 0 &&
-                              selectedActUuids.length < activities.length;
+                              selectedActUuids.length <
+                                selectableActivities.length;
                           }
                         }}
                         onChange={handleToggleSelectAll}
-                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Pilih semua aktivitas"
                       />
                     </th>
@@ -2892,6 +3260,18 @@ export default function ProkerV3AktivitasPage() {
                   <th className="py-3 px-4 w-12 text-center">No.</th>
                   <th className="py-3 px-4 min-w-[240px]">
                     Aktivitas / Kegiatan
+                  </th>
+                  <th className="py-3 px-4 min-w-[200px]">
+                    <div>Output</div>
+                    <div className="text-[10px] text-gray-400 font-normal normal-case">
+                      Luaran / Hasil Langsung
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 min-w-[200px]">
+                    <div>Outcome</div>
+                    <div className="text-[10px] text-gray-400 font-normal normal-case">
+                      Dampak / Manfaat Kegiatan
+                    </div>
                   </th>
                   <th className="py-3 px-4 min-w-[130px]">PIC Kegiatan</th>
                   <th className="py-3 px-4 min-w-[170px] text-right">
@@ -2907,6 +3287,7 @@ export default function ProkerV3AktivitasPage() {
                       </th>
                     </>
                   )}
+                  <th className="py-3 px-4 min-w-[150px]">Status Evaluator</th>
                   <th className="py-3 px-4 min-w-[150px]">
                     {isProdi ? "Status UPMS" : "Status UPML"}
                   </th>
@@ -2922,11 +3303,11 @@ export default function ProkerV3AktivitasPage() {
                       colSpan={
                         showBatchCheckbox
                           ? isEvaluatorOrAnggaran
-                            ? 9
-                            : 11
+                            ? 13
+                            : 15
                           : isEvaluatorOrAnggaran
-                            ? 8
-                            : 10
+                            ? 12
+                            : 14
                       }
                       className="py-12 text-center text-gray-400"
                     >
@@ -2976,8 +3357,6 @@ export default function ProkerV3AktivitasPage() {
                       canRevisiActDraft && actStatusStr !== "draft";
                     const isTerimaAnggaranAct =
                       isProkerAccAnggaran ||
-                      (act.StatusAnggaran || "").toLowerCase() ===
-                        "terima_anggaran" ||
                       actStatusStr === "terima_anggaran";
                     const canShowBatalActSwitch =
                       !isAdmin &&
@@ -3015,12 +3394,18 @@ export default function ProkerV3AktivitasPage() {
                           {/* Checkbox column before No */}
                           {showBatchCheckbox && (
                             <td className="py-3.5 px-3 text-center">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => handleToggleSelectRow(act.UUID)}
-                                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
-                              />
+                              {isActSelectableForBatch(act) ? (
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() =>
+                                    handleToggleSelectRow(act.UUID)
+                                  }
+                                  className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                />
+                              ) : (
+                                <span className="text-gray-300">-</span>
+                              )}
                             </td>
                           )}
 
@@ -3070,6 +3455,38 @@ export default function ProkerV3AktivitasPage() {
                                 </div>
                               )}
                             </div>
+                          </td>
+
+                          {/* Output (Luaran / Hasil Langsung) */}
+                          <td className="py-3.5 px-4 text-gray-700 leading-relaxed font-normal align-top min-w-[200px]">
+                            {act.Output || act.output ? (
+                              <div
+                                className="text-xs text-gray-800 line-clamp-3 leading-snug"
+                                title={act.Output || act.output}
+                              >
+                                {act.Output || act.output}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic text-[11px]">
+                                -
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Outcome (Dampak / Manfaat Kegiatan) */}
+                          <td className="py-3.5 px-4 text-gray-700 leading-relaxed font-normal align-top min-w-[200px]">
+                            {act.Outcome || act.outcome ? (
+                              <div
+                                className="text-xs text-gray-800 line-clamp-3 leading-snug"
+                                title={act.Outcome || act.outcome}
+                              >
+                                {act.Outcome || act.outcome}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic text-[11px]">
+                                -
+                              </span>
+                            )}
                           </td>
 
                           {/* PIC */}
@@ -3145,6 +3562,67 @@ export default function ProkerV3AktivitasPage() {
                                     );
                                   })()}
                                 </button>
+
+                                {/* Badge Status ACC Anggaran pada Aktivitas */}
+                                {Boolean(act.TerimaAnggaranAt || act.terima_anggaran_at) ? (
+                                  <div className="mt-1 flex justify-end">
+                                    <span
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
+                                      title={`Disetujui Tim Anggaran: ${
+                                        new Date(act.TerimaAnggaranAt || act.terima_anggaran_at).toLocaleDateString("id-ID", {
+                                          day: "numeric",
+                                          month: "short",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      }`}
+                                    >
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                      <span>Acc Anggaran</span>
+                                    </span>
+                                  </div>
+                                ) : (
+                                  (() => {
+                                    const sEv = (
+                                      act.StatusEvaluator ||
+                                      act.status_evaluator ||
+                                      act.StatusVerifikator ||
+                                      act.status_verifikator ||
+                                      ""
+                                    )
+                                      .toLowerCase()
+                                      .trim();
+                                    const isEvalAcc =
+                                      sEv === "diterima" ||
+                                      sEv === "disetujui" ||
+                                      sEv === "terima_verifikator";
+                                    if (isEvalAcc) {
+                                      return (
+                                        <div className="mt-1 flex justify-end">
+                                          <span
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs"
+                                            title="Aktivitas telah disetujui evaluator, menunggu verifikasi / ACC Tim Anggaran"
+                                          >
+                                            <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                                            <span>Belum Acc Anggaran</span>
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })()
+                                )}
+
+                                {/* Badge Beban Yayasan */}
+                                {Boolean(act.BebanYayasan || act.beban_yayasan) && (
+                                  <div className="mt-1 flex justify-end">
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">
+                                      <Building2 className="w-3 h-3 text-purple-600 shrink-0" />
+                                      <span>Beban Yayasan</span>
+                                    </span>
+                                  </div>
+                                )}
 
                                 {/* Badge Status Pencairan Anggaran */}
                                 {(() => {
@@ -3307,6 +3785,31 @@ export default function ProkerV3AktivitasPage() {
                             </>
                           )}
 
+                          {/* Status Evaluator */}
+                          <td className="py-3.5 px-4 align-middle">
+                            {(() => {
+                              const curSt =
+                                act.StatusEvaluator ||
+                                act.status_evaluator ||
+                                act.StatusVerifikator ||
+                                act.status_verifikator ||
+                                "";
+                              const note =
+                                act.CatatanEvaluator ||
+                                act.catatan_evaluator ||
+                                act.CatatanVerifikator ||
+                                act.catatan_verifikator ||
+                                act.CatatanPenolakan;
+                              return renderTableRubberStamp(
+                                curSt,
+                                "EVALUATOR",
+                                note,
+                                true,
+                                actStatusStr,
+                              );
+                            })()}
+                          </td>
+
                           {/* Status UPML/UPMS */}
                           <td className="py-3.5 px-4 align-middle">
                             {(() => {
@@ -3314,14 +3817,9 @@ export default function ProkerV3AktivitasPage() {
                               const curSt = isUnitProdi
                                 ? act.StatusUpms || act.status_upms || ""
                                 : act.StatusUpml || act.status_upml || "";
-                              const note =
-                                (isUnitProdi
-                                  ? act.CatatanTolakUpms ||
-                                    act.catatan_tolak_upms
-                                  : act.CatatanTolakUpml ||
-                                    act.catatan_tolak_upml) ||
-                                act.CatatanVerifikator ||
-                                act.CatatanPenolakan;
+                              const note = isUnitProdi
+                                ? act.CatatanTolakUpms || act.catatan_tolak_upms || ""
+                                : act.CatatanTolakUpml || act.catatan_tolak_upml || "";
                               return renderTableRubberStamp(
                                 curSt,
                                 roleCode,
@@ -3340,8 +3838,7 @@ export default function ProkerV3AktivitasPage() {
                               const noteUpmf =
                                 act.CatatanTolakUpmf ||
                                 act.catatan_tolak_upmf ||
-                                act.CatatanVerifikator ||
-                                act.CatatanPenolakan;
+                                "";
                               const isApplicable =
                                 isUnitProdi &&
                                 stUpmf !== "-" &&
@@ -3360,12 +3857,13 @@ export default function ProkerV3AktivitasPage() {
                           <td className="py-3.5 px-4 align-middle">
                             {(() => {
                               const stLpm =
-                                act.StatusLpm || act.status_lpm || "";
+                                act.StatusLpm ||
+                                act.status_lpm ||
+                                "";
                               const noteLpm =
                                 act.CatatanTolakLpm ||
                                 act.catatan_tolak_lpm ||
-                                act.CatatanVerifikator ||
-                                act.CatatanPenolakan;
+                                "";
                               return renderTableRubberStamp(
                                 stLpm,
                                 "LPM",
@@ -3559,10 +4057,75 @@ export default function ProkerV3AktivitasPage() {
                                   </>
                                 )}
 
-                                {/* 4. LPM / EVALUATOR VERIFY / REJECT ACTION */}
-                                {(isAdmin ||
-                                  curRole === "evaluator" ||
-                                  curRole === "lpm") &&
+                                {/* 4. EVALUATOR VERIFY / REJECT ACTION */}
+                                {!isAdmin && curRole === "evaluator" && (() => {
+                                  const {
+                                    canAct,
+                                    isAccepted: isEvalAccepted,
+                                    isAwaitingResubmit,
+                                  } = getEvaluatorActionState(act);
+
+                                  if (!canAct) {
+                                    return (
+                                      <span className="text-[11px] text-gray-400 italic">
+                                        {isAwaitingResubmit
+                                          ? "Menunggu diajukan kembali"
+                                          : "Belum diajukan"}
+                                      </span>
+                                    );
+                                  }
+
+                                  return (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleVerifySingleRow(act, "evaluator")
+                                        }
+                                        disabled={
+                                          isEvalAccepted ||
+                                          verifyingRowUuid === act.UUID ||
+                                          isBatchProcessing
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title={
+                                          isEvalAccepted
+                                            ? "Aktivitas sudah disetujui Evaluator"
+                                            : "Setujui verifikasi Evaluator"
+                                        }
+                                      >
+                                        {verifyingRowUuid === act.UUID ? (
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <Check className="w-3 h-3" />
+                                        )}
+                                        <span>Verifikasi</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleOpenSingleRejectModal(
+                                            act,
+                                            "evaluator",
+                                          )
+                                        }
+                                        disabled={
+                                          verifyingRowUuid === act.UUID ||
+                                          isBatchProcessing
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title="Tolak verifikasi Evaluator"
+                                      >
+                                        <X className="w-3 h-3" />
+                                        <span>Tolak</span>
+                                      </button>
+                                    </>
+                                  );
+                                })()}
+
+                                {/* 5. LPM / ADMIN VERIFY / REJECT ACTION */}
+                                {(isAdmin || curRole === "lpm") &&
                                   (() => {
                                     const stUpms = (
                                       act.StatusUpms ||
@@ -3649,6 +4212,7 @@ export default function ProkerV3AktivitasPage() {
                                     );
                                   })()}
 
+
                                 {/* Option to revert single activity to draft (bukan untuk upml, upmf, upms) */}
                                 {canShowDraftBtn && (
                                   <button
@@ -3695,6 +4259,62 @@ export default function ProkerV3AktivitasPage() {
                                   </>
                                 )}
 
+                                {/* Switch Beban Yayasan untuk Aktivitas */}
+                                {(canAddAktivitas || isAdmin) && (
+                                  <div className="flex items-center gap-1.5 pl-1 border-l border-gray-200">
+                                    <label
+                                      className="text-[11px] font-medium text-gray-700 select-none cursor-pointer flex items-center gap-1.5"
+                                      title="Ubah Beban Yayasan untuk aktivitas ini"
+                                    >
+                                      <span className="text-[10px] text-purple-700 font-semibold whitespace-nowrap">
+                                        Yayasan:
+                                      </span>
+                                      {(() => {
+                                        const isBeban = Boolean(
+                                          act.BebanYayasan || act.beban_yayasan,
+                                        );
+                                        const isUpdating =
+                                          updatingBebanActUuid === act.UUID;
+                                        return (
+                                          <>
+                                            <button
+                                              type="button"
+                                              role="switch"
+                                              disabled={isUpdating}
+                                              aria-checked={isBeban}
+                                              onClick={() =>
+                                                handleToggleBebanYayasanAct(act)
+                                              }
+                                              className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:opacity-50 ${
+                                                isBeban
+                                                  ? "bg-purple-600"
+                                                  : "bg-gray-300"
+                                              }`}
+                                            >
+                                              <span
+                                                className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                                  isBeban
+                                                    ? "translate-x-3"
+                                                    : "translate-x-0"
+                                                }`}
+                                              />
+                                            </button>
+                                            <span
+                                              className={`text-[10px] font-bold ${
+                                                isBeban
+                                                  ? "text-purple-600"
+                                                  : "text-gray-500"
+                                              }`}
+                                            >
+                                              {isBeban ? "Ya" : "Tidak"}
+                                            </span>
+                                          </>
+                                        );
+                                      })()}
+                                    </label>
+                                  </div>
+                                )}
+
                                 {/* Switch Proker / Aktivitas Batal untuk User Fakultas Unit */}
                                 {canShowBatalActSwitch && (
                                   <div className="flex items-center gap-1.5 pl-1 border-l border-gray-200">
@@ -3707,7 +4327,7 @@ export default function ProkerV3AktivitasPage() {
                                       </span>
                                       {(() => {
                                         const isActBatal = Boolean(
-                                          act.IsBatal || proker?.IsBatal,
+                                          act.IsBatal || act.is_batal,
                                         );
                                         return (
                                           <>
@@ -3760,7 +4380,7 @@ export default function ProkerV3AktivitasPage() {
                         {isEvaluatorOrAnggaran && (
                           <ProkerV3AktivitasEvaluatorRow
                             activity={act}
-                            colSpan={showBatchCheckbox ? 9 : 8}
+                            colSpan={showBatchCheckbox ? 13 : 12}
                             prokerDocuments={prokerDocuments}
                             isVerifierRoleOrLevel={isVerifikatorRoleOrLevel}
                           />
@@ -3773,11 +4393,11 @@ export default function ProkerV3AktivitasPage() {
                               colSpan={
                                 showBatchCheckbox
                                   ? isEvaluatorOrAnggaran
-                                    ? 9
-                                    : 11
+                                    ? 13
+                                    : 15
                                   : isEvaluatorOrAnggaran
-                                    ? 8
-                                    : 10
+                                    ? 12
+                                    : 14
                               }
                               className="py-3 px-6"
                             >
@@ -3937,6 +4557,82 @@ export default function ProkerV3AktivitasPage() {
                     </div>
                   </div>
 
+                  {/* Luaran & Dampak Kegiatan (Output & Outcome) */}
+                  <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50/30 space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 uppercase tracking-wider">
+                      <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                      <span>Luaran & Dampak Aktivitas</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-gray-700">
+                            Output (Luaran / Hasil Langsung)
+                          </label>
+                          <span className="text-[10px] text-gray-400">
+                            {actOutput ? `${actOutput.length} karakter` : "Opsional"}
+                          </span>
+                        </div>
+                        <textarea
+                          rows={2}
+                          placeholder="Contoh: Tersedianya 50 unit komputer dan laporan instalasi"
+                          value={actOutput}
+                          onChange={(e) => setActOutput(e.target.value)}
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 leading-relaxed placeholder:text-gray-400 shadow-2xs"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-gray-700">
+                            Outcome (Dampak / Manfaat Kegiatan)
+                          </label>
+                          <span className="text-[10px] text-gray-400">
+                            {actOutcome ? `${actOutcome.length} karakter` : "Opsional"}
+                          </span>
+                        </div>
+                        <textarea
+                          rows={2}
+                          placeholder="Contoh: Peningkatan kelancaran praktikum mahasiswa sebesar 30%"
+                          value={actOutcome}
+                          onChange={(e) => setActOutcome(e.target.value)}
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 leading-relaxed placeholder:text-gray-400 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Toggle Beban Yayasan */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-purple-100 bg-purple-50/40 hover:bg-purple-50/70 transition">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-gray-800">
+                          Beban Yayasan
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          Aktifkan jika pembiayaan aktivitas ini ditanggung oleh Yayasan (tidak memotong pagu unit)
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={actBebanYayasan}
+                      onClick={() => setActBebanYayasan((prev) => !prev)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${
+                        actBebanYayasan ? "bg-purple-600" : "bg-gray-200"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          actBebanYayasan ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
                   {/* Rincian Anggaran Biaya (RAB) & SBU Dinamis */}
                   <div className="space-y-3 pt-2 border-t border-gray-100">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -4007,9 +4703,7 @@ export default function ProkerV3AktivitasPage() {
                     {/* Pagu Anggaran Banner (Case 1 vs Case 2) */}
                     {proker?.HasPagu && Number(proker?.PaguUnit) > 0 ? (
                       (() => {
-                        const isBebanYayasan = Boolean(
-                          proker?.BebanYayasan || proker?.beban_yayasan,
-                        );
+                        const isBebanYayasan = Boolean(actBebanYayasan);
                         const paguUnit = Number(proker.PaguUnit);
                         const totalTerpakai =
                           Number(proker.TotalAnggaranUnit) || 0;
@@ -4046,7 +4740,7 @@ export default function ProkerV3AktivitasPage() {
                                 <span className="font-bold flex items-center gap-2">
                                   <span>
                                     {isBebanYayasan
-                                      ? "Program Kerja Beban Yayasan"
+                                      ? "Aktivitas Beban Yayasan"
                                       : isMelebihi
                                       ? "Alokasi Melebihi Batas Pagu Anggaran Unit!"
                                       : "Batas Pagu Anggaran Unit Terpenuhi"}
@@ -4096,6 +4790,18 @@ export default function ProkerV3AktivitasPage() {
                           </div>
                         );
                       })()
+                    ) : actBebanYayasan ? (
+                      <div className="bg-purple-50/70 border border-purple-200 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 text-xs text-purple-900 shadow-2xs">
+                        <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
+                        <div>
+                          <span className="font-bold">
+                            Aktivitas Beban Yayasan
+                          </span>
+                          <span className="text-[11px] text-purple-800 ml-1.5">
+                            Pembiayaan aktivitas ini ditanggung oleh Yayasan dan tidak memotong kuota pagu unit.
+                          </span>
+                        </div>
+                      </div>
                     ) : (
                       <div className="bg-amber-50/70 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 text-xs text-amber-900 shadow-2xs">
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -4296,7 +5002,7 @@ export default function ProkerV3AktivitasPage() {
                                   <input
                                     type="number"
                                     min="0"
-                                    step="1000"
+                                    step="1"
                                     placeholder="0"
                                     value={row.sbu ?? ""}
                                     onChange={(e) =>
@@ -5406,7 +6112,7 @@ export default function ProkerV3AktivitasPage() {
                   {proker?.HasPagu && Number(proker?.PaguUnit) > 0 ? (
                     (() => {
                       const isBebanYayasan = Boolean(
-                        proker?.BebanYayasan || proker?.beban_yayasan,
+                        rabDetailAct?.BebanYayasan || rabDetailAct?.beban_yayasan,
                       );
                       const paguUnit = Number(proker.PaguUnit);
                       const totalTerpakai =
@@ -5442,7 +6148,7 @@ export default function ProkerV3AktivitasPage() {
                               <span className="font-bold flex items-center gap-2">
                                 <span>
                                   {isBebanYayasan
-                                    ? "Program Kerja Beban Yayasan"
+                                    ? "Aktivitas Beban Yayasan"
                                     : isMelebihi
                                     ? "Alokasi Melebihi Batas Pagu Anggaran Unit!"
                                     : "Batas Pagu Anggaran Unit Terpenuhi"}
@@ -5492,6 +6198,18 @@ export default function ProkerV3AktivitasPage() {
                         </div>
                       );
                     })()
+                  ) : Boolean(rabDetailAct?.BebanYayasan || rabDetailAct?.beban_yayasan) ? (
+                    <div className="bg-purple-50/70 border border-purple-200 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 text-xs text-purple-900 shadow-2xs">
+                      <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0" />
+                      <div>
+                        <span className="font-bold">
+                          Aktivitas Beban Yayasan
+                        </span>
+                        <span className="text-[11px] text-purple-800 ml-1.5">
+                          Pembiayaan aktivitas ini ditanggung oleh Yayasan dan tidak memotong kuota pagu unit.
+                        </span>
+                      </div>
+                    </div>
                   ) : (
                     <div className="bg-amber-50/70 border border-amber-200 rounded-2xl px-4 py-2.5 flex items-center gap-2.5 text-xs text-amber-900 shadow-2xs">
                       <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -5691,7 +6409,7 @@ export default function ProkerV3AktivitasPage() {
                                 <input
                                   type="number"
                                   min="0"
-                                  step="1000"
+                                  step="1"
                                   placeholder="0"
                                   value={row.sbu ?? ""}
                                   onChange={(e) =>

@@ -82,7 +82,7 @@ export default function StandarRenstraFormModal({
                   </div>
                   <div>
                     <Dialog.Title className="text-base font-bold text-gray-900">
-                      {mode === "edit" ? "Edit" : "Tambah"} Standar Renstra
+                      {mode === "edit" ? "Edit" : "Tambah"} Standar
                     </Dialog.Title>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Standar mutu dan kriteria penilaian universitas

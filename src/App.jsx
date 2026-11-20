@@ -76,8 +76,11 @@ export default function App() {
                       <Route path="/mata_program" element={<MataProgramPage />} />
                       <Route path="/mata_programv3" element={<MataProgramV2Page />} />
                       <Route path="/mata_programv3/new" element={<MataProgramV2FormPage />} />
+                      <Route path="/mata_programv3/:uuid/edit" element={<MataProgramV2FormPage />} />
+                      <Route path="/mata_programv3/edit/:uuid" element={<MataProgramV2FormPage />} />
                       <Route path="/mata_programv2" element={<MataProgramV2Page />} />
                       <Route path="/mata_programv2/new" element={<MataProgramV2FormPage />} />
+                      <Route path="/mata_programv2/:uuid/edit" element={<MataProgramV2FormPage />} />
                       <Route path="/aktivitas" element={<AktivitasPage />} />
                       <Route path="/aktivitas_proker" element={<AktivitasPage />} />
                       <Route path="/pelaporan_pelaksanaan" element={<PelaporanPelaksanaanPage />} />

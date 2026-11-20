@@ -512,11 +512,18 @@ export const formatFakultasUnitOption = (f) => {
   const type = String(f.type || f.Type || "unit").toLowerCase().trim();
   const rawBaseName = f.Nama || f.nama_fak_prod_unit || f.nama || "";
   const baseName = cleanDuplicateJenjang(rawBaseName);
-  const jenjang = f.Jenjang || f.jenjang || f.KodeJenjang || f.kode_jenjang || "";
+  const jenjang =
+    f.Jenjang ||
+    f.jenjang ||
+    f.JenjangFakultasUnit ||
+    f.jenjang_fakultas_unit ||
+    f.KodeJenjang ||
+    f.kode_jenjang ||
+    "";
 
   let label = baseName;
   if (type === "prodi") {
-    label = formatProdiWithJenjang(baseName, jenjang);
+    label = formatProdiWithJenjang(baseName, jenjang, type);
   } else {
     label = baseName;
   }
@@ -545,9 +552,12 @@ export const formatFakultasUnitOption = (f) => {
     id_numeric: numericId,
     nama: label,
     label: label,
+    name: label,
     display_name: label,
     pureName: baseName,
+    raw_nama: baseName,
     type: type,
+    jenjang: jenjang,
     badge: badgeText,
     badgeClass: badgeClass,
   };

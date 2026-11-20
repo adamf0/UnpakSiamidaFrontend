@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useToast } from "@/Providers/ToastProvider";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
@@ -11,52 +11,25 @@ import TextInput from "@/Components/TextInput";
 import {
   Layers,
   ArrowLeft,
+  CheckCircle2,
+  BookOpen,
+  LayoutTemplate,
+  Search,
+  ChevronDown,
+  ChevronUp,
   CheckSquare,
   Square,
-  Sparkles,
-  CheckCircle2,
-  Building2,
-  BookOpen,
+  MinusSquare,
 } from "lucide-react";
 import { apiClient } from "@/Common/api";
-import { fetchFakultasUnits, formatFetchError } from "@/Common/Utils";
-
-const getTargetKey = (t) => {
-  if (!t) return "";
-  if (typeof t === "string" || typeof t === "number") return String(t);
-  return String(t.rawId ?? t.id_numeric ?? t.ID ?? t.id ?? t.UUID ?? "");
-};
-
-const groupDataAdapter = (rows = []) => {
-  const map = {};
-  for (const r of rows) {
-    const rawType = String(r.type || r.Type || "unit").toLowerCase().trim();
-    const jenjang = String(r.jenjang || r.Jenjang || "").toUpperCase().trim();
-    const key = jenjang ? `${rawType}#${jenjang}` : `${rawType}#all`;
-
-    if (!map[key]) {
-      map[key] = {
-        Key: key,
-        Type: rawType,
-        Jenjang: jenjang,
-        Targets: [],
-      };
-    }
-    const resolvedId = getTargetKey(r);
-    map[key].Targets.push({
-      ID: resolvedId,
-      UUID: r.UUID || r.uuid,
-      Nama: r.nama || r.label || r.pureName || r.Nama,
-      Badge: r.badge,
-      BadgeClass: r.badgeClass,
-      raw: r,
-    });
-  }
-  return Object.values(map);
-};
+import { formatFetchError } from "@/Common/Utils";
+import { templateRenstraAdapter } from "@/Page/TemplateRenstra/TemplateRenstraPage";
 
 export default function MataProgramV2FormPage() {
   const navigate = useNavigate();
+  const { uuid } = useParams();
+  const isEdit = Boolean(uuid);
+
   const { addToast } = useToast();
   const { user } = useAuth();
   const {
@@ -73,15 +46,20 @@ export default function MataProgramV2FormPage() {
   const [selectedTahun, setSelectedTahun] = useState(null);
 
   const [namaProgram, setNamaProgram] = useState("");
-  const [fakultasUnits, setFakultasUnits] = useState([]);
-  const [loadingUnits, setLoadingUnits] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
-  // Map of selected unit IDs / UUIDs: { [unitId]: true }
-  const [selectedTargets, setSelectedTargets] = useState({});
+  // Raw and adapted template renstra
+  const [rawTemplates, setRawTemplates] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+  // Selected template IDs map: { [templateId]: true }
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState({});
+
+  // Filter & expand states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedIndikators, setExpandedIndikators] = useState({});
+
   const [submitting, setSubmitting] = useState(false);
-
-  // Filter search stakeholder text
-  const [filterUnitText, setFilterUnitText] = useState("");
 
   const curRole = String(
     level || localStorage.getItem("activeLevel") || user?.level || ""
@@ -98,6 +76,7 @@ export default function MataProgramV2FormPage() {
     }
   }, [isAdmin, navigate]);
 
+  // Fetch master tahun options
   const fetchTahunOptions = async () => {
     setLoadingTahun(true);
     try {
@@ -106,111 +85,205 @@ export default function MataProgramV2FormPage() {
       const mapped = (Array.isArray(json) ? json : []).map((item) => ({
         id: item.UUID,
         UUID: item.UUID,
-        nama: item.Tahun,
-        Tahun: item.Tahun,
+        nama: String(item.Tahun),
+        Tahun: String(item.Tahun),
         ...item,
       }));
       setTahunOptions(mapped);
-
-      // Preselect Tahun
-      const targetYear = positionYear && positionYear !== "all" ? String(positionYear) : "2027";
-      const found = mapped.find((t) => String(t.Tahun || t.nama) === targetYear);
-      if (found) {
-        setSelectedTahun(found);
-      } else if (mapped.length > 0) {
-        setSelectedTahun(mapped[0]);
-      }
+      return mapped;
     } catch (err) {
       console.error("Fetch master tahun gagal:", err);
       addToast("error", formatFetchError(err, "Gagal memuat master tahun"));
+      return [];
     } finally {
       setLoadingTahun(false);
     }
   };
 
-  const fetchUnits = async () => {
-    setLoadingUnits(true);
+  // Fetch template renstra for selected year
+  const fetchTemplatesForYear = async (yearStr) => {
+    if (!yearStr) {
+      setRawTemplates([]);
+      return;
+    }
+    setLoadingTemplates(true);
     try {
-      const opts = await fetchFakultasUnits();
-      setFakultasUnits(opts || []);
+      const res = await apiClient.get(`/templaterenstras?mode=all&tahun=${encodeURIComponent(yearStr)}`);
+      const body = res?.data ?? res;
+      const list = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+      setRawTemplates(list);
     } catch (err) {
-      console.error("Fetch master unit gagal:", err);
-      addToast("error", formatFetchError(err, "Gagal memuat daftar fakultas / unit"));
+      console.error("Fetch template renstra gagal:", err);
+      addToast("error", formatFetchError(err, "Gagal memuat template renstra"));
+      setRawTemplates([]);
     } finally {
-      setLoadingUnits(false);
+      setLoadingTemplates(false);
     }
   };
 
+  // Initial load
   useEffect(() => {
-    fetchTahunOptions();
-    fetchUnits();
-  }, []);
+    let active = true;
 
-  const groups = useMemo(() => {
-    return groupDataAdapter(fakultasUnits);
-  }, [fakultasUnits]);
+    const initData = async () => {
+      const years = await fetchTahunOptions();
+      if (!active) return;
 
-  // Toggle single target
-  const handleToggleTarget = (target) => {
-    const key = getTargetKey(target);
-    if (!key) return;
-    setSelectedTargets((prev) => {
-      const next = { ...prev };
-      if (next[key]) {
-        delete next[key];
+      if (isEdit && uuid) {
+        setLoadingDetail(true);
+        try {
+          const detailRes = await apiClient.get(`/mataprogramv2/${uuid}`);
+          const detail = detailRes?.data ?? detailRes;
+
+          if (!active) return;
+
+          setNamaProgram(detail.MataProgram || detail.nama || "");
+
+          const targetYear = String(detail.Tahun || "");
+          const foundTahun = years.find((t) => String(t.Tahun) === targetYear);
+          if (foundTahun) {
+            setSelectedTahun(foundTahun);
+          } else if (targetYear) {
+            setSelectedTahun({ id: targetYear, nama: targetYear, Tahun: targetYear });
+          }
+
+          // Pre-select template renstra IDs
+          if (Array.isArray(detail.TemplateRenstraIDs)) {
+            const preMap = {};
+            detail.TemplateRenstraIDs.forEach((id) => {
+              if (id) preMap[String(id)] = true;
+            });
+            setSelectedTemplateIds(preMap);
+          }
+
+          if (targetYear) {
+            await fetchTemplatesForYear(targetYear);
+          }
+        } catch (err) {
+          console.error("Gagal memuat detail mata program:", err);
+          addToast("error", formatFetchError(err, "Gagal memuat detail mata program"));
+        } finally {
+          if (active) setLoadingDetail(false);
+        }
       } else {
-        next[key] = true;
+        // Create mode: preselect default year
+        const targetYear = positionYear && positionYear !== "all" ? String(positionYear) : "2027";
+        const found = years.find((t) => String(t.Tahun || t.nama) === targetYear) || years[0];
+        if (found) {
+          setSelectedTahun(found);
+          await fetchTemplatesForYear(found.Tahun || found.nama);
+        }
       }
-      return next;
-    });
+    };
+
+    initData();
+    return () => {
+      active = false;
+    };
+  }, [isEdit, uuid, positionYear]);
+
+  // Handle year change by user
+  const handleYearChange = (newTahun) => {
+    setSelectedTahun(newTahun);
+    const yr = newTahun?.Tahun || newTahun?.nama || "";
+    if (yr) {
+      fetchTemplatesForYear(yr);
+      // Reset selected templates if user changes year in create mode
+      if (!isEdit) {
+        setSelectedTemplateIds({});
+      }
+    }
   };
 
-  // Toggle all in group
-  const handleToggleGroup = (group) => {
-    const allSelected =
-      group.Targets.length > 0 &&
-      group.Targets.every((t) => Boolean(selectedTargets[getTargetKey(t)]));
+  // Group raw template rows by Indikator
+  const adaptedIndicators = useMemo(() => {
+    return templateRenstraAdapter(rawTemplates);
+  }, [rawTemplates]);
 
-    setSelectedTargets((prev) => {
+  // Filter adapted indicators by search query
+  const filteredIndicators = useMemo(() => {
+    if (!searchQuery.trim()) return adaptedIndicators;
+    const q = searchQuery.toLowerCase().trim();
+    return adaptedIndicators.filter((item) => {
+      const matchIndikator = (item.Indikator || "").toLowerCase().includes(q);
+      const matchStandar = (item.StandarRenstra || "").toLowerCase().includes(q);
+      const matchTarget = (item.Targets || []).some(
+        (t) =>
+          (t.FakultasUnit || "").toLowerCase().includes(q) ||
+          (t.Kategori || "").toLowerCase().includes(q)
+      );
+      return matchIndikator || matchStandar || matchTarget;
+    });
+  }, [adaptedIndicators, searchQuery]);
+
+  // Toggle all targets under an indicator
+  const handleToggleIndikator = (item) => {
+    const targets = Array.isArray(item.Targets) ? item.Targets : [];
+    if (targets.length === 0) return;
+
+    const allChecked = targets.every((t) => Boolean(selectedTemplateIds[String(t.ID)]));
+
+    setSelectedTemplateIds((prev) => {
       const next = { ...prev };
-      group.Targets.forEach((t) => {
-        const key = getTargetKey(t);
-        if (!key) return;
-        if (allSelected) {
-          delete next[key];
+      targets.forEach((t) => {
+        const idStr = String(t.ID);
+        if (allChecked) {
+          delete next[idStr];
         } else {
-          next[key] = true;
+          next[idStr] = true;
         }
       });
       return next;
     });
   };
 
-  // Select all everywhere
-  const handleSelectAll = () => {
-    const next = {};
-    fakultasUnits.forEach((u) => {
-      const key = getTargetKey(u);
-      if (key) {
-        next[key] = true;
+  // Toggle single target item
+  const handleToggleSingleTarget = (targetId) => {
+    const idStr = String(targetId);
+    setSelectedTemplateIds((prev) => {
+      const next = { ...prev };
+      if (next[idStr]) {
+        delete next[idStr];
+      } else {
+        next[idStr] = true;
       }
+      return next;
     });
-    setSelectedTargets(next);
+  };
+
+  // Select all visible targets
+  const handleSelectAllVisible = () => {
+    const next = { ...selectedTemplateIds };
+    filteredIndicators.forEach((item) => {
+      (item.Targets || []).forEach((t) => {
+        next[String(t.ID)] = true;
+      });
+    });
+    setSelectedTemplateIds(next);
   };
 
   // Deselect all
   const handleDeselectAll = () => {
-    setSelectedTargets({});
+    setSelectedTemplateIds({});
+  };
+
+  // Toggle accordion expand
+  const toggleExpand = (indId) => {
+    setExpandedIndikators((prev) => ({
+      ...prev,
+      [indId]: !prev[indId],
+    }));
   };
 
   const totalSelectedCount = useMemo(() => {
-    return Object.keys(selectedTargets).length;
-  }, [selectedTargets]);
+    return Object.keys(selectedTemplateIds).length;
+  }, [selectedTemplateIds]);
 
+  // Form submission
   const handleSubmit = async (e) => {
     e?.preventDefault();
 
-    const resolvedTahun = selectedTahun?.Tahun || selectedTahun?.nama || selectedTahun?.id || "";
+    const resolvedTahun = selectedTahun?.Tahun || selectedTahun?.nama || "";
     if (!resolvedTahun) {
       addToast("warning", "Tahun Periode wajib dipilih");
       return;
@@ -221,9 +294,9 @@ export default function MataProgramV2FormPage() {
       return;
     }
 
-    const targetIds = Object.keys(selectedTargets);
-    if (targetIds.length === 0) {
-      addToast("warning", "Pilih minimal satu Fakultas / Prodi / Unit sasaran");
+    const selectedIds = Object.keys(selectedTemplateIds);
+    if (selectedIds.length === 0) {
+      addToast("warning", "Pilih minimal satu Template Renstra sasaran");
       return;
     }
 
@@ -233,22 +306,30 @@ export default function MataProgramV2FormPage() {
       fd.append("mata_program", namaProgram.trim());
       fd.append("tahun", String(resolvedTahun));
 
-      // Append each target
-      targetIds.forEach((tId) => {
-        fd.append("targets[]", String(tId));
+      selectedIds.forEach((tId) => {
+        fd.append("template_renstras[]", String(tId));
       });
 
-      const res = await apiClient.post("/mataprogramv2", fd);
+      let res;
+      if (isEdit) {
+        res = await apiClient.put(`/mataprogramv2/${uuid}?scope=group`, fd);
+      } else {
+        res = await apiClient.post("/mataprogramv2", fd);
+      }
+
       addToast(
         "success",
-        res?.data?.message || `Berhasil menyimpan ${targetIds.length} target Mata Program`
+        res?.data?.message ||
+          (isEdit
+            ? "Berhasil memperbarui master Mata Program"
+            : `Berhasil menyimpan Mata Program dengan ${selectedIds.length} target Template Renstra`)
       );
       navigate("/mata_programv3");
     } catch (err) {
       console.error("Gagal simpan mata program v2:", err);
       addToast(
         "error",
-        err?.message || "Gagal menyimpan mata program v2 ke server"
+        err?.response?.data?.message || err?.message || "Gagal menyimpan mata program ke server"
       );
     } finally {
       setSubmitting(false);
@@ -273,7 +354,7 @@ export default function MataProgramV2FormPage() {
       />
 
       <div className="p-4 sm:p-6 bg-gray-50 min-h-screen space-y-5">
-        {/* Header Breadcrumb & Title */}
+        {/* Header Breadcrumb & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
@@ -286,8 +367,8 @@ export default function MataProgramV2FormPage() {
             </button>
             <PageHeader
               icon={Layers}
-              title="Tambah Mata Program"
-              subtitle="Kelola distribusi master mata program kerja ke berbagai Fakultas, Prodi, dan Unit"
+              title={isEdit ? "Edit Mata Program" : "Tambah Mata Program"}
+              subtitle="Kelola master mata program kerja dan hubungkan dengan Template Renstra sasaran"
             />
           </div>
 
@@ -301,12 +382,18 @@ export default function MataProgramV2FormPage() {
             </button>
             <button
               type="button"
-              disabled={submitting}
+              disabled={submitting || loadingDetail}
               onClick={handleSubmit}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 disabled:opacity-50 rounded-xl transition cursor-pointer shadow-2xs"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{submitting ? "Menyimpan..." : `Simpan (${totalSelectedCount} Target)`}</span>
+              <span>
+                {submitting
+                  ? "Menyimpan..."
+                  : isEdit
+                  ? `Simpan Perubahan (${totalSelectedCount} Template)`
+                  : `Simpan (${totalSelectedCount} Template)`}
+              </span>
             </button>
           </div>
         </div>
@@ -327,7 +414,7 @@ export default function MataProgramV2FormPage() {
                 placeholder="Pilih Tahun"
                 loading={loadingTahun}
                 value={selectedTahun}
-                onChange={(item) => setSelectedTahun(item)}
+                onChange={handleYearChange}
               />
             </div>
 
@@ -343,28 +430,31 @@ export default function MataProgramV2FormPage() {
           </div>
         </div>
 
-        {/* Stakeholder Selection Groups Card */}
+        {/* Template Renstra Selection Card */}
         <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
             <div className="flex items-center gap-2 text-xs font-bold text-purple-900 uppercase tracking-wider">
-              <Building2 className="w-4 h-4 text-purple-600" />
-              <span>2. Penugasan Fakultas / Prodi / Unit Sasaran</span>
-              <span className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800">
-                {totalSelectedCount} Terpilih
+              <LayoutTemplate className="w-4 h-4 text-purple-600" />
+              <span>2. Template Renstra Sasaran</span>
+              <span className="ml-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800">
+                {totalSelectedCount} Target Terpilih
               </span>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <input
-                type="text"
-                placeholder="Cari stakeholder..."
-                value={filterUnitText}
-                onChange={(e) => setFilterUnitText(e.target.value)}
-                className="px-3 py-1.5 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 w-44"
-              />
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Cari indikator / standar..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 w-52"
+                />
+              </div>
               <button
                 type="button"
-                onClick={handleSelectAll}
+                onClick={handleSelectAllVisible}
                 className="px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl transition cursor-pointer"
               >
                 Pilih Semua
@@ -379,127 +469,136 @@ export default function MataProgramV2FormPage() {
             </div>
           </div>
 
-          {loadingUnits ? (
-            <div className="py-12 text-center text-xs text-gray-500">
-              Memuat master stakeholder...
+          {loadingTemplates ? (
+            <div className="py-16 text-center text-xs text-gray-500">
+              <div className="inline-block w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mb-2" />
+              <p>Memuat daftar template renstra tahun {selectedTahun?.Tahun || ""}...</p>
+            </div>
+          ) : filteredIndicators.length === 0 ? (
+            <div className="py-16 text-center text-xs text-gray-400">
+              {rawTemplates.length === 0
+                ? `Tidak ada data template renstra untuk tahun ${selectedTahun?.Tahun || "-"}.`
+                : "Tidak ada indikator yang sesuai dengan kata kunci pencarian."}
             </div>
           ) : (
-            <div className="space-y-4">
-              {groups.map((group) => {
-                const groupTitle = group.Jenjang
-                  ? `${group.Type.toUpperCase()} - ${group.Jenjang}`
-                  : group.Type.toUpperCase();
+            <div className="space-y-3">
+              {filteredIndicators.map((item) => {
+                const targets = Array.isArray(item.Targets) ? item.Targets : [];
+                const indKey = `${item.IndikatorRenstraID}-${item.Tahun}`;
+                const isExpanded = Boolean(expandedIndikators[indKey]);
 
-                const filteredTargets = group.Targets.filter((t) => {
-                  if (!filterUnitText.trim()) return true;
-                  return t.Nama.toLowerCase().includes(filterUnitText.toLowerCase());
-                });
-
-                if (filteredTargets.length === 0) return null;
-
-                const allInGroupSelected =
-                  group.Targets.length > 0 &&
-                  group.Targets.every((t) => Boolean(selectedTargets[getTargetKey(t)]));
-                const someInGroupSelected = group.Targets.some((t) =>
-                  Boolean(selectedTargets[getTargetKey(t)])
-                );
+                const checkedCount = targets.filter((t) =>
+                  Boolean(selectedTemplateIds[String(t.ID)])
+                ).length;
+                const allChecked = targets.length > 0 && checkedCount === targets.length;
+                const someChecked = checkedCount > 0 && !allChecked;
 
                 return (
                   <div
-                    key={group.Key}
-                    className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs"
+                    key={indKey}
+                    className={`border rounded-xl transition-all ${
+                      allChecked
+                        ? "border-purple-300 bg-purple-50/20"
+                        : someChecked
+                        ? "border-purple-200 bg-purple-50/10"
+                        : "border-gray-200 bg-white hover:border-purple-200"
+                    }`}
                   >
-                    {/* Group Header */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50/80 border-b border-gray-200">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
-                        <h3 className="text-xs font-bold text-gray-800 tracking-wide uppercase">
-                          {groupTitle}
-                        </h3>
-                        <span className="text-[11px] font-semibold text-gray-500">
-                          ({filteredTargets.length} Stakeholder)
-                        </span>
+                    {/* Header Row */}
+                    <div className="p-3.5 flex items-start gap-3">
+                      <div className="pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleIndikator(item)}
+                          className="cursor-pointer text-purple-700 hover:text-purple-900 transition"
+                          title={allChecked ? "Batal pilih semua sasaran" : "Pilih semua sasaran indikator ini"}
+                        >
+                          {allChecked ? (
+                            <CheckSquare className="w-5 h-5 text-purple-700" />
+                          ) : someChecked ? (
+                            <MinusSquare className="w-5 h-5 text-purple-500" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-300 hover:text-gray-400" />
+                          )}
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleToggleGroup(group)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
-                          allInGroupSelected
-                            ? "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200"
-                            : "bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200"
-                        }`}
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>{allInGroupSelected ? "Batal Kelompok" : "Pilih Kelompok"}</span>
-                      </button>
+                      <div className="flex-1 min-w-0">
+                        {item.StandarRenstra && (
+                          <div className="text-[11px] font-semibold text-purple-700 mb-0.5 truncate">
+                            {item.StandarRenstra}
+                          </div>
+                        )}
+                        <h4
+                          onClick={() => handleToggleIndikator(item)}
+                          className="text-xs font-bold text-gray-900 leading-snug cursor-pointer hover:text-purple-700 transition"
+                          title={allChecked ? "Batal pilih sasaran indikator ini" : "Pilih sasaran indikator ini"}
+                        >
+                          {item.Indikator}
+                        </h4>
+
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <span className="text-[11px] text-gray-500">
+                            Sasaran:{" "}
+                            <strong className="text-gray-800">
+                              {checkedCount} / {targets.length} unit
+                            </strong>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(indKey)}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 hover:text-purple-900 transition cursor-pointer"
+                          >
+                            <span>{isExpanded ? "Sembunyikan Sasaran" : "Lihat Sasaran Unit"}</span>
+                            {isExpanded ? (
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Stakeholder Table */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-gray-100/60 text-gray-600 font-semibold border-b border-gray-200">
-                          <tr>
-                            <th className="px-4 py-2.5 w-12 text-center">Pilih</th>
-                            <th className="px-4 py-2.5">Stakeholder</th>
-                            <th className="px-4 py-2.5 w-36 text-center">Kategori</th>
-                            <th className="px-4 py-2.5 w-32 text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {filteredTargets.map((target) => {
-                            const key = getTargetKey(target);
-                            const isSelected = Boolean(selectedTargets[key]);
-
+                    {/* Expandable Targets Section */}
+                    {isExpanded && (
+                      <div className="px-4 pb-3.5 pt-1 border-t border-gray-100 bg-gray-50/60 rounded-b-xl space-y-2">
+                        <div className="text-[11px] font-semibold text-gray-600">
+                          Pilih unit / prodi sasaran spesifik untuk indikator ini:
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                          {targets.map((tg) => {
+                            const isTgSelected = Boolean(selectedTemplateIds[String(tg.ID)]);
                             return (
-                              <tr
-                                key={key}
-                                onClick={() => handleToggleTarget(key)}
-                                className={`transition-colors cursor-pointer hover:bg-purple-50/40 ${
-                                  isSelected ? "bg-purple-50/20" : ""
+                              <label
+                                key={tg.ID}
+                                className={`flex items-start gap-2 p-2 rounded-lg border text-xs cursor-pointer transition select-none ${
+                                  isTgSelected
+                                    ? "bg-purple-100/70 border-purple-300 text-purple-950 font-medium"
+                                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                                 }`}
                               >
-                                <td
-                                  className="px-4 py-2.5 text-center"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => handleToggleTarget(key)}
-                                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600"
-                                  />
-                                </td>
-                                <td className="px-4 py-2.5 font-medium text-gray-800">
-                                  {target.Nama}
-                                </td>
-                                <td className="px-4 py-2.5 text-center">
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                      target.BadgeClass || "bg-gray-100 text-gray-700"
-                                    }`}
-                                  >
-                                    {target.Badge || group.Type.toUpperCase()}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2.5 text-center">
-                                  {isSelected ? (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                      Ditugaskan
-                                    </span>
-                                  ) : (
-                                    <span className="text-[11px] text-gray-400 font-medium">
-                                      Belum dipilih
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
+                                <input
+                                  type="checkbox"
+                                  checked={isTgSelected}
+                                  onChange={() => handleToggleSingleTarget(tg.ID)}
+                                  className="mt-0.5 w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-semibold truncate" title={tg.FakultasUnit}>
+                                    {tg.FakultasUnit || "Unit"}
+                                  </div>
+                                  <div className="text-[10px] text-gray-500 truncate">
+                                    Target: {tg.Target || "-"} {tg.Satuan || ""}
+                                  </div>
+                                </div>
+                              </label>
                             );
                           })}
-                        </tbody>
-                      </table>
-                    </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -512,7 +611,8 @@ export default function MataProgramV2FormPage() {
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
             <p className="text-xs text-gray-700 font-medium">
-              Total Target Terpilih: <strong className="text-purple-700 font-bold">{totalSelectedCount}</strong> Fakultas / Prodi / Unit
+              Total Sasaran Terpilih:{" "}
+              <strong className="text-purple-700 font-bold">{totalSelectedCount}</strong> Template Renstra
             </p>
           </div>
 
@@ -526,12 +626,18 @@ export default function MataProgramV2FormPage() {
             </button>
             <button
               type="button"
-              disabled={submitting}
+              disabled={submitting || loadingDetail}
               onClick={handleSubmit}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-800 disabled:opacity-50 rounded-xl transition cursor-pointer shadow-md"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{submitting ? "Menyimpan..." : "Simpan Mata Program"}</span>
+              <span>
+                {submitting
+                  ? "Menyimpan..."
+                  : isEdit
+                  ? "Simpan Perubahan"
+                  : "Simpan Mata Program"}
+              </span>
             </button>
           </div>
         </div>

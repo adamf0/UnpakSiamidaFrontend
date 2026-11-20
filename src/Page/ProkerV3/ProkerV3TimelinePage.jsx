@@ -2451,15 +2451,20 @@ export default function ProkerV3TimelinePage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  const fuUuid =
+                    proker?.UuidFakultasUnit ||
+                    proker?.uuid_fakultas_unit ||
+                    proker?.FakultasUnit;
+                  const q = fuUuid ? `?fakultas_unit=${fuUuid}` : "";
                   navigate(
                     proker?.UUID
-                      ? `/proker_v3/${proker.UUID}/aktivitas`
+                      ? `/proker_v3/${proker.UUID}/aktivitas${q}`
                       : prokerUuid
-                        ? `/proker_v3/${prokerUuid}/aktivitas`
+                        ? `/proker_v3/${prokerUuid}/aktivitas${q}`
                         : "/proker_v3",
-                  )
-                }
+                  );
+                }}
                 className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1.5 border border-purple-200 transition cursor-pointer shadow-2xs"
                 title="Kembali ke halaman daftar aktivitas program kerja"
               >
@@ -2484,15 +2489,20 @@ export default function ProkerV3TimelinePage() {
             curRole={curRole}
             activeRoleUnit={activeRoleUnit}
             accessBlockInfo={accessBlockInfo}
-            onBack={() =>
+            onBack={() => {
+              const fuUuid =
+                proker?.UuidFakultasUnit ||
+                proker?.uuid_fakultas_unit ||
+                proker?.FakultasUnit;
+              const q = fuUuid ? `?fakultas_unit=${fuUuid}` : "";
               navigate(
                 proker?.UUID
-                  ? `/proker_v3/${proker.UUID}/aktivitas`
+                  ? `/proker_v3/${proker.UUID}/aktivitas${q}`
                   : prokerUuid
-                    ? `/proker_v3/${prokerUuid}/aktivitas`
+                    ? `/proker_v3/${prokerUuid}/aktivitas${q}`
                     : "/proker_v3",
-              )
-            }
+              );
+            }}
             backLabel={
               prokerUuid || proker?.UUID
                 ? "Kembali ke aktivitas"
@@ -2598,30 +2608,52 @@ export default function ProkerV3TimelinePage() {
             </div>
           </div>
 
-          {/* Info Program Kerja Induk & PIC */}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 bg-purple-50/50 rounded-xl border border-purple-100 text-xs">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 whitespace-nowrap">
-                Program Kerja Induk:
-              </span>
-              <p
-                className="font-bold text-gray-800 truncate"
-                title={proker?.NamaProgram}
-              >
-                {proker?.NamaProgram || "-"}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="flex items-center gap-1.5 text-emerald-800">
-                <User className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                  PIC:
+          {/* Info Program Kerja Induk, PIC, Luaran & Dampak Aktivitas */}
+          <div className="space-y-2 px-3.5 py-2.5 bg-purple-50/50 rounded-xl border border-purple-100 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 whitespace-nowrap">
+                  Program Kerja Induk:
                 </span>
-                <span className="font-bold text-gray-900 text-xs">
-                  {aktivitas?.PIC || "-"}
-                </span>
+                <p
+                  className="font-bold text-gray-800 truncate"
+                  title={proker?.NamaProgram}
+                >
+                  {proker?.NamaProgram || "-"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 text-emerald-800">
+                  <User className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                    PIC:
+                  </span>
+                  <span className="font-bold text-gray-900 text-xs">
+                    {aktivitas?.PIC || "-"}
+                  </span>
+                </div>
               </div>
             </div>
+
+            {Boolean(
+              (aktivitas?.Output || aktivitas?.output) ||
+              (aktivitas?.Outcome || aktivitas?.outcome)
+            ) && (
+              <div className="pt-2 border-t border-purple-100/80 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                {(aktivitas?.Output || aktivitas?.output) && (
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-indigo-900 shrink-0">Output:</span>
+                    <span className="text-gray-700">{aktivitas.Output || aktivitas.output}</span>
+                  </div>
+                )}
+                {(aktivitas?.Outcome || aktivitas?.outcome) && (
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-purple-900 shrink-0">Outcome:</span>
+                    <span className="text-gray-700">{aktivitas.Outcome || aktivitas.outcome}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {!isVerifierRoleOrLevel &&
@@ -2641,8 +2673,8 @@ export default function ProkerV3TimelinePage() {
               </div>
             )}
 
-          {/* Grid Metadata Matriks (Standar & Sub Standar, Target Capaian, Luaran & Dampak) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Grid Metadata Matriks (Standar & Sub Standar, Target Capaian) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Standar & Indikator */}
             <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 space-y-2">
               <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">
@@ -2773,61 +2805,6 @@ export default function ProkerV3TimelinePage() {
                       <span className="italic">Capaian Lalu:</span>
                       <span className="text-gray-600 text-right">
                         {sc.CapaianUnitLalu || sc.capaian_unit_lalu || "-"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Luaran & Dampak */}
-            <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-2">
-              <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-800">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Luaran & Dampak</span>
-                </div>
-                {scopesList.length > 1 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[9px] font-mono font-bold">
-                    {scopesList.length} Luaran
-                  </span>
-                )}
-              </div>
-              <div
-                className={`space-y-2.5 max-h-56 overflow-y-auto pr-1 ${
-                  scopesList.length > 1
-                    ? "divide-y divide-indigo-200/70"
-                    : ""
-                }`}
-              >
-                {scopesList.map((sc, idx) => (
-                  <div
-                    key={idx}
-                    className={idx > 0 ? "pt-2 space-y-1" : "space-y-1"}
-                  >
-                    {scopesList.length > 1 && (
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-indigo-100/80 text-indigo-800 border border-indigo-200">
-                          #{idx + 1}
-                        </span>
-                      </div>
-                    )}
-                    <div className="text-xs text-gray-700">
-                      <b className="text-indigo-900">Output:</b>{" "}
-                      <span
-                        className="line-clamp-2"
-                        title={sc.Output || sc.output}
-                      >
-                        {sc.Output || sc.output || "-"}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-600">
-                      <b className="text-indigo-900">Outcome:</b>{" "}
-                      <span
-                        className="line-clamp-2"
-                        title={sc.Outcome || sc.outcome}
-                      >
-                        {sc.Outcome || sc.outcome || "-"}
                       </span>
                     </div>
                   </div>
@@ -3131,7 +3108,7 @@ export default function ProkerV3TimelinePage() {
                         <input
                           type="number"
                           min="0"
-                          step="1000"
+                          step="1"
                           placeholder="0"
                           value={row.sbu ?? ""}
                           onChange={(e) =>
@@ -5305,7 +5282,7 @@ export default function ProkerV3TimelinePage() {
                           <input
                             type="number"
                             min="0"
-                            step="1000"
+                            step="10"
                             placeholder="0"
                             value={row.harga_satuan}
                             onChange={(e) =>

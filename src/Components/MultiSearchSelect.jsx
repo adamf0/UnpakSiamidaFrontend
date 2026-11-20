@@ -19,7 +19,33 @@ const getItemId = (obj) => {
 const getItemLabel = (obj) => {
   if (!obj) return "";
   if (typeof obj !== "object") return String(obj);
-  return obj.iku ?? obj.label ?? obj.nama ?? obj.text ?? "";
+  const raw =
+    obj.display_name ??
+    obj.iku ??
+    obj.label ??
+    obj.nama ??
+    obj.text ??
+    "";
+  const type = String(obj.type ?? obj.Type ?? "").toLowerCase().trim();
+  const jenjang = String(
+    obj.jenjang ??
+      obj.Jenjang ??
+      obj.jenjang_fakultas_unit ??
+      obj.JenjangFakultasUnit ??
+      obj.kode_jenjang ??
+      obj.KodeJenjang ??
+      ""
+  )
+    .trim()
+    .toUpperCase();
+
+  if (type === "prodi" && jenjang && raw) {
+    const regex = new RegExp(`\\(${jenjang}\\)|\\b${jenjang}\\b`, "i");
+    if (!regex.test(raw)) {
+      return `${raw} (${jenjang})`;
+    }
+  }
+  return raw;
 };
 
 export default function MultiSearchSelect({

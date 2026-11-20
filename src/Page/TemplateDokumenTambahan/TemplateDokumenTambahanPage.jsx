@@ -8,17 +8,15 @@ import { Plus, Eye, Pencil, Trash2, FolderPlus } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/Components/PageHeader";
-import { useFeatureActionVisibility } from "@/Common/versionConfig";
 
 const TemplateDokumenTambahanPage = () => {
   const navigate = useNavigate();
-  const canShowActions = useFeatureActionVisibility();
   const [_, setOpenAction] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTitle, setDrawerTitle] = useState("");
   const [drawerTargets, setDrawerTargets] = useState([]);
   const [drawerMode, setDrawerMode] = useState("detail");
-  const {getValidToken} = useAuth()
+  const { getValidToken, user } = useAuth();
 
   const openTagsDrawer = (row, label) => {
     const filtered = row.Targets.filter((t) => t.Kategori === label);
@@ -30,6 +28,11 @@ const TemplateDokumenTambahanPage = () => {
   };
 
   const { level, listLevel, setLevel, openChangeLevel, setOpenChangeLevel } = useContent();
+  const isAdmin =
+    level === "admin" ||
+    user?.level === "admin" ||
+    String(user?.level || "").toLowerCase().trim() === "admin" ||
+    String(level || "").toLowerCase().trim() === "admin";
 
   return (
     <>
@@ -58,10 +61,11 @@ const TemplateDokumenTambahanPage = () => {
           <RemoteTable
             endpoint="/templatedokumentambahans"
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
+            forceShowActions={isAdmin}
             adapter={templateDokumenTambahanAdapter}
             token={getValidToken()}
             renderAddAction={
-              canShowActions ? (
+              isAdmin ? (
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -135,36 +139,40 @@ const TemplateDokumenTambahanPage = () => {
                 searchable: false,
               },
             ]}
-            renderAction={({ row, close }) => (
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition-all cursor-pointer text-left group"
-                  onClick={() => {
-                    navigate(
-                      `/template_dokumen_tambahan/${row.Tahun}/${row.JenisFileUuid}`
-                    );
-                    close();
-                  }}
-                >
-                  <Pencil className="w-4 h-4 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
-                  <span>Edit</span>
-                </button>
+            renderAction={
+              isAdmin
+                ? ({ row, close }) => (
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                        onClick={() => {
+                          navigate(
+                            `/template_dokumen_tambahan/${row.Tahun}/${row.JenisFileUuid}`
+                          );
+                          close();
+                        }}
+                      >
+                        <Pencil className="w-4 h-4 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span>Edit</span>
+                      </button>
 
-                <div className="my-1 border-t border-gray-150" />
+                      <div className="my-1 border-t border-gray-150" />
 
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition-all cursor-pointer text-left group"
-                  onClick={() => {
-                    close();
-                  }}
-                >
-                  <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
-                  <span>Hapus</span>
-                </button>
-              </div>
-            )}
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                        onClick={() => {
+                          close();
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-500 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span>Hapus</span>
+                      </button>
+                    </div>
+                  )
+                : null
+            }
           />
         </div>
 
