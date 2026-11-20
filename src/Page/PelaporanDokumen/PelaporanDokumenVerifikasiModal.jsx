@@ -86,8 +86,14 @@ export default function PelaporanDokumenVerifikasiModal({
     }
   };
 
-  const fileUrl = data?.File
-    ? `${API_BASE_URL}/upload/pelaporan_dokumen/${data.File}`
+  const rawFile = String(data?.FileURL || data?.File || "").trim();
+  const cleanPath = rawFile.replace(/^\/+/, "");
+  const fileUrl = rawFile
+    ? (rawFile.startsWith("http://") || rawFile.startsWith("https://")
+      ? rawFile
+      : cleanPath.startsWith("upload/")
+      ? `${API_BASE_URL}/${cleanPath}`
+      : `${API_BASE_URL}/upload/pelaporan_dokumen/${cleanPath}`)
     : null;
 
   return (

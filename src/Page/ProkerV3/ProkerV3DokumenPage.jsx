@@ -47,6 +47,31 @@ import {
   Target,
 } from "lucide-react";
 
+const parseIkuString = (rawIku) => {
+  if (!rawIku) return [];
+  if (Array.isArray(rawIku)) {
+    return rawIku.map((item) => {
+      if (typeof item === "object" && item !== null) return item;
+      return { iku: String(item), jenis: "" };
+    });
+  }
+  if (!String(rawIku).trim()) return [];
+  const itemsMap = new Map();
+  String(rawIku)
+    .split("||")
+    .forEach((str) => {
+      const parts = str.split("::");
+      const iku = (parts[1] || parts[0] || "").trim();
+      if (iku && !itemsMap.has(iku)) {
+        itemsMap.set(iku, {
+          iku,
+          jenis: parts[2] ? parts[2].trim() : "",
+        });
+      }
+    });
+  return Array.from(itemsMap.values());
+};
+
 export default function ProkerV3DokumenPage() {
   const { uuid: prokerUuid } = useParams();
   const navigate = useNavigate();
@@ -165,15 +190,27 @@ export default function ProkerV3DokumenPage() {
     return true;
   }, [isAdmin, hasFakultasUnit, isVerifierRole, proker, user]);
 
-  // Determine currently active activity
-  const currentAktivitas = useMemo(() => {
-    if (location.state?.aktivitas) return location.state.aktivitas;
-    if (selectedActUuid) {
-      const found = activities.find((a) => a.UUID === selectedActUuid);
-      if (found) return found;
-    }
-    return activities[0] || null;
-  }, [activities, selectedActUuid, location.state]);
+  // Multi-scope support for Standar, Target, and Luaran
+  const scopesList = useMemo(() => {
+    const scs = proker?.Scopes || proker?.scopes || [];
+    if (Array.isArray(scs) && scs.length > 0) return scs;
+    if (!proker) return [];
+    return [
+      {
+        StandarSubStandar:
+          proker.StandarSubStandar || proker.standar_sub_standar || "-",
+        IndikatorKinerja:
+          proker.IndikatorKinerja || proker.indikator_kinerja || "",
+        TargetUnpak: proker.TargetUnpak || proker.target_unpak || "-",
+        TargetUnit: proker.TargetUnit || proker.target_unit || "-",
+        CapaianUnitLalu:
+          proker.CapaianUnitLalu || proker.capaian_unit_lalu || "-",
+        Output: proker.Output || proker.output || "-",
+        Outcome: proker.Outcome || proker.outcome || "-",
+        IkuList: proker.IkuList || proker.iku_list || "",
+      },
+    ];
+  }, [proker]);
 
   // Form rows for multi-data submission: Array of { id, jenisDokumen, file, keterangan }
   const [formRows, setFormRows] = useState([
@@ -960,147 +997,152 @@ export default function ProkerV3DokumenPage() {
             </div>
           </div>
 
-          {/* 3 Highlights Grid: Standar Renstra, Indikator Kinerja, Aktivitas Yang Sedang Diakses */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
-            {/* 1. Standar & Sub Standar */}
-            <div className="p-3.5 bg-purple-50/50 rounded-xl border border-purple-100 space-y-2 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-800">
-                  <Layers className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Standar Renstra</span>
+          {/* Metadata Matriks (Standar & Sub Standar, Target Capaian) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2">
+            {/* Standar & Indikator */}
+            <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 space-y-2">
+              <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                <div className="flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Standar & Sub Standar</span>
                 </div>
-                <p className="font-semibold text-gray-900 mt-1.5 line-clamp-3" title={proker?.StandarSubStandar}>
-                  {proker?.StandarSubStandar || "-"}
-                </p>
+                {scopesList.length > 1 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[9px] font-mono font-bold">
+                    {scopesList.length} Standar
+                  </span>
+                )}
               </div>
-              <span className="text-[10px] text-purple-700/80 font-medium">Standar / Sub Standar</span>
-            </div>
-
-            {/* 2. Indikator Kinerja */}
-            <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-100 space-y-2 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-800">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Indikator Kinerja</span>
-                </div>
-                <p className="font-semibold text-gray-900 mt-1.5 line-clamp-3" title={proker?.IndikatorKinerja}>
-                  {proker?.IndikatorKinerja || "-"}
-                </p>
-              </div>
-              <span className="text-[10px] text-blue-700/80 font-medium">Indikator Renstra</span>
-            </div>
-
-            {/* 3. Aktivitas Yang Sedang Diakses */}
-            <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-2 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between gap-1.5">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
-                    <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Aktivitas Yang Sedang Diakses</span>
-                  </div>
-                  {currentAktivitas?.Status && (
-                    <span className="text-[9px] uppercase px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      {currentAktivitas.Status}
-                    </span>
-                  )}
-                </div>
-
-                {activities.length > 1 ? (
-                  <div className="mt-1.5">
-                    <select
-                      value={currentAktivitas?.UUID || ""}
-                      onChange={(e) => {
-                        const chosen = activities.find((a) => a.UUID === e.target.value);
-                        if (chosen) setSelectedActUuid(chosen.UUID);
-                      }}
-                      className="w-full text-xs font-semibold text-gray-900 bg-white border border-emerald-200 rounded-lg p-1.5 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+              <div
+                className={`space-y-2.5 max-h-56 overflow-y-auto pr-1 ${
+                  scopesList.length > 1 ? "divide-y divide-gray-200/70" : ""
+                }`}
+              >
+                {scopesList.map((sc, idx) => {
+                  const ikus = parseIkuString(sc.IkuList || sc.iku_list);
+                  return (
+                    <div
+                      key={idx}
+                      className={idx > 0 ? "pt-2 space-y-1" : "space-y-1"}
                     >
-                      {activities.map((act, idx) => (
-                        <option key={act.UUID} value={act.UUID}>
-                          {idx + 1}. {act.Aktivitas}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <p className="font-semibold text-gray-900 mt-1.5 line-clamp-2" title={currentAktivitas?.Aktivitas}>
-                    {currentAktivitas?.Aktivitas || "Belum ada aktivitas terdaftar"}
-                  </p>
-                )}
-
-                {currentAktivitas && (
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
-                    <span>
-                      PIC: <b className="text-gray-900 font-bold">{currentAktivitas.PIC || "-"}</b>
-                    </span>
-                    {currentAktivitas.Anggaran !== undefined && currentAktivitas.Anggaran !== null && (
-                      <span className="inline-flex items-center gap-1">
-                        <span>Anggaran:</span>{" "}
-                        {isVerifierRoleOrLevel ? (
-                          <b className="text-emerald-700 font-bold font-mono">***</b>
-                        ) : isAnggaranRevised(currentAktivitas) ? (
-                          <span className="inline-flex items-center gap-1 font-mono">
-                            <span
-                              className="line-through text-gray-400 font-normal decoration-rose-500 decoration-1"
-                              title="Anggaran Awal"
-                            >
-                              {formatRupiah(currentAktivitas.Anggaran)}
-                            </span>
-                            <b
-                              className="text-emerald-700 font-bold"
-                              title="Realisasi Anggaran Baru"
-                            >
-                              {formatRupiah(getRealisasiAnggaran(currentAktivitas))}
-                            </b>
+                      <div className="flex items-start gap-1.5">
+                        {scopesList.length > 1 && (
+                          <span className="shrink-0 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-purple-100/80 text-purple-800 border border-purple-200 mt-0.5">
+                            #{idx + 1}
                           </span>
-                        ) : (
-                          <b className="text-emerald-700 font-bold font-mono">
-                            {formatRupiah(hasRealisasiAnggaran(currentAktivitas) ? getRealisasiAnggaran(currentAktivitas) : currentAktivitas.Anggaran)}
-                          </b>
                         )}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {!isEvaluator &&
-                  !(
-                    !isAdmin &&
-                    ["upmf", "upms", "fakultas", "verifikator"].includes(
-                      curRole,
-                    )
-                  ) &&
-                  (currentAktivitas?.CatatanRevisiAnggaran ||
-                    currentAktivitas?.catatan_revisi_anggaran) && (
-                    <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px]">
-                      <div className="flex items-center gap-1 font-bold text-amber-900">
-                        <FileText className="w-3 h-3 text-amber-800 shrink-0" />
-                        <span>Catatan Revisi Anggaran:</span>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className="text-xs font-semibold text-gray-800 line-clamp-2"
+                            title={
+                              sc.StandarSubStandar ||
+                              sc.standar_sub_standar
+                            }
+                          >
+                            {sc.StandarSubStandar ||
+                              sc.standar_sub_standar ||
+                              "-"}
+                          </p>
+                          {(sc.IndikatorKinerja ||
+                            sc.indikator_kinerja) && (
+                            <p
+                              className="text-[11px] text-gray-500 italic line-clamp-2 mt-0.5"
+                              title={
+                                sc.IndikatorKinerja || sc.indikator_kinerja
+                              }
+                            >
+                              Indikator:{" "}
+                              {sc.IndikatorKinerja || sc.indikator_kinerja}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <p className="mt-0.5 text-amber-950 leading-snug whitespace-pre-wrap break-words">
-                        {currentAktivitas.CatatanRevisiAnggaran ||
-                          currentAktivitas.catatan_revisi_anggaran}
-                      </p>
+                      {ikus.length > 0 ? (
+                        <div
+                          className={`flex flex-wrap items-center gap-1 ${
+                            scopesList.length > 1 ? "pl-6" : ""
+                          }`}
+                        >
+                          {ikus.map((it, iIdx) => (
+                            <span
+                              key={iIdx}
+                              className="px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-bold font-mono border border-purple-200"
+                              title={
+                                it.iku + (it.jenis ? ` (${it.jenis})` : "")
+                              }
+                            >
+                              {it.iku}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div
+                          className={`text-[10px] text-gray-400 italic ${
+                            scopesList.length > 1 ? "pl-6" : ""
+                          }`}
+                        >
+                          - Tidak ada IKU -
+                        </div>
+                      )}
                     </div>
-                  )}
+                  );
+                })}
               </div>
+            </div>
 
-              <div className="pt-2 flex items-center justify-between border-t border-emerald-100/70 text-[10px]">
-                <span className="text-emerald-700/80 font-medium">Kegiatan Proker Terpilih</span>
-                {currentAktivitas?.UUID && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate(`/proker_v3/${prokerUuid}/aktivitas/${currentAktivitas.UUID}/timeline`, {
-                        state: { aktivitas: currentAktivitas },
-                      })
-                    }
-                    className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:text-emerald-900 transition hover:underline cursor-pointer"
-                  >
-                    <span>Timeline & Bukti Aktivitas</span>
-                    <span>→</span>
-                  </button>
+            {/* Target Unpak & Target Unit */}
+            <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-2">
+              <div className="flex items-center justify-between gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                <div className="flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5" />
+                  <span>Target Capaian</span>
+                </div>
+                {scopesList.length > 1 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-mono font-bold">
+                    {scopesList.length} Target
+                  </span>
                 )}
+              </div>
+              <div
+                className={`space-y-2.5 max-h-56 overflow-y-auto pr-1 ${
+                  scopesList.length > 1
+                    ? "divide-y divide-emerald-200/70"
+                    : ""
+                }`}
+              >
+                {scopesList.map((sc, idx) => (
+                  <div
+                    key={idx}
+                    className={idx > 0 ? "pt-2 space-y-1" : "space-y-1"}
+                  >
+                    {scopesList.length > 1 && (
+                      <div className="flex items-center gap-1 mb-1">
+                        <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-emerald-100/80 text-emerald-800 border border-emerald-200">
+                          #{idx + 1}
+                        </span>
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-700 flex items-start justify-between gap-1">
+                      <span className="text-gray-500">Target Unpak:</span>
+                      <b className="text-emerald-700 text-right">
+                        {sc.TargetUnpak || sc.target_unpak || "-"}
+                      </b>
+                    </div>
+                    <div className="text-xs text-gray-700 flex items-start justify-between gap-1">
+                      <span className="text-purple-700 font-medium">
+                        Target Unit:
+                      </span>
+                      <b className="text-purple-800 text-right">
+                        {sc.TargetUnit || sc.target_unit || "-"}
+                      </b>
+                    </div>
+                    <div className="text-[11px] text-gray-500 flex items-start justify-between gap-1 pt-0.5 border-t border-emerald-100/60">
+                      <span className="italic">Capaian Lalu:</span>
+                      <span className="text-gray-600 text-right">
+                        {sc.CapaianUnitLalu || sc.capaian_unit_lalu || "-"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

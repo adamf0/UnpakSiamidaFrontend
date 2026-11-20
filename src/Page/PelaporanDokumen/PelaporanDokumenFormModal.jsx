@@ -308,17 +308,28 @@ export default function PelaporanDokumenFormModal({
                     onChange={handleFileChange}
                     className="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 border border-gray-200 rounded-xl p-1.5 bg-white cursor-pointer"
                   />
-                  {mode === "edit" && data?.File && (
+                  {mode === "edit" && (data?.File || data?.FileURL) && (
                     <p className="text-xs text-gray-500">
                       File saat ini:{" "}
-                      <a
-                        href={`${API_BASE_URL}/upload/pelaporan_dokumen/${data.File}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-purple-700 hover:text-purple-900 underline font-medium"
-                      >
-                        {data.File}
-                      </a>{" "}
+                      {(() => {
+                        const rawFile = String(data?.FileURL || data?.File || "").trim();
+                        const cleanPath = rawFile.replace(/^\/+/, "");
+                        const currentFileUrl = rawFile.startsWith("http://") || rawFile.startsWith("https://")
+                          ? rawFile
+                          : cleanPath.startsWith("upload/")
+                          ? `${API_BASE_URL}/${cleanPath}`
+                          : `${API_BASE_URL}/upload/pelaporan_dokumen/${cleanPath}`;
+                        return (
+                          <a
+                            href={currentFileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-purple-700 hover:text-purple-900 underline font-medium"
+                          >
+                            {data.File || rawFile}
+                          </a>
+                        );
+                      })()}{" "}
                       (Biarkan kosong jika tidak ingin mengubah)
                     </p>
                   )}

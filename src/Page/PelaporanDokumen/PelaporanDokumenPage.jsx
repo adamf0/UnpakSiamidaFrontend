@@ -189,8 +189,14 @@ const PelaporanDokumenPage = () => {
                 label: "Dokumen",
                 searchable: true,
                 renderKey: (row) => {
-                  if (!row.File) return <span className="text-gray-400">-</span>;
-                  const fileUrl = `${API_BASE_URL}/upload/pelaporan_dokumen/${row.File}`;
+                  if (!row.File && !row.FileURL) return <span className="text-gray-400">-</span>;
+                  const rawFile = String(row.FileURL || row.File || "").trim();
+                  const cleanPath = rawFile.replace(/^\/+/, "");
+                  const fileUrl = rawFile.startsWith("http://") || rawFile.startsWith("https://")
+                    ? rawFile
+                    : cleanPath.startsWith("upload/")
+                    ? `${API_BASE_URL}/${cleanPath}`
+                    : `${API_BASE_URL}/upload/pelaporan_dokumen/${cleanPath}`;
                   return (
                     <a
                       href={fileUrl}
