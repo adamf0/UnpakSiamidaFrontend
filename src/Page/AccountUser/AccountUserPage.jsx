@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AccountUserFormModal from "./AccountUserFormModal";
 import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
+import ConfirmSendEmailDialog from "@/Components/ConfirmSendEmailDialog";
 import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
@@ -22,6 +23,7 @@ import {
   Building2,
   CheckCircle2,
   Wallet,
+  Mail,
 } from "lucide-react";
 import Tooltip from "@/Components/Tooltip";
 import { useAuth } from "@/Providers/AuthProvider";
@@ -57,6 +59,11 @@ export default function AccountUserPage() {
   const [selectedRow, setSelectedRow] = useState(null);
   const { addToast } = useToast();
   const { getValidToken } = useAuth();
+
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailTargetUsers, setEmailTargetUsers] = useState([]);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const [abacMap, setAbacMap] = useState({});
   const [fakultasMap, setFakultasMap] = useState({});
@@ -158,6 +165,43 @@ export default function AccountUserPage() {
     }
   };
 
+  const handleTriggerEmail = (users) => {
+    if (!users || users.length === 0) return;
+    setEmailTargetUsers(users);
+    setEmailDialogOpen(true);
+  };
+
+  const handleConfirmSendEmail = async () => {
+    const validUsers = emailTargetUsers.filter((u) => Boolean(u?.Email || u?.email));
+    const uuids = validUsers
+      .map((u) => u?.UUID || u?.uuid)
+      .filter(Boolean);
+
+    if (uuids.length === 0) {
+      addToast("error", "Tidak ada akun dengan email valid yang dapat dikirim.");
+      setEmailDialogOpen(false);
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const res = await apiClient.post("/users/send-email", { user_uuids: uuids });
+      const msg = res?.data?.message || res?.message || "Pengiriman email akun telah dimasukkan ke antrean outbox.";
+      addToast("success", msg);
+      setSelectedRows([]);
+      setEmailDialogOpen(false);
+    } catch (err) {
+      console.error("Send account email error:", err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Gagal memproses pengiriman email";
+      addToast("error", errMsg);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   return (
     <>
       <Navbar
@@ -191,10 +235,46 @@ export default function AccountUserPage() {
               endpoint="/users"
               mode="paging"
               forceShowActions={true}
+              selectable={true}
+              selectedRows={selectedRows}
+              onSelectionChange={setSelectedRows}
+              rowKey="UUID"
               token={getValidToken()}
               onError={(err) => {
                 console.error("USER TABLE ERROR:", err);
               }}
+              renderBulkAction={
+                selectedRows.length > 0 ? (
+                  <div className="flex items-center justify-between px-4 py-2.5 mx-4 mt-3 mb-1 bg-indigo-50/90 border border-indigo-200/90 rounded-xl text-xs text-indigo-950 shadow-xs animate-in fade-in duration-150">
+                    <div className="flex items-center gap-2.5">
+                      <span className="inline-flex items-center justify-center min-w-5 px-1.5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[11px]">
+                        {selectedRows.length}
+                      </span>
+                      <span className="font-semibold text-indigo-900">
+                        {selectedRows.length} user dipilih
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={sendingEmail}
+                        onClick={() => handleTriggerEmail(selectedRows)}
+                        className="inline-flex items-center gap-1.5 h-8 px-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>{sendingEmail ? "Mengirim..." : `Kirim Email Batch (${selectedRows.length})`}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRows([])}
+                        className="h-8 px-2.5 text-gray-500 hover:text-gray-800 hover:bg-indigo-100/60 rounded-lg text-xs font-medium transition cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                ) : null
+              }
               renderAddAction={
                 <div className="flex items-center gap-2">
                   <Tooltip content="Merging Data Pengguna">
@@ -569,6 +649,18 @@ export default function AccountUserPage() {
 
                   <button
                     type="button"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50/80 rounded-xl transition-all cursor-pointer text-left group"
+                    onClick={() => {
+                      handleTriggerEmail([row]);
+                      close();
+                    }}
+                  >
+                    <Mail className="w-4 h-4 text-indigo-600 shrink-0 group-hover:scale-110 transition-transform" />
+                    <span>Kirim Email</span>
+                  </button>
+
+                  <button
+                    type="button"
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:text-amber-700 hover:bg-amber-50/80 rounded-xl transition-all cursor-pointer text-left group"
                     onClick={() => {
                       openEdit(row);
@@ -618,6 +710,15 @@ export default function AccountUserPage() {
         }"? Data akun yang dihapus tidak dapat dipulihkan.`}
         onConfirm={deleteData}
         onClose={() => setConfirmDelete(false)}
+      />
+
+      {/* CONFIRM SEND EMAIL DIALOG */}
+      <ConfirmSendEmailDialog
+        open={emailDialogOpen}
+        users={emailTargetUsers}
+        loading={sendingEmail}
+        onConfirm={handleConfirmSendEmail}
+        onClose={() => setEmailDialogOpen(false)}
       />
     </>
   );
