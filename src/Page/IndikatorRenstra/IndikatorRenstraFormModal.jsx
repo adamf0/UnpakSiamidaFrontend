@@ -17,6 +17,7 @@ const TIPE_TARGET_OPTIONS = [
   { id: "numerik", value: "numerik", label: "Numerik" },
   { id: "range", value: "range", label: "Range" },
   { id: "kategori", value: "kategori", label: "Kategori" },
+  { id: "text", value: "text", label: "Text" },
 ];
 
 export default function IndikatorRenstraFormModal({
@@ -352,7 +353,10 @@ export default function IndikatorRenstraFormModal({
       fd.append("parent", parentUuid);
       fd.append("tahun", form?.tahun ?? "");
       fd.append("tipe_target", rawTipeTarget);
-      fd.append("operator", form?.operator ?? "");
+      fd.append(
+        "operator",
+        rawTipeTarget === "range" ? form?.operator ?? "" : ""
+      );
 
       if (mode === "edit") {
         await apiClient.put(
@@ -497,12 +501,24 @@ export default function IndikatorRenstraFormModal({
                   })}
                 />
 
-                <TextInput
-                  label="Operator"
-                  placeholder=">=, <=, =, dll."
-                  error={errors.operator?.message}
-                  {...register("operator", { required: false })}
-                />
+                {(() => {
+                  const currentTipe =
+                    watch("tipe_target")?.value ??
+                    watch("tipe_target")?.id ??
+                    (typeof watch("tipe_target") === "string"
+                      ? watch("tipe_target")
+                      : "");
+                  if (currentTipe !== "range") return null;
+
+                  return (
+                    <TextInput
+                      label="Operator"
+                      placeholder=">=, <=, =, dll."
+                      error={errors.operator?.message}
+                      {...register("operator", { required: false })}
+                    />
+                  );
+                })()}
 
                 <SearchSelect
                   label="Parent Renstra"

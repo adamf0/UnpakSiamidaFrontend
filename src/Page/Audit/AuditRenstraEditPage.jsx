@@ -388,10 +388,20 @@ const AuditRenstraEditPage = ({
     return "#";
   }
   
+  const getTipeTarget = (dataAudit) => {
+    return (
+      dataAudit?.TipeTarget ||
+      dataAudit?.tipe_target ||
+      dataAudit?.Kategori ||
+      ""
+    ).toLowerCase().trim();
+  };
+
   const renderCapaian = (dataAudit) => {
-    if (dataAudit.Kategori == "kategori") {
+    const tipe = getTipeTarget(dataAudit);
+    if (tipe === "kategori" || tipe === "text") {
       return dataAudit.Target ?? "-";
-    } else if (dataAudit.Kategori == "range") {
+    } else if (tipe === "range") {
       return `${dataAudit.TargetMin} ${dataAudit.TargetMin} ${
         dataAudit.Operator
       } nilai ${mirrorOperator(dataAudit.Operator)} ${dataAudit.TargetMax} ${
@@ -402,9 +412,60 @@ const AuditRenstraEditPage = ({
     }
   };
 
+  const renderStatusCapaianAuditee = (itemData) => {
+    const tipe = getTipeTarget(itemData);
+    const capaian = watch("capaian");
+    if (capaian === undefined || capaian === null || String(capaian).trim() === "") {
+      return null;
+    }
+    let status = null;
+    const target = itemData.Target;
+    if (tipe === "kategori" || tipe === "text") {
+      status =
+        String(capaian).toLowerCase().trim() === String(target).toLowerCase().trim()
+          ? "Ya"
+          : "Tidak";
+    } else if (tipe === "numerik") {
+      const numCapaian = parseFloat(capaian);
+      const numTarget = parseFloat(target);
+      if (!isNaN(numCapaian) && !isNaN(numTarget)) {
+        status = numCapaian >= numTarget ? "Ya" : "Tidak";
+      }
+    } else if (tipe === "range") {
+      const numCapaian = parseFloat(capaian);
+      const min = parseFloat(itemData.TargetMin);
+      const max = parseFloat(itemData.TargetMax);
+      if (!isNaN(numCapaian) && !isNaN(min) && !isNaN(max)) {
+        status = numCapaian >= min && numCapaian <= max ? "Ya" : "Tidak";
+      }
+    }
+
+    if (!status) return null;
+
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="block text-sm font-medium text-gray-700">
+          Capaian dari auditee
+        </label>
+        <div>
+          <span
+            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+              status === "Ya"
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-red-100 text-red-700"
+            }`}
+          >
+            {status}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   //[pr] belum di disable berdasarkan dataRenstra range
   const renderInputCapaian = (dataAudit) => {
-    if (dataAudit.Kategori == "kategori") {
+    const tipe = getTipeTarget(dataAudit);
+    if (tipe === "kategori") {
       return (level == "auditee" && !effectiveReadOnly) ? (
         <SearchSelect
           label="Isi Capaian"
@@ -446,7 +507,27 @@ const AuditRenstraEditPage = ({
           disabled
         />
       );
-    } else if (dataAudit.Kategori == "range") {
+    } else if (tipe === "text") {
+      return (level == "auditee" && !effectiveReadOnly) ? (
+        <TextInput
+          type="text"
+          label="Isi Capaian"
+          placeholder="masukkan capaiannya"
+          error={errors.capaian?.message}
+          {...register("capaian", {
+            required: "Isi Capaian wajib diisi",
+          })}
+        />
+      ) : (
+        <TextInput
+          type="text"
+          label="Isi Capaian Auditee"
+          placeholder="masukkan capaiannya"
+          value={watch("capaian")}
+          disabled
+        />
+      );
+    } else if (tipe === "range") {
       return (level == "auditee" && !effectiveReadOnly) ? (
         <TextInput
           type="number"
@@ -475,7 +556,8 @@ const AuditRenstraEditPage = ({
     } else {
       return (level == "auditee" && !effectiveReadOnly) ? (
         <TextInput
-          type={dataAudit.Kategori == "numerik" ? "number" : "text"}
+          type="number"
+          step="0.0001"
           label="Isi Capaian"
           placeholder="masukkan capaiannya"
           error={errors.capaian?.message}
@@ -485,7 +567,8 @@ const AuditRenstraEditPage = ({
         />
       ) : (
         <TextInput
-          type={dataAudit.Kategori == "numerik" ? "number" : "text"}
+          type="number"
+          step="0.0001"
           label="Isi Capaian Auditee"
           placeholder="masukkan capaiannya"
           value={watch("capaian")}
@@ -497,7 +580,8 @@ const AuditRenstraEditPage = ({
 
   //[pr] belum di disable berdasarkan dataRenstra range
   const renderInputCapaianAuditor = (dataAudit) => {
-    if (dataAudit.Kategori == "kategori") {
+    const tipe = getTipeTarget(dataAudit);
+    if (tipe === "kategori") {
       return (
         <SearchSelect
           label="Isi Capaian Auditor"
@@ -524,7 +608,22 @@ const AuditRenstraEditPage = ({
           }}
         />
       );
-    } else if (dataAudit.Kategori == "range") {
+    } else if (tipe === "text") {
+      return (
+        <TextInput
+          type="text"
+          label="Isi Capaian Auditor"
+          placeholder="masukkan capaiannya"
+          error={errors.capaian_auditor?.message}
+          disabled={effectiveReadOnly}
+          {...(!effectiveReadOnly
+            ? register("capaian_auditor", {
+                required: "Isi Capaian wajib diisi",
+              })
+            : { value: watch("capaian_auditor") })}
+        />
+      );
+    } else if (tipe === "range") {
       return (
         <TextInput
           type="number"
@@ -545,7 +644,8 @@ const AuditRenstraEditPage = ({
     } else {
       return (
         <TextInput
-          type={dataAudit.Kategori == "numerik" ? "number" : "text"}
+          type="number"
+          step="0.0001"
           label="Isi Capaian Auditor"
           placeholder="masukkan capaiannya"
           error={errors.capaian_auditor?.message}
@@ -727,6 +827,11 @@ const AuditRenstraEditPage = ({
                 Satuan: currentAudit?.Satuan || currentTemplate?.Satuan,
                 Operator: currentAudit?.Operator || currentTemplate?.Operator,
                 NamaIndikator: currentAudit?.NamaIndikator || currentTemplate?.Indikator,
+                TipeTarget:
+                  currentAudit?.TipeTarget ||
+                  currentTemplate?.TipeTarget ||
+                  currentAudit?.Kategori ||
+                  currentTemplate?.Kategori,
               };
 
               return (
@@ -758,6 +863,11 @@ const AuditRenstraEditPage = ({
                   />
 
                   <TextInput label="Satuan" value={itemData.Satuan || "-"} disabled />
+
+                  {(level === "auditor1" ||
+                    level === "auditor2" ||
+                    effectiveReadOnly) &&
+                    renderStatusCapaianAuditee(itemData)}
 
                   {renderInputCapaian(itemData)}
 

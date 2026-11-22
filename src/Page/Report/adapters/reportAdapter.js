@@ -167,20 +167,30 @@ export class ReportAdapterV2 extends ReportAdapter {
     return data
       .filter((row) => {
         const tipe = String(row.TipeTarget || "numerik").toLowerCase().trim();
-        return ["numerik", "range", "kategori"].includes(tipe);
+        return ["numerik", "range", "kategori", "text"].includes(tipe);
       })
       .map((row) => {
         const tipe = String(row.TipeTarget || "numerik").toLowerCase().trim();
-        const isCategory = tipe === "kategori";
+        const isCategory = tipe === "kategori" || tipe === "text";
         let capaianAuditee = row.Capaian;
         let capaianAuditor = row.CapaianAuditor;
 
         if (isCategory) {
-          const validStatus = ["terlaksana", "tercapai", "ya", "ada", "1", "100", "selesai"];
-          const auditeeStr = String(capaianAuditee || "").toLowerCase().trim();
-          const auditorStr = String(capaianAuditor || "").toLowerCase().trim();
-          capaianAuditee = validStatus.includes(auditeeStr) ? 100 : 0;
-          capaianAuditor = validStatus.includes(auditorStr) ? 100 : 0;
+          if (tipe === "text") {
+            const auditeeStr = String(capaianAuditee || "").toLowerCase().trim();
+            const auditorStr = String(capaianAuditor || "").toLowerCase().trim();
+            const targetStr = String(row.Target || "").toLowerCase().trim();
+            capaianAuditee =
+              auditeeStr && targetStr && auditeeStr === targetStr ? 100 : 0;
+            capaianAuditor =
+              auditorStr && targetStr && auditorStr === targetStr ? 100 : 0;
+          } else {
+            const validStatus = ["terlaksana", "tercapai", "ya", "ada", "1", "100", "selesai"];
+            const auditeeStr = String(capaianAuditee || "").toLowerCase().trim();
+            const auditorStr = String(capaianAuditor || "").toLowerCase().trim();
+            capaianAuditee = validStatus.includes(auditeeStr) ? 100 : 0;
+            capaianAuditor = validStatus.includes(auditorStr) ? 100 : 0;
+          }
         } else {
           capaianAuditee = Number(capaianAuditee) || 0;
           capaianAuditor = Number(capaianAuditor) || 0;

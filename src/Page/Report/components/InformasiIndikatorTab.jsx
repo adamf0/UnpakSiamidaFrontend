@@ -79,7 +79,7 @@ export default function InformasiIndikatorTab({
       }
     }
 
-    if (row.TipeTarget === "kategori") {
+    if (row.TipeTarget === "kategori" || row.TipeTarget === "text") {
       return auditorVal >= 100;
     }
 
@@ -207,9 +207,13 @@ export default function InformasiIndikatorTab({
       `"${row.Satuan || ""}"`,
       row.TipeTarget === "kategori"
         ? `"${row.Capaian || (row.NormalizedCapaian >= 100 ? "Terlaksana" : "Belum Terlaksana")}"`
+        : row.TipeTarget === "text"
+        ? `"${row.Capaian || ""}"`
         : (row.NormalizedCapaian ?? row.Capaian ?? 0),
       row.TipeTarget === "kategori"
         ? `"${row.CapaianAuditor || (row.NormalizedCapaianAuditor >= 100 ? "Terlaksana" : "Belum Terlaksana")}"`
+        : row.TipeTarget === "text"
+        ? `"${row.CapaianAuditor || ""}"`
         : (row.NormalizedCapaianAuditor ?? row.CapaianAuditor ?? 0),
       checkStatusTarget(row) ? "Tercapai" : "Belum Tercapai",
     ]);
@@ -444,6 +448,10 @@ export default function InformasiIndikatorTab({
                           <span className="capitalize font-medium text-gray-700">
                             {row.Capaian || (auditeeVal >= 100 ? "Terlaksana" : "Belum Terlaksana")}
                           </span>
+                        ) : row.TipeTarget === "text" ? (
+                          <span className="font-medium text-gray-700">
+                            {row.Capaian || "-"}
+                          </span>
                         ) : (
                           auditeeVal
                         )}
@@ -462,6 +470,10 @@ export default function InformasiIndikatorTab({
                             {row.TipeTarget === "kategori" ? (
                               <span className="capitalize font-medium">
                                 {row.CapaianAuditor || (auditorVal >= 100 ? "Terlaksana" : "Belum Terlaksana")}
+                              </span>
+                            ) : row.TipeTarget === "text" ? (
+                              <span className="font-medium">
+                                {row.CapaianAuditor || "-"}
                               </span>
                             ) : (
                               auditorVal
