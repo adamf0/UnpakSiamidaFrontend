@@ -44,7 +44,6 @@ import ProkerV3DokumenPage from "./Page/ProkerV3/ProkerV3DokumenPage";
 import ProkerV3TimelinePage from "./Page/ProkerV3/ProkerV3TimelinePage";
 import JadwalProkerV3Page from "./Page/ProkerV3/JadwalProkerV3Page";
 import SettingsPage from "./Page/Settings/SettingsPage";
-
 export default function App() {
   return (
     <AuthProvider>
