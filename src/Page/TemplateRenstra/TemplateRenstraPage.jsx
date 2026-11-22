@@ -3,11 +3,13 @@ import Navbar from "@/Components/Navbar";
 import RemoteTable from "@/Components/RemoteTable";
 import { useAuth } from "@/Providers/AuthProvider";
 import { useContent } from "@/Providers/ContentProvider";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Eye, Pencil, Trash2, LayoutTemplate, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/Components/PageHeader";
 import { apiClient } from "@/Common/api";
+import { useToast } from "@/Providers/ToastProvider";
+import ConfirmDeleteDialog from "@/Components/ConfirmDeleteDialog";
 
 const FIXED_TARGET_GROUPS = [
   {
@@ -74,11 +76,17 @@ const getTargetCardKey = (t) => {
 
 const TemplateRenstraPage = () => {
   const navigate = useNavigate();
+  const { addToast } = useToast();
+  const tableRef = useRef(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTitle, setDrawerTitle] = useState("");
   const [drawerTargets, setDrawerTargets] = useState([]);
   const [drawerMode, setDrawerMode] = useState("detail");
   const { getValidToken, user } = useAuth();
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [selectedDeleteRow, setSelectedDeleteRow] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [tahunList, setTahunList] = useState([]);
   const [selectedTahun, setSelectedTahun] = useState("");
@@ -182,11 +190,58 @@ const TemplateRenstraPage = () => {
 
   const handleAdapter = useCallback((rows = []) => {
     const adapted = templateRenstraAdapter(rows);
-    setAllTemplateRows((prev) =>
-      adapted.length >= prev.length || prev.length === 0 ? adapted : prev
-    );
+    setAllTemplateRows(adapted);
     return adapted;
   }, []);
+
+  const deleteData = async () => {
+    if (!selectedDeleteRow) return;
+
+    const targetUuids = (selectedDeleteRow.Targets || [])
+      .map((t) => t.UUID || t.uuid)
+      .filter(Boolean);
+
+    if (targetUuids.length === 0) {
+      addToast(
+        "error",
+        "Tidak ada target yang dapat dihapus pada template indikator ini"
+      );
+      setConfirmDelete(false);
+      setSelectedDeleteRow(null);
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await Promise.all(
+        targetUuids.map((uuid) => apiClient.delete(`/templaterenstra/${uuid}`))
+      );
+
+      addToast("success", "Template Renstra berhasil dihapus");
+      setAllTemplateRows((prev) =>
+        prev.filter(
+          (r) =>
+            !(
+              String(r.Tahun) === String(selectedDeleteRow.Tahun) &&
+              String(r.IndikatorRenstraID) ===
+                String(selectedDeleteRow.IndikatorRenstraID)
+            )
+        )
+      );
+      tableRef.current?.reload?.({ resetPage: true });
+    } catch (err) {
+      addToast(
+        "error",
+        `Gagal menghapus template renstra: ${
+          err?.message || "Server tidak dapat dihubungi"
+        }`
+      );
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+      setSelectedDeleteRow(null);
+    }
+  };
 
   const allTargetsCatalog = useMemo(() => {
     const unitItems = unitTargets.map((u) => ({
@@ -505,6 +560,7 @@ const TemplateRenstraPage = () => {
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <RemoteTable
+            ref={tableRef}
             endpoint="/templaterenstras"
             mode="sse" //harus sse jangan paging (keporong), all (oom), ndjson (oom)
             forceShowActions={isAdmin}
@@ -655,6 +711,8 @@ const TemplateRenstraPage = () => {
                         type="button"
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-xl transition-all cursor-pointer text-left group"
                         onClick={() => {
+                          setSelectedDeleteRow(row);
+                          setConfirmDelete(true);
                           close();
                         }}
                       >
@@ -758,6 +816,25 @@ const TemplateRenstraPage = () => {
             </div>
           </div>
         )}
+
+        <ConfirmDeleteDialog
+          open={confirmDelete}
+          loading={deleting}
+          title="Hapus Template Renstra"
+          entityName={selectedDeleteRow?.Indikator}
+          description={`Apakah Anda yakin ingin menghapus seluruh pemetaan target template Renstra untuk indikator "${
+            selectedDeleteRow?.Indikator || ""
+          }" tahun ${selectedDeleteRow?.Tahun || ""}? Tindakan ini akan menghapus ${
+            selectedDeleteRow?.Targets?.length || 0
+          } pemetaan target dan tidak dapat dibatalkan.`}
+          onClose={() => {
+            if (!deleting) {
+              setConfirmDelete(false);
+              setSelectedDeleteRow(null);
+            }
+          }}
+          onConfirm={deleteData}
+        />
       </div>
     </>
   );
