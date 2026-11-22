@@ -155,12 +155,14 @@ const PreviewTemplatePage = ({ type = "renstra" }) => {
             <ol className="list-none p-0 inline-flex">
               <li className="flex items-center">
                 <Link
-                  to="/template_dokumen_tambahan"
+                  to={
+                    type == "renstra"
+                      ? "/template_renstra"
+                      : "/template_dokumen_tambahan"
+                  }
                   className="hover:underline"
                 >
-                  {type == "renstra"
-                    ? "Template Renstra"
-                    : "Template Dokumen Tambahan"}
+                  {type == "renstra" ? "Template IKU" : "Template IKT"}
                 </Link>
                 <span className="mx-2">/</span>
               </li>

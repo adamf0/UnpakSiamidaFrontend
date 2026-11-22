@@ -781,7 +781,7 @@ const AuditRenstraEditPage = ({
                   !
                 </div>
                 <h4 className="font-semibold text-gray-800 text-base mb-1">
-                  Template Renstra Belum Tersedia
+                  Template IKU Belum Tersedia
                 </h4>
                 <p className="text-gray-500 text-sm max-w-md">
                   Target audit ini tidak memiliki template indikator renstra untuk tahun {dataRenstra?.Tahun || positionYear}.

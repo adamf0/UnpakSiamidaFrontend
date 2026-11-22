@@ -152,12 +152,12 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
               icon: <AlertTriangle size={18} strokeWidth={1.5} />,
             },
             {
-              name: "Template Renstra",
+              name: "Template IKU",
               path: "/template_renstra",
               icon: <FileText size={18} strokeWidth={1.5} />,
             },
             {
-              name: "Template Dokumen Tambahan",
+              name: "Template IKT",
               path: "/template_dokumen_tambahan",
               icon: <FilePlus size={18} strokeWidth={1.5} />,
             },

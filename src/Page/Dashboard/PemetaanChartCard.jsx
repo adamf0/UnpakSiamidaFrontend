@@ -1222,7 +1222,7 @@ export default function PemetaanChartCard() {
               Pemetaan Instrumen Renstra &amp; Dokumen Tambahan
             </h2>
             <p className="text-sm text-gray-600 max-w-2xl leading-relaxed">
-              Distribusi visual pemetaan indikator renstra dan template dokumen tambahan per Program Studi (berbagai jenjang) dan Fakultas/Unit. Unit tanpa pemetaan otomatis ditandai dengan <strong>warna merah</strong>.
+              Distribusi visual pemetaan indikator renstra dan Template IKT per Program Studi (berbagai jenjang) dan Fakultas/Unit. Unit tanpa pemetaan otomatis ditandai dengan <strong>warna merah</strong>.
             </p>
           </div>
 

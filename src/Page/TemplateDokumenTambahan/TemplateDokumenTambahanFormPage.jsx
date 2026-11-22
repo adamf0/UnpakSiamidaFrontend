@@ -290,7 +290,7 @@ const TemplateDokumenTambahanFormPage = () => {
               <Link
                 to="/template_dokumen_tambahan"
                 className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-600 hover:text-gray-900 transition cursor-pointer"
-                title="Kembali ke Template Dokumen Tambahan"
+                title="Kembali ke Template IKT"
               >
                 <ArrowLeft className="w-5 h-5 stroke-[1.8]" />
               </Link>
@@ -299,7 +299,7 @@ const TemplateDokumenTambahanFormPage = () => {
                   <ol className="list-none p-0 inline-flex items-center gap-1.5">
                     <li>
                       <Link to="/template_dokumen_tambahan" className="hover:text-purple-700 transition">
-                        Template Dokumen Tambahan
+                        Template IKT
                       </Link>
                     </li>
                     <li className="text-gray-400">/</li>
@@ -309,7 +309,7 @@ const TemplateDokumenTambahanFormPage = () => {
                   </ol>
                 </nav>
                 <h1 className="text-lg font-bold text-gray-900">
-                  {mode === "edit" ? "Edit Template Dokumen Tambahan" : "Tambah Template Dokumen Tambahan"}
+                  {mode === "edit" ? "Edit Template IKT" : "Tambah Template IKT"}
                 </h1>
               </div>
             </div>

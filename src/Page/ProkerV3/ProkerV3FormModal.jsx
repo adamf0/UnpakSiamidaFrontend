@@ -993,7 +993,7 @@ export default function ProkerV3FormModal({
                                     </div>
                                   ) : (
                                     <p className="text-[10px] text-gray-500 mt-1">
-                                      Target institusi terisi otomatis dari master indikator renstra (fallback template renstra).
+                                      Target institusi terisi otomatis dari master indikator renstra (fallback Template IKU).
                                     </p>
                                   )}
                                 </div>

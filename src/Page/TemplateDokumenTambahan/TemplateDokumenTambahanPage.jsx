@@ -53,8 +53,8 @@ const TemplateDokumenTambahanPage = () => {
       <div className="p-4 sm:p-6 bg-gray-50 min-h-screen space-y-4">
         <PageHeader
           icon={FolderPlus}
-          title="Template Dokumen Tambahan"
-          subtitle="Kelola instrumen pertanyaan dan dokumen tambahan per fakultas/unit"
+          title="Template IKT"
+          subtitle="Kelola instrumen pertanyaan dan dokumen IKT per fakultas/unit"
         />
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">

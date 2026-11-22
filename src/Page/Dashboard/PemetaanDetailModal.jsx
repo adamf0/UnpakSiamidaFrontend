@@ -367,12 +367,12 @@ export default function PemetaanDetailModal({
               <div className="text-center py-10 px-4 bg-rose-50/50 rounded-xl border border-rose-150">
                 <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2 opacity-80" />
                 <h4 className="text-sm font-bold text-gray-800">
-                  Tidak Ada Template Renstra Terpetakan
+                  Tidak Ada Template IKU Terpetakan
                 </h4>
                 <p className="text-xs text-gray-600 max-w-md mx-auto mt-1">
                   Unit ini belum memiliki indikator renstra yang dipetakan pada
                   tahun {tahun}. Anda dapat melakukan pemetaan melalui menu
-                  Template Renstra.
+                  Template IKU.
                 </p>
               </div>
             ) : filteredRenstra.length === 0 ? (
@@ -500,7 +500,7 @@ export default function PemetaanDetailModal({
               <p className="text-xs text-gray-600 max-w-md mx-auto mt-1">
                 Unit ini belum memiliki instrumen dokumen tambahan yang
                 dipetakan pada tahun {tahun}. Silakan petakan melalui menu
-                Template Dokumen Tambahan.
+                Template IKT.
               </p>
             </div>
           ) : filteredDokumen.length === 0 ? (

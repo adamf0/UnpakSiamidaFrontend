@@ -217,7 +217,7 @@ const TemplateRenstraPage = () => {
         targetUuids.map((uuid) => apiClient.delete(`/templaterenstra/${uuid}`))
       );
 
-      addToast("success", "Template Renstra berhasil dihapus");
+      addToast("success", "Template IKU berhasil dihapus");
       setAllTemplateRows((prev) =>
         prev.filter(
           (r) =>
@@ -232,7 +232,7 @@ const TemplateRenstraPage = () => {
     } catch (err) {
       addToast(
         "error",
-        `Gagal menghapus template renstra: ${
+        `Gagal menghapus Template IKU: ${
           err?.message || "Server tidak dapat dihubungi"
         }`
       );
@@ -426,8 +426,8 @@ const TemplateRenstraPage = () => {
       <div className="p-4 sm:p-6 bg-gray-50 min-h-screen space-y-4">
         <PageHeader
           icon={LayoutTemplate}
-          title="Template Renstra"
-          subtitle="Kelola matriks instrumen dan kriteria target capaian Renstra"
+          title="Template IKU"
+          subtitle="Kelola matriks instrumen dan kriteria target capaian IKU"
         />
 
         {/* SECTION TOTAL DATA PEMETAAN TARGET */}
@@ -820,9 +820,9 @@ const TemplateRenstraPage = () => {
         <ConfirmDeleteDialog
           open={confirmDelete}
           loading={deleting}
-          title="Hapus Template Renstra"
+          title="Hapus Template IKU"
           entityName={selectedDeleteRow?.Indikator}
-          description={`Apakah Anda yakin ingin menghapus seluruh pemetaan target template Renstra untuk indikator "${
+          description={`Apakah Anda yakin ingin menghapus seluruh pemetaan target Template IKU untuk indikator "${
             selectedDeleteRow?.Indikator || ""
           }" tahun ${selectedDeleteRow?.Tahun || ""}? Tindakan ini akan menghapus ${
             selectedDeleteRow?.Targets?.length || 0

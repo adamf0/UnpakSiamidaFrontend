@@ -114,7 +114,7 @@ export default function MataProgramV2FormPage() {
       setRawTemplates(list);
     } catch (err) {
       console.error("Fetch template renstra gagal:", err);
-      addToast("error", formatFetchError(err, "Gagal memuat template renstra"));
+      addToast("error", formatFetchError(err, "Gagal memuat Template IKU"));
       setRawTemplates([]);
     } finally {
       setLoadingTemplates(false);
@@ -296,7 +296,7 @@ export default function MataProgramV2FormPage() {
 
     const selectedIds = Object.keys(selectedTemplateIds);
     if (selectedIds.length === 0) {
-      addToast("warning", "Pilih minimal satu Template Renstra sasaran");
+      addToast("warning", "Pilih minimal satu Template IKU sasaran");
       return;
     }
 
@@ -322,7 +322,7 @@ export default function MataProgramV2FormPage() {
         res?.data?.message ||
           (isEdit
             ? "Berhasil memperbarui master Mata Program"
-            : `Berhasil menyimpan Mata Program dengan ${selectedIds.length} target Template Renstra`)
+            : `Berhasil menyimpan Mata Program dengan ${selectedIds.length} target Template IKU`)
       );
       navigate("/mata_programv3");
     } catch (err) {
@@ -368,7 +368,7 @@ export default function MataProgramV2FormPage() {
             <PageHeader
               icon={Layers}
               title={isEdit ? "Edit Mata Program" : "Tambah Mata Program"}
-              subtitle="Kelola master mata program kerja dan hubungkan dengan Template Renstra sasaran"
+              subtitle="Kelola master mata program kerja dan hubungkan dengan Template IKU sasaran"
             />
           </div>
 
@@ -435,7 +435,7 @@ export default function MataProgramV2FormPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
             <div className="flex items-center gap-2 text-xs font-bold text-purple-900 uppercase tracking-wider">
               <LayoutTemplate className="w-4 h-4 text-purple-600" />
-              <span>2. Template Renstra Sasaran</span>
+              <span>2. Template IKU Sasaran</span>
               <span className="ml-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800">
                 {totalSelectedCount} Target Terpilih
               </span>
@@ -472,12 +472,12 @@ export default function MataProgramV2FormPage() {
           {loadingTemplates ? (
             <div className="py-16 text-center text-xs text-gray-500">
               <div className="inline-block w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mb-2" />
-              <p>Memuat daftar template renstra tahun {selectedTahun?.Tahun || ""}...</p>
+              <p>Memuat daftar Template IKU tahun {selectedTahun?.Tahun || ""}...</p>
             </div>
           ) : filteredIndicators.length === 0 ? (
             <div className="py-16 text-center text-xs text-gray-400">
               {rawTemplates.length === 0
-                ? `Tidak ada data template renstra untuk tahun ${selectedTahun?.Tahun || "-"}.`
+                ? `Tidak ada data Template IKU untuk tahun ${selectedTahun?.Tahun || "-"}.`
                 : "Tidak ada indikator yang sesuai dengan kata kunci pencarian."}
             </div>
           ) : (
@@ -612,7 +612,7 @@ export default function MataProgramV2FormPage() {
             <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
             <p className="text-xs text-gray-700 font-medium">
               Total Sasaran Terpilih:{" "}
-              <strong className="text-purple-700 font-bold">{totalSelectedCount}</strong> Template Renstra
+              <strong className="text-purple-700 font-bold">{totalSelectedCount}</strong> Template IKU
             </p>
           </div>
 

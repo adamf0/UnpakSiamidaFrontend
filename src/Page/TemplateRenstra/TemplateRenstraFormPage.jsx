@@ -4,7 +4,7 @@ import { useForm, useWatch } from "react-hook-form";
 import SearchSelect from "@/Components/SearchSelect";
 import TextInput from "@/Components/TextInput";
 import RadioButton from "@/Components/RadioButton";
-import { Sparkles, ArrowLeft, LayoutTemplate, ChevronDown } from "lucide-react";
+import { Sparkles, ArrowLeft, LayoutTemplate, ChevronDown, Trash2 } from "lucide-react";
 import {
   delay,
   formatFetchError,
@@ -719,7 +719,7 @@ const TemplateRenstraFormPage = () => {
               <Link
                 to="/template_renstra"
                 className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-600 hover:text-gray-900 transition cursor-pointer"
-                title="Kembali ke Template Renstra"
+                title="Kembali ke Template IKU"
               >
                 <ArrowLeft className="w-5 h-5 stroke-[1.8]" />
               </Link>
@@ -728,7 +728,7 @@ const TemplateRenstraFormPage = () => {
                   <ol className="list-none p-0 inline-flex items-center gap-1.5">
                     <li>
                       <Link to="/template_renstra" className="hover:text-purple-700 transition">
-                        Template Renstra
+                        Template IKU
                       </Link>
                     </li>
                     <li className="text-gray-400">/</li>
@@ -738,7 +738,7 @@ const TemplateRenstraFormPage = () => {
                   </ol>
                 </nav>
                 <h1 className="text-lg font-bold text-gray-900">
-                  {mode === "edit" ? "Edit Template Matriks Renstra" : "Tambah Template Matriks Renstra"}
+                  {mode === "edit" ? "Edit Template IKU" : "Tambah Template IKU"}
                 </h1>
               </div>
             </div>
@@ -958,6 +958,44 @@ const GroupDataTable = ({
     tipeTarget
   );
 
+  const isGroupLoading = (gd?.Targets || []).some((target) => {
+    const rowKey = buildRowLabel(gd, target);
+    const row = allRows?.[rowKey] ?? get(allRows, rowKey);
+    return row?.status === "loading";
+  });
+  const isClearDisabled = filledCount === 0 || isGroupLoading;
+
+  const clearTargetRow = (target) => {
+    const rowKey = buildRowLabel(gd, target);
+    setValue(
+      `rows.${rowKey}`,
+      {
+        enable: false,
+        status: null,
+        errormessage: null,
+        targetUuid: target.UUID,
+        targetId: target.ID,
+        targetType: gd.Type,
+        targetJenjang: gd.Jenjang,
+        targetNama: target.Nama,
+        klasifikasi: null,
+        satuan: "",
+        target: "",
+        target_min: "",
+        target_max: "",
+        pembagian_tugas: null,
+      },
+      { shouldValidate: true, shouldDirty: true }
+    );
+    if (typeof clearErrors === "function") {
+      clearErrors(`rows.${rowKey}`);
+    }
+  };
+
+  const clearGroupRows = () => {
+    (gd?.Targets || []).forEach(clearTargetRow);
+  };
+
   useEffect(() => {
     if (!errors?.rows || !gd?.Targets) return;
     const hasError = gd.Targets.some((target) => {
@@ -1004,20 +1042,46 @@ const GroupDataTable = ({
             )}
           </h2>
         </div>
-        <Tooltip content="Isi otomatis seluruh baris dalam kelompok ini">
-          <button
-            type="button"
-            onClick={() => {
-              if (indikator) openModalFill(gd);
-              else addToast("error", "Pilih dulu indikator");
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 border border-purple-200 rounded-lg transition-colors shadow-xs"
-            aria-label="Isi otomatis seluruh baris dalam kelompok ini"
+        <div className="flex items-center gap-2">
+          <Tooltip content="Isi otomatis seluruh baris dalam kelompok ini">
+            <button
+              type="button"
+              onClick={() => {
+                if (indikator) openModalFill(gd);
+                else addToast("error", "Pilih dulu indikator");
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 border border-purple-200 rounded-lg transition-colors shadow-xs cursor-pointer"
+              aria-label="Isi otomatis seluruh baris dalam kelompok ini"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              <span>Isi Otomatis</span>
+            </button>
+          </Tooltip>
+          <Tooltip
+            content={
+              filledCount === 0
+                ? "Tidak ada data untuk dihapus di kelompok ini"
+                : "Hapus seluruh isian dalam kelompok ini"
+            }
           >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-            <span>Isi Otomatis</span>
-          </button>
-        </Tooltip>
+            <span className={`inline-flex ${isClearDisabled ? "cursor-not-allowed" : ""}`}>
+              <button
+                type="button"
+                disabled={isClearDisabled}
+                onClick={isClearDisabled ? undefined : clearGroupRows}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                  isClearDisabled
+                    ? "bg-gray-50 text-gray-400 border-gray-200/80 cursor-not-allowed pointer-events-none"
+                    : "text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border-rose-200 shadow-xs cursor-pointer"
+                }`}
+                aria-label="Hapus seluruh isian dalam kelompok ini"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus</span>
+              </button>
+            </span>
+          </Tooltip>
+        </div>
       </div>
 
       {!isExpanded && uniqueGroups.length > 0 && (
@@ -1313,31 +1377,7 @@ const GroupDataTable = ({
                         <RowClearAction
                           status={status}
                           disabled={isRowEmpty}
-                          onClear={() => {
-                            setValue(
-                              `rows.${rowKey}`,
-                              {
-                                enable: false,
-                                status: null,
-                                errormessage: null,
-                                targetUuid: target.UUID,
-                                targetId: target.ID,
-                                targetType: gd.Type,
-                                targetJenjang: gd.Jenjang,
-                                targetNama: target.Nama,
-                                klasifikasi: null,
-                                satuan: "",
-                                target: "",
-                                target_min: "",
-                                target_max: "",
-                                pembagian_tugas: null,
-                              },
-                              { shouldValidate: true, shouldDirty: true }
-                            );
-                            if (typeof clearErrors === "function") {
-                              clearErrors(`rows.${rowKey}`);
-                            }
-                          }}
+                          onClear={() => clearTargetRow(target)}
                         />
                         {status && (
                           <RowStatusAction

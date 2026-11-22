@@ -193,7 +193,7 @@ export default function MataProgramV2Page() {
         <PageHeader
           icon={Layers}
           title="Mata Program"
-          subtitle="Kelola master mata program kerja dan hubungkan dengan Template Renstra"
+          subtitle="Kelola master mata program kerja dan hubungkan dengan Template IKU"
         />
 
         {showDeleted && (
@@ -267,7 +267,7 @@ export default function MataProgramV2Page() {
               { key: "MataProgram", label: "Nama Program Kerja", searchable: true, width: "w-64" },
               {
                 key: "TemplateRenstraSasaran",
-                label: "Template Renstra Sasaran",
+                label: "Template IKU Sasaran",
                 searchable: true,
                 renderKey: (row, ctx) => {
                   const colFilterVal = String(ctx?.filterValue || "").toLowerCase().trim();
@@ -348,7 +348,7 @@ export default function MataProgramV2Page() {
 
                   return (
                     <span className="text-xs text-gray-400 italic">
-                      Belum ada template renstra sasaran
+                      Belum ada Template IKU sasaran
                     </span>
                   );
                 },

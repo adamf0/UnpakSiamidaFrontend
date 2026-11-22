@@ -661,11 +661,11 @@ const PusatKtsPage = () => {
             <span>
               {activeTab === "auditor1" ? (
                 <>
-                  Menampilkan temuan <b>Template Renstra × KTS</b> (Tugas: <b>Auditor 1</b>) pada unit yang sedang diakses.
+                  Menampilkan temuan <b>Template IKU × KTS</b> (Tugas: <b>Auditor 1</b>) pada unit yang sedang diakses.
                 </>
               ) : (
                 <>
-                  Menampilkan temuan <b>(Template Renstra × KTS)</b> + <b>(Template Dokumen Tambahan × KTS)</b> (Tugas: <b>Auditor 2</b>) pada unit yang sedang diakses.
+                  Menampilkan temuan <b>(Template IKU × KTS)</b> + <b>(Template IKT × KTS)</b> (Tugas: <b>Auditor 2</b>) pada unit yang sedang diakses.
                 </>
               )}
             </span>
