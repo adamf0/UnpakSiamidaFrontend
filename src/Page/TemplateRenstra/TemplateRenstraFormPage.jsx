@@ -4,7 +4,7 @@ import { useForm, useWatch } from "react-hook-form";
 import SearchSelect from "@/Components/SearchSelect";
 import TextInput from "@/Components/TextInput";
 import RadioButton from "@/Components/RadioButton";
-import { Sparkles, ArrowLeft, LayoutTemplate } from "lucide-react";
+import { Sparkles, ArrowLeft, LayoutTemplate, ChevronDown } from "lucide-react";
 import {
   delay,
   formatFetchError,
@@ -148,8 +148,9 @@ const TemplateRenstraFormPage = () => {
 
   const setErr = (key, val) => setError((s) => ({ ...s, [key]: val }));
 
-  const markRowActive = (rowKey, target, gd) => {
-    const row = getValues(`rows.${rowKey}`) || {};
+  const markRowActive = (rowKey, target, gd, patch = null) => {
+    const prev = getValues(`rows.${rowKey}`) || {};
+    const row = patch ? { ...prev, ...patch } : prev;
     const hasValues = Boolean(
       row.klasifikasi ||
       (row.satuan !== undefined && row.satuan !== null && String(row.satuan).trim() !== "") ||
@@ -176,13 +177,15 @@ const TemplateRenstraFormPage = () => {
 
   const applyToGroup = (field, value) => {
     if (!activeGroupFill) return;
-    activeGroupFill.Targets.forEach((t) => {
-      const rowKey = buildRowLabel(activeGroupFill, t);
-      setValue(`rows.${rowKey}.${field}`, value, {
-        shouldDirty: true,
-        shouldValidate: true,
+    const groups = Array.isArray(activeGroupFill)
+      ? activeGroupFill
+      : [activeGroupFill];
+    groups.forEach((group) => {
+      group.Targets.forEach((t) => {
+        const rowKey = buildRowLabel(group, t);
+        markRowActive(rowKey, t, group, { [field]: value });
+        clearErrors(`rows.${rowKey}.${field}`);
       });
-      markRowActive(rowKey, t, activeGroupFill);
     });
   };
 
@@ -709,7 +712,7 @@ const TemplateRenstraFormPage = () => {
         )}
       />
 
-      <div className="p-4 sm:p-6 bg-slate-50 min-h-screen w-full pb-16">
+      <div className="p-4 sm:p-6 bg-slate-50 w-full pb-16">
         <div className="max-w-6xl mx-auto space-y-5">
           <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-xs flex items-center justify-between">
             <div className="flex items-center gap-3.5">
@@ -785,21 +788,45 @@ const TemplateRenstraFormPage = () => {
             {loading.fakultas || loading.template ? (
               <ShimmerTable />
             ) : (
-              groupDatas.map((gd) => (
-                <GroupDataTable
-                  key={gd.Type + gd.Jenjang}
-                  gd={gd}
-                  watch={watch}
-                  register={register}
-                  setValue={setValue}
-                  clearErrors={clearErrors}
-                  markRowActive={markRowActive}
-                  errors={errors}
-                  openModalFill={openModalFill}
-                  addToast={addToast}
-                  openModal={openModal}
-                />
-              ))
+              <>
+                {groupDatas.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 mt-4 mb-2 px-1">
+                    <p className="text-xs font-medium text-gray-500">
+                      Kelompok Target ({groupDatas.length} kelompok)
+                    </p>
+                    <Tooltip content="Isi otomatis seluruh target pada semua kelompok">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (watchedIndikator) openModalFill(groupDatas);
+                          else addToast("error", "Pilih dulu indikator");
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 active:bg-purple-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                        aria-label="Isi otomatis seluruh target pada semua kelompok"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Isi Otomatis Semua Kelompok</span>
+                      </button>
+                    </Tooltip>
+                  </div>
+                )}
+                {groupDatas.map((gd) => (
+                  <GroupDataTable
+                    key={gd.Type + gd.Jenjang}
+                    gd={gd}
+                    control={control}
+                    watch={watch}
+                    register={register}
+                    setValue={setValue}
+                    clearErrors={clearErrors}
+                    markRowActive={markRowActive}
+                    errors={errors}
+                    openModalFill={openModalFill}
+                    addToast={addToast}
+                    openModal={openModal}
+                  />
+                ))}
+              </>
             )}
 
             <SubmitButtonWithLoading
@@ -836,8 +863,75 @@ const groupDataAdapter = (rows = []) => {
   return Object.values(map);
 };
 
+const summarizeGroupRows = (gd, allRows, tipeTarget) => {
+  const targets = gd?.Targets || [];
+  let filledCount = 0;
+  const groupMap = new Map();
+
+  for (const target of targets) {
+    const rowKey = buildRowLabel(gd, target);
+    const row = allRows?.[rowKey] ?? get(allRows, rowKey);
+    if (!row || !row.enable) continue;
+
+    const klasifikasi = row.klasifikasi ? String(row.klasifikasi).trim() : "";
+    const satuan =
+      row.satuan !== undefined && row.satuan !== null
+        ? String(row.satuan).trim()
+        : "";
+    const tugas = row.pembagian_tugas ? String(row.pembagian_tugas).trim() : "";
+    const targetMin =
+      row.target_min !== undefined && row.target_min !== null
+        ? String(row.target_min).trim()
+        : "";
+    const targetMax =
+      row.target_max !== undefined && row.target_max !== null
+        ? String(row.target_max).trim()
+        : "";
+    const targetVal =
+      row.target !== undefined && row.target !== null
+        ? String(row.target).trim()
+        : "";
+
+    const hasTarget =
+      tipeTarget === "range"
+        ? targetMin !== "" || targetMax !== ""
+        : targetVal !== "";
+
+    if (!klasifikasi && !satuan && !tugas && !hasTarget) continue;
+
+    filledCount += 1;
+    const key = JSON.stringify(
+      tipeTarget === "range"
+        ? [klasifikasi, satuan, targetMin, targetMax, tugas]
+        : [klasifikasi, satuan, targetVal, tugas]
+    );
+
+    const existing = groupMap.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      groupMap.set(key, {
+        key,
+        klasifikasi,
+        satuan,
+        target: targetVal,
+        targetMin,
+        targetMax,
+        tugas,
+        count: 1,
+      });
+    }
+  }
+
+  return {
+    filledCount,
+    uniqueGroups: Array.from(groupMap.values()),
+  };
+};
+
 const GroupDataTable = ({
   gd,
+  control,
   watch,
   register,
   setValue,
@@ -848,21 +942,66 @@ const GroupDataTable = ({
   addToast,
   openModal,
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const indikator = watch("indikator_renstra");
   const tipeTarget = indikator?.TipeTarget;
+
+  const allRows = useWatch({
+    control,
+    name: "rows",
+  }) || {};
+
+  const totalTargets = gd.Targets?.length || 0;
+  const { filledCount, uniqueGroups } = summarizeGroupRows(
+    gd,
+    allRows,
+    tipeTarget
+  );
+
+  useEffect(() => {
+    if (!errors?.rows || !gd?.Targets) return;
+    const hasError = gd.Targets.some((target) => {
+      const rowKey = buildRowLabel(gd, target);
+      return Boolean(errors.rows[rowKey]);
+    });
+    if (hasError) {
+      setIsExpanded(true);
+    }
+  }, [errors, gd]);
 
   return (
     <div
       key={gd.Type + gd.Jenjang}
       className="p-6 border rounded-lg w-full mt-2"
     >
-      <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
+      <div
+        className={`flex justify-between items-center transition-all ${
+          isExpanded ? "mb-4 pb-3 border-b border-gray-100" : ""
+        }`}
+      >
+        <div
+          className="flex items-center gap-2 cursor-pointer select-none group/title"
+          onClick={() => setIsExpanded((prev) => !prev)}
+        >
+          <span className="p-1 -ml-1 text-gray-400 group-hover/title:text-gray-700 rounded-lg group-hover/title:bg-gray-100 transition-colors">
+            <ChevronDown
+              className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                isExpanded ? "rotate-0" : "-rotate-90"
+              }`}
+            />
+          </span>
           <span className="w-2 h-2 rounded-full bg-purple-600"></span>
-          <h2 className="text-sm font-semibold text-gray-800 tracking-wide">
-            {gd.Jenjang
-              ? `${gd.Type.toUpperCase()} - ${gd.Jenjang.toUpperCase()}`
-              : gd.Type.toUpperCase()}
+          <h2 className="text-sm font-semibold text-gray-800 tracking-wide flex items-center gap-2">
+            <span>
+              {gd.Jenjang
+                ? `${gd.Type.toUpperCase()} - ${gd.Jenjang.toUpperCase()}`
+                : gd.Type.toUpperCase()}
+            </span>
+            {filledCount > 0 && (
+              <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                {filledCount} / {totalTargets} terisi
+              </span>
+            )}
           </h2>
         </div>
         <Tooltip content="Isi otomatis seluruh baris dalam kelompok ini">
@@ -881,7 +1020,57 @@ const GroupDataTable = ({
         </Tooltip>
       </div>
 
-      <div className="w-full overflow-x-auto">
+      {!isExpanded && uniqueGroups.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
+          {uniqueGroups.map((item) => (
+            <div
+              key={item.key}
+              className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 bg-gray-50/80 border border-gray-200/80 rounded-lg text-xs text-gray-700"
+            >
+              <span className="inline-flex items-center gap-1">
+                <span className="text-gray-600">Klasifikasi:</span>
+                <span className="font-semibold text-gray-800 capitalize">
+                  {item.klasifikasi || "-"}
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="text-gray-600">Satuan:</span>
+                <span className="font-semibold text-gray-800 break-words">
+                  {item.satuan || "-"}
+                </span>
+              </span>
+              {tipeTarget === "range" ? (
+                <span className="inline-flex items-center gap-1">
+                  <span className="text-gray-600">Target Min - Max:</span>
+                  <span className="font-semibold text-gray-800">
+                    {item.targetMin || "-"} - {item.targetMax || "-"}
+                  </span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <span className="text-gray-600">Target:</span>
+                  <span className="font-semibold text-gray-800 break-words">
+                    {item.target || "-"}
+                  </span>
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1">
+                <span className="text-gray-600">Tugas:</span>
+                <span className="font-semibold text-gray-800 capitalize">
+                  {item.tugas || "-"}
+                </span>
+              </span>
+              {uniqueGroups.length > 1 && (
+                <span className="ml-auto px-2 py-0.5 text-[11px] font-medium rounded-full bg-gray-200/70 text-gray-700">
+                  {item.count} target
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className={isExpanded ? "w-full overflow-x-auto" : "hidden"}>
         <table className="w-full table-auto">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>

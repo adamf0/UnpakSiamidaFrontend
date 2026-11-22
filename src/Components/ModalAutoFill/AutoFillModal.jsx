@@ -4,6 +4,7 @@ import { Sparkles, X } from "lucide-react";
 
 const AutoFillModalFill = ({ modalFill, closeModalFill, watch, applyToGroup }) => {
   if (!modalFill.openFill) return null;
+  const isAllGroups = Array.isArray(modalFill.activeGroupFill);
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -16,7 +17,7 @@ const AutoFillModalFill = ({ modalFill, closeModalFill, watch, applyToGroup }) =
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-900">
-                Isi Otomatis Kelompok
+                {isAllGroups ? "Isi Otomatis Semua Kelompok" : "Isi Otomatis Kelompok"}
               </h3>
               <p className="text-xs text-gray-500 capitalize">
                 {modalFill.activeKeyFill?.replaceAll("_", " ")}
@@ -34,7 +35,9 @@ const AutoFillModalFill = ({ modalFill, closeModalFill, watch, applyToGroup }) =
         {/* Content */}
         <div className="p-5 space-y-4">
           <div className="p-2.5 bg-purple-50/70 border border-purple-100 rounded-lg text-xs text-purple-800">
-            Nilai yang Anda masukkan akan langsung diterapkan ke seluruh target di kelompok ini.
+            {isAllGroups
+              ? "Nilai yang Anda masukkan akan langsung diterapkan ke seluruh target di semua kelompok."
+              : "Nilai yang Anda masukkan akan langsung diterapkan ke seluruh target di kelompok ini."}
           </div>
 
           <TextInput

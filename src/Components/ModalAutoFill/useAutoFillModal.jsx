@@ -7,11 +7,16 @@ export const useAutoFillModalFill = () => {
     activeGroupFill: null,
   });
 
-  const openModalFill = (gd) => {
+  const openModalFill = (target) => {
+    const isAll = Array.isArray(target);
     setModalFill({
       openFill: true,
-      activeKeyFill: `${gd.Type.toUpperCase()} - ${gd.Jenjang.toUpperCase()}`,
-      activeGroupFill: gd,
+      activeKeyFill: isAll
+        ? `Semua Kelompok (${target.length} kelompok)`
+        : target.Jenjang
+          ? `${target.Type.toUpperCase()} - ${target.Jenjang.toUpperCase()}`
+          : target.Type.toUpperCase(),
+      activeGroupFill: target,
     });
   };
 
