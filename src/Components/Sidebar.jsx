@@ -21,6 +21,7 @@ import {
   FileSearch,
   FileBarChart,
   ChevronDown,
+  Building2,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useContent } from "@/Providers/ContentProvider";
@@ -125,6 +126,11 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
               name: "Master Tahun",
               path: "/master_tahun",
               icon: <Calendar size={18} strokeWidth={1.5} />,
+            },
+            {
+              name: "Manajemen Target",
+              path: "/manajemen_target",
+              icon: <Building2 size={18} strokeWidth={1.5} />,
             },
             {
               name: "Standar",

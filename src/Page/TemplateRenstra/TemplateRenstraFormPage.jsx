@@ -189,6 +189,11 @@ const TemplateRenstraFormPage = () => {
     });
   };
 
+  const clearAllGroups = () => {
+    setValue("rows", {}, { shouldValidate: true, shouldDirty: true });
+    clearErrors("rows");
+  };
+
   const fetchIndikatorRenstraOptions = async (tahun) => {
     const token = getValidToken();
     if (isEmpty(token)) return;
@@ -794,20 +799,28 @@ const TemplateRenstraFormPage = () => {
                     <p className="text-xs font-medium text-gray-500">
                       Kelompok Target ({groupDatas.length} kelompok)
                     </p>
-                    <Tooltip content="Isi otomatis seluruh target pada semua kelompok">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (watchedIndikator) openModalFill(groupDatas);
-                          else addToast("error", "Pilih dulu indikator");
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 active:bg-purple-800 rounded-lg transition-colors shadow-xs cursor-pointer"
-                        aria-label="Isi otomatis seluruh target pada semua kelompok"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Isi Otomatis Semua Kelompok</span>
-                      </button>
-                    </Tooltip>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Tooltip content="Isi otomatis seluruh target pada semua kelompok">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (watchedIndikator) openModalFill(groupDatas);
+                            else addToast("error", "Pilih dulu indikator");
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 active:bg-purple-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                          aria-label="Isi otomatis seluruh target pada semua kelompok"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Isi Otomatis Semua Kelompok</span>
+                        </button>
+                      </Tooltip>
+                      <ClearAllGroupsButton
+                        control={control}
+                        groupDatas={groupDatas}
+                        tipeTarget={watchedIndikator?.TipeTarget}
+                        onClearAll={clearAllGroups}
+                      />
+                    </div>
                   </div>
                 )}
                 {groupDatas.map((gd) => (
@@ -1397,6 +1410,53 @@ const GroupDataTable = ({
         </table>
       </div>
     </div>
+  );
+};
+
+const ClearAllGroupsButton = ({
+  control,
+  groupDatas,
+  tipeTarget,
+  onClearAll,
+}) => {
+  const allRows = useWatch({ control, name: "rows" }) || {};
+  const hasFilled = groupDatas.some(
+    (gd) => summarizeGroupRows(gd, allRows, tipeTarget).filledCount > 0
+  );
+  const isAnyLoading = groupDatas.some((gd) =>
+    (gd?.Targets || []).some((target) => {
+      const rowKey = buildRowLabel(gd, target);
+      const row = allRows?.[rowKey] ?? get(allRows, rowKey);
+      return row?.status === "loading";
+    })
+  );
+  const disabled = !hasFilled || isAnyLoading;
+
+  return (
+    <Tooltip
+      content={
+        !hasFilled
+          ? "Tidak ada data untuk dihapus"
+          : "Hapus seluruh isian pada semua kelompok"
+      }
+    >
+      <span className={`inline-flex ${disabled ? "cursor-not-allowed" : ""}`}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={disabled ? undefined : onClearAll}
+          className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border transition-colors ${
+            disabled
+              ? "bg-gray-50 text-gray-400 border-gray-200/80 cursor-not-allowed pointer-events-none"
+              : "text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border-rose-200 shadow-xs cursor-pointer"
+          }`}
+          aria-label="Hapus seluruh isian pada semua kelompok"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>Hapus Semua Kelompok</span>
+        </button>
+      </span>
+    </Tooltip>
   );
 };
 

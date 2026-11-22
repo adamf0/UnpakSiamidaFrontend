@@ -44,6 +44,7 @@ import ProkerV3DokumenPage from "./Page/ProkerV3/ProkerV3DokumenPage";
 import ProkerV3TimelinePage from "./Page/ProkerV3/ProkerV3TimelinePage";
 import JadwalProkerV3Page from "./Page/ProkerV3/JadwalProkerV3Page";
 import SettingsPage from "./Page/Settings/SettingsPage";
+import ManajemenTargetPage from "./Page/ManajemenTarget/ManajemenTargetPage";
 export default function App() {
   return (
     <AuthProvider>
@@ -72,6 +73,7 @@ export default function App() {
                       <Route path="/account_user/penugasan" element={<UserAssignmentPage />} />
                       <Route path="/master_tahun" element={<MasterTahunPage />} />
                       <Route path="/tahun_proker" element={<MasterTahunPage />} />
+                      <Route path="/manajemen_target" element={<ManajemenTargetPage />} />
                       <Route path="/mata_program" element={<MataProgramPage />} />
                       <Route path="/mata_programv3" element={<MataProgramV2Page />} />
                       <Route path="/mata_programv3/new" element={<MataProgramV2FormPage />} />

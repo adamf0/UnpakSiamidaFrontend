@@ -42,7 +42,7 @@ const Navbar = ({ renderChangeLevelModal }) => {
   useEffect(() => {
     let cancel = false;
     apiClient
-      .get("/fakultasunits?mode=all")
+      .get("/fakultasunits?mode=all&include_hidden=true")
       .then((res) => {
         if (!cancel && Array.isArray(res.data)) {
           setUnitOptions(res.data);
