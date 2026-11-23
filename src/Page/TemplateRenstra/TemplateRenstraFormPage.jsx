@@ -60,6 +60,53 @@ class FormErrorBoundary extends React.Component {
 const buildRowLabel = (gd, target) =>
   `${(gd?.Type || "").toUpperCase()} - ${(gd?.Jenjang || "").toUpperCase()} - ${(target?.Nama || "").toUpperCase()}`;
 
+const matchTemplateItemToTarget = (item, groupDatas) => {
+  for (const gd of groupDatas) {
+    const t = gd.Targets.find(
+      (target) =>
+        (item.FakultasUnitID && Number(target.ID) === Number(item.FakultasUnitID)) ||
+        (item.FakultasUnitUUID && target.UUID === item.FakultasUnitUUID) ||
+        (item.FakultasUnit &&
+          target.Nama?.trim().toLowerCase() === item.FakultasUnit?.trim().toLowerCase())
+    );
+    if (t) return { foundGd: gd, foundTarget: t };
+  }
+
+  const kat = (item.Kategori || "").trim().toLowerCase();
+  const [katType = "", katJenjang = ""] = kat.split("#");
+  const foundGd = groupDatas.find((g) => {
+    const gType = (g.Type || "").toLowerCase();
+    const gJenjang = (g.Jenjang || "").toLowerCase();
+    if (gType !== katType) return false;
+    if (katType === "unit" || katType === "fakultas") return true;
+    return gJenjang === katJenjang;
+  });
+  if (foundGd) {
+    const foundTarget = foundGd.Targets.find(
+      (t) =>
+        (item.FakultasUnitID && Number(t.ID) === Number(item.FakultasUnitID)) ||
+        (item.FakultasUnit &&
+          t.Nama?.trim().toLowerCase() === item.FakultasUnit?.trim().toLowerCase())
+    );
+    if (foundTarget) return { foundGd, foundTarget };
+  }
+  return { foundGd: null, foundTarget: null };
+};
+
+const collectDeletePayloads = (initialTemplateMap, activeRowKeys) => {
+  const result = [];
+  Object.entries(initialTemplateMap || {}).forEach(([rowKey, uuids]) => {
+    if (!activeRowKeys.has(rowKey)) {
+      (uuids || []).forEach((tplUuid) => {
+        if (tplUuid) {
+          result.push({ key: rowKey, uuid: tplUuid });
+        }
+      });
+    }
+  });
+  return result;
+};
+
 const scrollToErrorField = (rowKey, fieldPath) => {
   let targetEl = null;
 
@@ -131,6 +178,7 @@ const TemplateRenstraFormPage = () => {
   const [indikatorOptions, setIndikatorOptions] = useState([]);
   const [groupDatas, setGroupDatas] = useState([]);
   const [fakultasUnits, setFakultasUnits] = useState([]);
+  const [initialTemplateMap, setInitialTemplateMap] = useState({});
   const prevIndikatorRef = useRef(null);
   const [loading, setLoading] = useState({
     indikator: false,
@@ -325,6 +373,34 @@ const TemplateRenstraFormPage = () => {
     }
   };
 
+  const syncInitialTemplateMap = async (indikatorUuid) => {
+    const token = getValidToken();
+    if (!token || !indikatorUuid) return;
+    try {
+      const data = await apiClient.get(
+        `/templaterenstras?mode=all&filters=indikatorrenstrauuid:eq:${indikatorUuid}`
+      );
+      const rawList = Array.isArray(data) ? data : (data?.data || []);
+      const list = tahun
+        ? rawList.filter((item) => !item.Tahun || String(item.Tahun) === String(tahun))
+        : rawList;
+      const nextMap = {};
+      list.forEach((item) => {
+        const { foundGd, foundTarget } = matchTemplateItemToTarget(item, groupDatas);
+        if (!foundGd || !foundTarget) return;
+        const rowKey = buildRowLabel(foundGd, foundTarget);
+        const tplUuid = item.UUID || item.Uuid || item.uuid;
+        if (tplUuid) {
+          if (!nextMap[rowKey]) nextMap[rowKey] = [];
+          if (!nextMap[rowKey].includes(tplUuid)) nextMap[rowKey].push(tplUuid);
+        }
+      });
+      setInitialTemplateMap(nextMap);
+    } catch (err) {
+      console.error("Sync initial template map gagal:", err);
+    }
+  };
+
   const fetchTemplateRenstraEdit = async (indikatorUuid) => {
     const token = getValidToken();
     if (!token) return;
@@ -336,7 +412,10 @@ const TemplateRenstraFormPage = () => {
       const data = await apiClient.get(
         `/templaterenstras?mode=all&filters=indikatorrenstrauuid:eq:${indikatorUuid}`
       );
-      const list = Array.isArray(data) ? data : (data?.data || []);
+      const rawList = Array.isArray(data) ? data : (data?.data || []);
+      const list = tahun
+        ? rawList.filter((item) => !item.Tahun || String(item.Tahun) === String(tahun))
+        : rawList;
 
       if (list.length > 0 && !watch("indikator_renstra")) {
         setValue(
@@ -354,42 +433,10 @@ const TemplateRenstraFormPage = () => {
         );
       }
 
+      const loadedMap = {};
+
       list.forEach((item) => {
-        let foundGd = null;
-        let foundTarget = null;
-
-        for (const gd of groupDatas) {
-          const t = gd.Targets.find(
-            (target) =>
-              (item.FakultasUnitID && Number(target.ID) === Number(item.FakultasUnitID)) ||
-              (item.FakultasUnitUUID && target.UUID === item.FakultasUnitUUID) ||
-              (item.FakultasUnit && target.Nama?.trim().toLowerCase() === item.FakultasUnit?.trim().toLowerCase())
-          );
-          if (t) {
-            foundGd = gd;
-            foundTarget = t;
-            break;
-          }
-        }
-
-        if (!foundGd || !foundTarget) {
-          const kat = (item.Kategori || "").trim().toLowerCase();
-          const [katType = "", katJenjang = ""] = kat.split("#");
-          foundGd = groupDatas.find((g) => {
-            const gType = (g.Type || "").toLowerCase();
-            const gJenjang = (g.Jenjang || "").toLowerCase();
-            if (gType !== katType) return false;
-            if (katType === "unit" || katType === "fakultas") return true;
-            return gJenjang === katJenjang;
-          });
-          if (foundGd) {
-            foundTarget = foundGd.Targets.find(
-              (t) =>
-                (item.FakultasUnitID && Number(t.ID) === Number(item.FakultasUnitID)) ||
-                (item.FakultasUnit && t.Nama?.trim().toLowerCase() === item.FakultasUnit?.trim().toLowerCase())
-            );
-          }
-        }
+        const { foundGd, foundTarget } = matchTemplateItemToTarget(item, groupDatas);
 
         if (!foundGd || !foundTarget) {
           console.warn("Target not found for template item:", item);
@@ -397,6 +444,13 @@ const TemplateRenstraFormPage = () => {
         }
 
         const rowKey = buildRowLabel(foundGd, foundTarget);
+        const tplUuid = item.UUID || item.Uuid || item.uuid;
+        if (tplUuid) {
+          if (!loadedMap[rowKey]) loadedMap[rowKey] = [];
+          if (!loadedMap[rowKey].includes(tplUuid)) {
+            loadedMap[rowKey].push(tplUuid);
+          }
+        }
 
         setValue(
           `rows.${rowKey}`,
@@ -417,6 +471,8 @@ const TemplateRenstraFormPage = () => {
           { shouldDirty: false, shouldValidate: false }
         );
       });
+
+      setInitialTemplateMap(loadedMap);
     } catch (err) {
       console.error(err);
       setErr("template", err.message || "Gagal memuat template");
@@ -496,11 +552,32 @@ const TemplateRenstraFormPage = () => {
       return;
     }
 
-    const activeEntries = Object.entries(data.rows || {}).filter(
-      ([_, row]) => row?.enable
+    const activeEntries = [];
+    const seenKeys = new Set();
+    for (const gd of groupDatas) {
+      for (const target of gd.Targets || []) {
+        const rowKey = buildRowLabel(gd, target);
+        const row = data.rows?.[rowKey] ?? get(data.rows, rowKey);
+        if (row?.enable) {
+          activeEntries.push([rowKey, row]);
+          seenKeys.add(rowKey);
+        }
+      }
+    }
+    Object.entries(data.rows || {}).forEach(([key, row]) => {
+      if (!seenKeys.has(key) && row?.enable) {
+        activeEntries.push([key, row]);
+        seenKeys.add(key);
+      }
+    });
+
+    const activeRowKeys = new Set(activeEntries.map(([key]) => key));
+    const deletePayloads = collectDeletePayloads(
+      initialTemplateMap,
+      activeRowKeys
     );
 
-    if (activeEntries.length === 0) {
+    if (activeEntries.length === 0 && deletePayloads.length === 0) {
       addToast(
         "warning",
         "Tidak ada baris data yang diisi atau diaktifkan untuk disimpan"
@@ -652,13 +729,14 @@ const TemplateRenstraFormPage = () => {
       return;
     }
 
-    console.log("SUBMIT:", data, payloads);
+    console.log("SUBMIT:", data, payloads, deletePayloads);
 
     let successCount = 0;
+    const deletedUuids = new Set();
     const errorsList = [];
 
-    await Promise.all(
-      payloads.map(async ({ key, fd }) => {
+    await Promise.all([
+      ...payloads.map(async ({ key, fd }) => {
         try {
           setValue(`rows.${key}.status`, "loading");
 
@@ -685,13 +763,52 @@ const TemplateRenstraFormPage = () => {
           setValue(`rows.${key}.errormessage`, err?.message || "Gagal");
           errorsList.push({ key, msg: "Server tidak dapat dihubungi" });
         }
-      })
-    );
+      }),
+      ...deletePayloads.map(async ({ key, uuid: tplUuid }) => {
+        try {
+          setValue(`rows.${key}.status`, "loading");
+          await apiClient.delete(`/templaterenstra/${tplUuid}`);
+          deletedUuids.add(tplUuid);
+          setValue(`rows.${key}.status`, null);
+          setValue(`rows.${key}.errormessage`, null);
+        } catch (err) {
+          setValue(`rows.${key}.status`, "error");
+          const msg = isValidationError(err?.code)
+            ? normalizeValidationMessage(err?.message)
+            : err?.message || "Gagal menghapus pemetaan target";
+          setValue(`rows.${key}.errormessage`, msg);
+          errorsList.push({ key, msg });
+        }
+      }),
+    ]);
+
+    if (deletedUuids.size > 0) {
+      setInitialTemplateMap((prev) => {
+        const next = {};
+        Object.entries(prev).forEach(([k, uuids]) => {
+          const remaining = (uuids || []).filter((u) => !deletedUuids.has(u));
+          if (remaining.length > 0) next[k] = remaining;
+        });
+        return next;
+      });
+    }
 
     if (errorsList.length === 0) {
-      addToast("success", "Data berhasil disimpan");
+      if (deletedUuids.size > 0 && successCount > 0) {
+        addToast(
+          "success",
+          `Data berhasil diperbarui (${successCount} disimpan, ${deletedUuids.size} dihapus)`
+        );
+      } else if (deletedUuids.size > 0) {
+        addToast("success", `${deletedUuids.size} pemetaan target berhasil dihapus`);
+      } else {
+        addToast("success", "Data berhasil disimpan");
+      }
+
       if (mode === "add") {
         navigate(`/template_renstra`);
+      } else if (uuidIndikator) {
+        await syncInitialTemplateMap(uuidIndikator);
       }
     } else {
       const firstErr = errorsList[0];
