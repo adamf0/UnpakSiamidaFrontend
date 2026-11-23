@@ -171,7 +171,7 @@ export default function AccountUserPage() {
     setEmailDialogOpen(true);
   };
 
-  const handleConfirmSendEmail = async () => {
+  const handleConfirmSendEmail = async (attachments = []) => {
     const validUsers = emailTargetUsers.filter((u) => Boolean(u?.Email || u?.email));
     const uuids = validUsers
       .map((u) => u?.UUID || u?.uuid)
@@ -187,6 +187,9 @@ export default function AccountUserPage() {
     try {
       const formData = new FormData();
       formData.append("user_uuids", JSON.stringify(uuids));
+      (attachments || []).forEach((file) => {
+        formData.append("attachments", file);
+      });
       const res = await apiClient.post("/users/send-email", formData);
       const msg = res?.data?.message || res?.message || "Pengiriman email akun telah dimasukkan ke antrean outbox.";
       addToast("success", msg);
@@ -196,6 +199,7 @@ export default function AccountUserPage() {
       console.error("Send account email error:", err);
       const errMsg =
         err?.response?.data?.message ||
+        err?.response?.data?.Message ||
         err?.message ||
         "Gagal memproses pengiriman email";
       addToast("error", errMsg);

@@ -287,13 +287,28 @@ export default function MataProgramV2Page() {
                       groupedIndikators[key].targets.push(t);
                     });
 
+                    const formatTargetUnitWithJenjang = (t) => {
+                      const base = String(t?.FakultasUnit || "Unit").trim();
+                      let jenjang = String(t?.Jenjang || "").trim().toUpperCase();
+                      if (!jenjang) {
+                        const kat = String(t?.Kategori || "").trim().toLowerCase();
+                        if (kat.startsWith("prodi#")) {
+                          jenjang = kat.slice("prodi#".length).trim().toUpperCase();
+                        }
+                      }
+                      if (!jenjang || jenjang === "ALL") return base;
+                      const suffix = `(${jenjang})`;
+                      if (base.toUpperCase().endsWith(suffix)) return base;
+                      return `${base} ${suffix}`;
+                    };
+
                     let displayItems = Object.values(groupedIndikators);
                     if (colFilterVal) {
                       displayItems = displayItems.filter((item) => {
                         const matchName = (item.name || "").toLowerCase().includes(colFilterVal);
                         const matchStandar = (item.standar || "").toLowerCase().includes(colFilterVal);
                         const matchUnit = item.targets.some((tg) =>
-                          (tg.FakultasUnit || "").toLowerCase().includes(colFilterVal)
+                          formatTargetUnitWithJenjang(tg).toLowerCase().includes(colFilterVal)
                         );
                         return matchName || matchStandar || matchUnit;
                       });
@@ -302,7 +317,7 @@ export default function MataProgramV2Page() {
                         const matchName = (item.name || "").toLowerCase().includes(globalSearchVal);
                         const matchStandar = (item.standar || "").toLowerCase().includes(globalSearchVal);
                         const matchUnit = item.targets.some((tg) =>
-                          (tg.FakultasUnit || "").toLowerCase().includes(globalSearchVal)
+                          formatTargetUnitWithJenjang(tg).toLowerCase().includes(globalSearchVal)
                         );
                         return matchName || matchStandar || matchUnit;
                       });
@@ -325,7 +340,7 @@ export default function MataProgramV2Page() {
                           <div
                             key={idx}
                             className="p-2.5 rounded-xl border bg-purple-50/50 border-purple-200/80 shadow-2xs space-y-1 transition hover:bg-purple-50"
-                            title={`${item.standar ? `[${item.standar}]\n` : ""}${item.name}\n\nSasaran Unit (${item.targets.length}):\n${item.targets.map((t) => `• ${t.FakultasUnit || "Unit"} (Target: ${t.Target || "-"} ${t.Satuan || ""})`).join("\n")}`}
+                            title={`${item.standar ? `[${item.standar}]\n` : ""}${item.name}\n\nSasaran Unit (${item.targets.length}):\n${item.targets.map((t) => `• ${formatTargetUnitWithJenjang(t)} (Target: ${t.Target || "-"} ${t.Satuan || ""})`).join("\n")}`}
                           >
                             {item.standar && (
                               <div className="text-[10px] font-semibold text-purple-700 leading-tight">

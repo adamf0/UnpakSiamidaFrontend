@@ -1,6 +1,6 @@
 import { Dialog, Transition } from "@headlessui/react";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import TextInput from "@/Components/TextInput";
 import { useToast } from "@/Providers/ToastProvider";
 import SearchSelect from "@/Components/SearchSelect";
@@ -19,6 +19,15 @@ const TIPE_TARGET_OPTIONS = [
   { id: "kategori", value: "kategori", label: "Kategori" },
   { id: "text", value: "text", label: "Text" },
 ];
+
+const DEFAULT_NUMERIK_OPERATOR = ">=";
+
+const getNormalizedTipe = (tipeVal) =>
+  String(
+    tipeVal?.value ?? tipeVal?.id ?? (typeof tipeVal === "string" ? tipeVal : "")
+  )
+    .toLowerCase()
+    .trim();
 
 export default function IndikatorRenstraFormModal({
   open,
@@ -39,6 +48,7 @@ export default function IndikatorRenstraFormModal({
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
     reset,
@@ -51,7 +61,7 @@ export default function IndikatorRenstraFormModal({
       parent: null,
       tahun: "",
       tipe_target: null,
-      operator: null,
+      operator: "",
     },
   });
 
@@ -78,13 +88,21 @@ export default function IndikatorRenstraFormModal({
               String(data.TipeTarget || "").toLowerCase().trim()
         ) || (data.TipeTarget ? { id: data.TipeTarget, label: data.TipeTarget } : null);
 
+      const normalizedTipe = getNormalizedTipe(targetSelected);
+      const initialOperator =
+        normalizedTipe === "numerik"
+          ? String(data.Operator || "").trim() || DEFAULT_NUMERIK_OPERATOR
+          : normalizedTipe === "range"
+          ? String(data.Operator || "").trim()
+          : "";
+
       reset({
         standar_renstra: standarSelected || null,
         indikator: data.Indikator || "",
         parent: null,
         tahun: data.Tahun ? String(data.Tahun) : "",
         tipe_target: targetSelected,
-        operator: data.Operator || null,
+        operator: initialOperator,
       });
 
       if (data.Tahun) {
@@ -97,7 +115,7 @@ export default function IndikatorRenstraFormModal({
         parent: null,
         tahun: "",
         tipe_target: null,
-        operator: null,
+        operator: "",
       });
       setIndikatorOptions([]);
     }
@@ -347,16 +365,20 @@ export default function IndikatorRenstraFormModal({
         form.tipe_target?.value ??
         form.tipe_target?.id ??
         (typeof form.tipe_target === "string" ? form.tipe_target : "");
+      const normalizedTipe = getNormalizedTipe(rawTipeTarget);
+      const operatorValue =
+        normalizedTipe === "numerik"
+          ? String(form?.operator ?? "").trim() || DEFAULT_NUMERIK_OPERATOR
+          : normalizedTipe === "range"
+          ? String(form?.operator ?? "").trim()
+          : "";
 
       fd.append("standar_renstra", standarUuid);
       fd.append("indikator", form?.indikator ?? "");
       fd.append("parent", parentUuid);
       fd.append("tahun", form?.tahun ?? "");
       fd.append("tipe_target", rawTipeTarget);
-      fd.append(
-        "operator",
-        rawTipeTarget === "range" ? form?.operator ?? "" : ""
-      );
+      fd.append("operator", operatorValue);
 
       if (mode === "edit") {
         await apiClient.put(
@@ -486,8 +508,11 @@ export default function IndikatorRenstraFormModal({
                     setValue("tipe_target", item, {
                       shouldValidate: true,
                     });
-                    if (item?.value === "numerik" || item?.id === "numerik") {
-                      setValue("operator", ">=", { shouldValidate: true });
+                    const nextTipe = getNormalizedTipe(item);
+                    if (nextTipe === "numerik") {
+                      setValue("operator", DEFAULT_NUMERIK_OPERATOR, {
+                        shouldValidate: true,
+                      });
                     } else {
                       setValue("operator", "", { shouldValidate: true });
                     }
@@ -502,20 +527,27 @@ export default function IndikatorRenstraFormModal({
                 />
 
                 {(() => {
-                  const currentTipe =
-                    watch("tipe_target")?.value ??
-                    watch("tipe_target")?.id ??
-                    (typeof watch("tipe_target") === "string"
-                      ? watch("tipe_target")
-                      : "");
-                  if (currentTipe !== "range") return null;
+                  const currentTipe = getNormalizedTipe(watch("tipe_target"));
+                  if (currentTipe !== "numerik" && currentTipe !== "range") {
+                    return null;
+                  }
 
                   return (
-                    <TextInput
-                      label="Operator"
-                      placeholder=">=, <=, =, dll."
-                      error={errors.operator?.message}
-                      {...register("operator", { required: false })}
+                    <Controller
+                      name="operator"
+                      control={control}
+                      render={({ field }) => (
+                        <TextInput
+                          label="Operator"
+                          placeholder=">=, <=, =, dll."
+                          maxLength={5}
+                          error={errors.operator?.message}
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      )}
                     />
                   );
                 })()}
