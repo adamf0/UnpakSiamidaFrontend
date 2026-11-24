@@ -179,8 +179,7 @@ export default function AccountUserPage() {
 
     if (uuids.length === 0) {
       addToast("error", "Tidak ada akun dengan email valid yang dapat dikirim.");
-      setEmailDialogOpen(false);
-      return;
+      return null;
     }
 
     setSendingEmail(true);
@@ -191,10 +190,14 @@ export default function AccountUserPage() {
         formData.append("attachments", file);
       });
       const res = await apiClient.post("/users/send-email", formData);
-      const msg = res?.data?.message || res?.message || "Pengiriman email akun telah dimasukkan ke antrean outbox.";
+      const resData = res?.data || res || {};
+      const msg =
+        resData.message ||
+        resData.Message ||
+        "Pengiriman email akun telah dimasukkan ke antrean outbox.";
       addToast("success", msg);
       setSelectedRows([]);
-      setEmailDialogOpen(false);
+      return resData;
     } catch (err) {
       console.error("Send account email error:", err);
       const errMsg =
@@ -203,6 +206,7 @@ export default function AccountUserPage() {
         err?.message ||
         "Gagal memproses pengiriman email";
       addToast("error", errMsg);
+      throw err;
     } finally {
       setSendingEmail(false);
     }
@@ -283,6 +287,7 @@ export default function AccountUserPage() {
               }
               renderAddAction={
                 <div className="flex items-center gap-2">
+                  {/* MERGING DATA BUTTON */}
                   <Tooltip content="Merging Data Pengguna">
                     <button
                       type="button"
@@ -725,6 +730,9 @@ export default function AccountUserPage() {
         loading={sendingEmail}
         onConfirm={handleConfirmSendEmail}
         onClose={() => setEmailDialogOpen(false)}
+        onSuccess={() => {
+          tableRef.current?.reload?.({ resetPage: false });
+        }}
       />
     </>
   );

@@ -45,6 +45,7 @@ import ProkerV3TimelinePage from "./Page/ProkerV3/ProkerV3TimelinePage";
 import JadwalProkerV3Page from "./Page/ProkerV3/JadwalProkerV3Page";
 import SettingsPage from "./Page/Settings/SettingsPage";
 import ManajemenTargetPage from "./Page/ManajemenTarget/ManajemenTargetPage";
+import EmailHistoryPage from "./Page/EmailHistory/EmailHistoryPage";
 export default function App() {
   return (
     <AuthProvider>
@@ -71,6 +72,8 @@ export default function App() {
                       <Route path="/account_user/assignment" element={<UserAssignmentPage />} />
                       <Route path="/account_user/:userUuid/assignment" element={<UserAssignmentPage />} />
                       <Route path="/account_user/penugasan" element={<UserAssignmentPage />} />
+                      <Route path="/email_history" element={<EmailHistoryPage />} />
+                      <Route path="/riwayat_email" element={<EmailHistoryPage />} />
                       <Route path="/master_tahun" element={<MasterTahunPage />} />
                       <Route path="/tahun_proker" element={<MasterTahunPage />} />
                       <Route path="/manajemen_target" element={<ManajemenTargetPage />} />

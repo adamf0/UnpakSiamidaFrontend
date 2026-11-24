@@ -22,6 +22,7 @@ import {
   FileBarChart,
   ChevronDown,
   Building2,
+  Mail,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useContent } from "@/Providers/ContentProvider";
@@ -121,6 +122,11 @@ const Sidebar = ({ isOpen, toggleSidebar, closeSidebarOnMobile, isCollapsed }) =
               name: "Account User",
               path: "/users",
               icon: <Users size={18} strokeWidth={1.5} />,
+            },
+            {
+              name: "Riwayat Email",
+              path: "/email_history",
+              icon: <Mail size={18} strokeWidth={1.5} />,
             },
             {
               name: "Master Tahun",
