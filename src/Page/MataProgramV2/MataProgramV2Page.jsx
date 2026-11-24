@@ -220,6 +220,7 @@ export default function MataProgramV2Page() {
               {
                 key: "TemplateRenstraSasaran",
                 label: "Template IKU Sasaran",
+                minWidth: "240px",
                 searchable: true,
                 renderKey: (row, ctx) => {
                   const colFilterVal = String(ctx?.filterValue || "").toLowerCase().trim();
@@ -290,41 +291,80 @@ export default function MataProgramV2Page() {
 
                     if (displayItems.length === 0) {
                       return (
-                        <span className="text-xs text-gray-400 italic">
+                        <span className="text-xs text-gray-500 italic">
                           Tidak ada indikator yang sesuai pencarian
                         </span>
                       );
                     }
 
-                    return (
-                      <div className="flex flex-col gap-2 py-1 max-w-xl">
-                        {displayItems.map((item, idx) => (
-                          <div
-                            key={idx}
-                            className="p-2.5 rounded-xl border bg-purple-50/50 border-purple-200/80 shadow-2xs space-y-1 transition hover:bg-purple-50"
-                            title={`${item.standar ? `[${item.standar}]\n` : ""}${item.name}\n\nSasaran Unit (${item.targets.length}):\n${item.targets.map((t) => `• ${formatTargetUnitWithJenjang(t)} (Target: ${t.Target || "-"} ${t.Satuan || ""})`).join("\n")}`}
-                          >
-                            {item.standar && (
-                              <div className="text-[10px] font-semibold text-purple-700 leading-tight">
+                    const renderItemRow = (item, number, clamped) => (
+                      <div className="flex items-start gap-1.5">
+                        {number != null && (
+                          <span className="shrink-0 text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 mt-0.5">
+                            #{number}
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          {item.standar ? (
+                            <>
+                              <div className={`font-medium text-gray-900 ${clamped ? "line-clamp-1" : ""}`}>
                                 {item.standar}
                               </div>
-                            )}
-                            <div className="flex items-start justify-between gap-3">
-                              <span className="text-xs font-bold text-gray-900 leading-snug">
+                              <div className={`text-[11px] text-gray-600 mt-0.5 ${clamped ? "line-clamp-2" : ""}`}>
                                 {item.name}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-100 text-purple-900 border-purple-300 shrink-0 whitespace-nowrap">
-                                {item.targets.length} unit sasaran
-                              </span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className={`font-medium text-gray-900 ${clamped ? "line-clamp-2" : ""}`}>
+                              {item.name}
                             </div>
+                          )}
+                          <div className="text-[10px] font-medium text-gray-500 mt-0.5">
+                            {item.targets.length} unit sasaran
                           </div>
-                        ))}
+                        </div>
+                      </div>
+                    );
+
+                    if (displayItems.length === 1) {
+                      return (
+                        <div className="text-xs py-0.5 max-w-md">
+                          {renderItemRow(displayItems[0], null, false)}
+                        </div>
+                      );
+                    }
+
+                    const primaryItem = displayItems[0];
+                    const remainingItems = displayItems.slice(1);
+
+                    return (
+                      <div className="text-xs py-0.5 space-y-1 max-w-md">
+                        {renderItemRow(primaryItem, 1, true)}
+
+                        <details className="mt-1">
+                          <summary className="w-fit py-1 text-[11px] font-semibold text-purple-700 hover:text-purple-900 cursor-pointer select-none rounded focus-visible:outline-2 focus-visible:outline-purple-700 focus-visible:outline-offset-2 marker:text-purple-700">
+                            +{remainingItems.length} standar & indikator lainnya
+                          </summary>
+                          <ol
+                            start={2}
+                            className="mt-1.5 pt-1.5 border-t border-gray-200 space-y-2 max-h-60 overflow-y-auto pr-1 list-none"
+                          >
+                            {remainingItems.map((item, idx) => (
+                              <li
+                                key={item.name || idx}
+                                className={idx > 0 ? "pt-2 border-t border-gray-100" : ""}
+                              >
+                                {renderItemRow(item, idx + 2, false)}
+                              </li>
+                            ))}
+                          </ol>
+                        </details>
                       </div>
                     );
                   }
 
                   return (
-                    <span className="text-xs text-gray-400 italic">
+                    <span className="text-xs text-gray-500 italic">
                       Belum ada Template IKU sasaran
                     </span>
                   );
