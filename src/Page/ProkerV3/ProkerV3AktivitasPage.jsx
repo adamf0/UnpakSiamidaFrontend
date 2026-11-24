@@ -556,7 +556,11 @@ export default function ProkerV3AktivitasPage() {
   const fetchJadwalProkerStatus = useCallback(
     async (prokerData) => {
       const targetYear = prokerData?.Tahun || positionYear || "2027";
-      const targetUnitId = prokerData?.IdFakultasUnit ?? "";
+      const targetUnitId =
+        prokerData?.UuidFakultasUnit ||
+        prokerData?.uuid_fakultas_unit ||
+        prokerData?.IdFakultasUnit ||
+        "";
       const targetUnitName = prokerData?.NamaFakultasUnit ?? "";
       let params = `tahun=${encodeURIComponent(targetYear)}`;
       if (targetUnitId) {
