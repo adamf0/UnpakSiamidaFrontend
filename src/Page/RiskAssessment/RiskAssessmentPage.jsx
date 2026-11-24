@@ -255,20 +255,26 @@ const RiskAssessmentPage = () => {
       });
     }
 
-    return list.map((p) => {
+    const seen = new Set();
+    const deduped = [];
+    for (const p of list) {
+      const key = String(p.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
       const thn = p.tahun ? String(p.tahun) : "";
       const mpName = p.mata_program || "";
       const label = thn ? `[${thn}] ${mpName}` : mpName;
-      return {
-        id: String(p.id),
+      deduped.push({
+        id: key,
         rawId: p.id,
         UUID: p.uuid,
         nama: label,
         mata_program: mpName,
         tahun: thn,
         ...p,
-      };
-    });
+      });
+    }
+    return deduped;
   }, [programList, selectedTahun, selectedFakultas, fakultasOptions]);
 
   // Construct Dynamic RemoteTable Endpoint

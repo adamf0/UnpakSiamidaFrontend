@@ -1384,6 +1384,9 @@ export default function ProkerV3Page() {
     try {
       const fd = new FormData();
       fd.append("status", nextStatus);
+      if (row?.IdFakultasUnit) {
+        fd.append("id_fakultas_unit", String(row.IdFakultasUnit));
+      }
       await apiClient.put(`/proker_v3/${row.UUID}/status`, fd);
       addToast(
         "success",
@@ -1393,7 +1396,8 @@ export default function ProkerV3Page() {
     } catch (err) {
       addToast(
         "error",
-        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
           err?.message ||
           "Gagal memperbarui status",
       );
@@ -3566,93 +3570,118 @@ export default function ProkerV3Page() {
                 },
               ];
 
+        const renderIkuBadges = (ikus, extraClass = "") => {
+          if (!ikus || ikus.length === 0) return null;
+          return (
+            <div className={`flex flex-wrap items-center gap-1 ${extraClass}`}>
+              {ikus.map((it, iIdx) => (
+                <span
+                  key={iIdx}
+                  className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 text-[11px] font-semibold font-mono border border-purple-200 whitespace-nowrap"
+                  title={it.iku + (it.jenis ? ` (${it.jenis})` : "")}
+                >
+                  {it.iku}
+                </span>
+              ))}
+            </div>
+          );
+        };
+
         if (scopesList.length === 1) {
           const item = scopesList[0];
           return (
-            <div className="text-xs space-y-1.5 py-0.5">
-              <div>
-                <div
-                  className="font-medium text-gray-800 line-clamp-2"
-                  title={item.standar}
-                >
-                  {item.standar}
-                </div>
-                {item.indikator && (
-                  <div
-                    className="text-[11px] text-gray-500 line-clamp-2 italic mt-0.5"
-                    title={item.indikator}
-                  >
-                    {item.indikator}
-                  </div>
-                )}
+            <div className="text-xs space-y-1 py-0.5">
+              <div
+                className="font-medium text-gray-900 line-clamp-1"
+                title={item.standar}
+              >
+                {item.standar}
               </div>
-              {item.ikus.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                  {item.ikus.map((it, idx) => (
-                    <span
-                      key={idx}
-                      className="px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-xs font-bold font-mono border border-purple-200 transition-colors shadow-2xs whitespace-nowrap"
-                      title={it.iku + (it.jenis ? ` (${it.jenis})` : "")}
-                    >
-                      {it.iku}
-                    </span>
-                  ))}
+              {item.indikator && (
+                <div
+                  className="text-[11px] text-gray-600 line-clamp-2"
+                  title={item.indikator}
+                >
+                  {item.indikator}
                 </div>
-              ) : (
-                <span className="text-gray-400 text-xs italic">-</span>
               )}
+              {renderIkuBadges(item.ikus, "pt-0.5")}
             </div>
           );
         }
 
-        return (
-          <div className="text-xs space-y-2 py-0.5 divide-y divide-gray-100">
-            {scopesList.map((sc, idx) => (
-              <div
-                key={idx}
-                className={idx > 0 ? "pt-2 space-y-1.5" : "space-y-1.5"}
-              >
-                <div className="flex items-start gap-1.5">
-                  <span className="shrink-0 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-md bg-purple-100/70 text-purple-800 border border-purple-200 mt-0.5">
-                    #{idx + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className="font-medium text-gray-800 line-clamp-2"
-                      title={sc.standar}
-                    >
-                      {sc.standar}
-                    </div>
-                    {sc.indikator && (
-                      <div
-                        className="text-[11px] text-gray-500 line-clamp-2 italic mt-0.5"
-                        title={sc.indikator}
-                      >
-                        {sc.indikator}
-                      </div>
-                    )}
-                  </div>
-                </div>
+        const primaryScope = scopesList[0];
+        const remainingScopes = scopesList.slice(1);
+        const extraIkuNames = new Set();
+        remainingScopes.forEach((sc) => {
+          sc.ikus.forEach((it) => {
+            if (it.iku) extraIkuNames.add(it.iku);
+          });
+        });
 
-                {sc.ikus.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-1 pl-6">
-                    {sc.ikus.map((it, iIdx) => (
-                      <span
-                        key={iIdx}
-                        className="px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 text-xs font-bold font-mono border border-purple-200 transition-colors shadow-2xs whitespace-nowrap"
-                        title={it.iku + (it.jenis ? ` (${it.jenis})` : "")}
-                      >
-                        {it.iku}
-                      </span>
-                    ))}
+        return (
+          <div className="text-xs py-0.5 space-y-1">
+            <div className="flex items-start gap-1.5">
+              <span className="shrink-0 text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 mt-0.5">
+                #1
+              </span>
+              <div className="min-w-0 flex-1">
+                <div
+                  className="font-medium text-gray-900 line-clamp-1"
+                  title={primaryScope.standar}
+                >
+                  {primaryScope.standar}
+                </div>
+                {primaryScope.indikator && (
+                  <div
+                    className="text-[11px] text-gray-600 line-clamp-2 mt-0.5"
+                    title={primaryScope.indikator}
+                  >
+                    {primaryScope.indikator}
                   </div>
-                ) : (
-                  <span className="text-gray-400 text-[11px] italic pl-6 block">
-                    - Tidak ada IKU -
-                  </span>
                 )}
               </div>
-            ))}
+            </div>
+            {renderIkuBadges(primaryScope.ikus, "pl-6 pt-0.5")}
+
+            <details className="mt-1">
+              <summary className="w-fit py-1 text-[11px] font-semibold text-purple-700 hover:text-purple-900 cursor-pointer select-none rounded focus-visible:outline-2 focus-visible:outline-purple-700 focus-visible:outline-offset-2 marker:text-purple-700">
+                +{remainingScopes.length} standar & indikator lainnya
+                {extraIkuNames.size > 0 ? ` (${extraIkuNames.size} IKU)` : ""}
+              </summary>
+              <ol
+                start={2}
+                className="mt-1.5 pt-1.5 border-t border-gray-200 space-y-2 max-h-60 overflow-y-auto pr-1 list-none"
+              >
+                {remainingScopes.map((sc, idx) => (
+                  <li
+                    key={idx + 2}
+                    className={
+                      idx > 0
+                        ? "pt-2 border-t border-gray-100 space-y-1"
+                        : "space-y-1"
+                    }
+                  >
+                    <div className="flex items-start gap-1.5">
+                      <span className="shrink-0 text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 mt-0.5">
+                        #{idx + 2}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-gray-900">
+                          {sc.standar}
+                        </div>
+                        {sc.indikator && (
+                          <div className="text-[11px] text-gray-600 mt-0.5">
+                            {sc.indikator}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {renderIkuBadges(sc.ikus, "pl-6")}
+                  </li>
+                ))}
+              </ol>
+            </details>
           </div>
         );
       },

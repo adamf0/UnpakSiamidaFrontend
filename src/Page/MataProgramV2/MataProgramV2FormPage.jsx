@@ -184,21 +184,82 @@ export default function MataProgramV2FormPage() {
 
   // Handle year change by user
   const handleYearChange = (newTahun) => {
+    const prevYr = selectedTahun?.Tahun || selectedTahun?.nama || "";
     setSelectedTahun(newTahun);
     const yr = newTahun?.Tahun || newTahun?.nama || "";
     if (yr) {
       fetchTemplatesForYear(yr);
-      // Reset selected templates if user changes year in create mode
-      if (!isEdit) {
+      if (String(yr) !== String(prevYr)) {
         setSelectedTemplateIds({});
       }
     }
   };
 
-  // Group raw template rows by Indikator
-  const adaptedIndicators = useMemo(() => {
-    return templateRenstraAdapter(rawTemplates);
+  // Group raw template rows by Indikator and deduplicate targets per FakultasUnit (keep latest ID)
+  const { adaptedIndicators, canonicalIdByRawId, validCanonicalIds } = useMemo(() => {
+    const grouped = templateRenstraAdapter(rawTemplates);
+    const idMap = {};
+    const validSet = new Set();
+
+    const deduped = grouped.map((item) => {
+      const byUnit = new Map();
+      const rawTargets = Array.isArray(item.Targets) ? item.Targets : [];
+      for (const tg of rawTargets) {
+        const unitKey = tg.FakultasUnitID
+          ? `fu:${tg.FakultasUnitID}`
+          : `name:${String(tg.FakultasUnit || "").trim().toLowerCase()}`;
+        const prev = byUnit.get(unitKey);
+        if (!prev || Number(tg.ID) > Number(prev.ID)) {
+          byUnit.set(unitKey, tg);
+        }
+      }
+      for (const tg of rawTargets) {
+        const unitKey = tg.FakultasUnitID
+          ? `fu:${tg.FakultasUnitID}`
+          : `name:${String(tg.FakultasUnit || "").trim().toLowerCase()}`;
+        const winner = byUnit.get(unitKey);
+        if (winner) {
+          idMap[String(tg.ID)] = String(winner.ID);
+        }
+      }
+      const uniqueTargets = Array.from(byUnit.values()).sort((a, b) =>
+        String(a.FakultasUnit || "").localeCompare(String(b.FakultasUnit || ""))
+      );
+      uniqueTargets.forEach((tg) => validSet.add(String(tg.ID)));
+      return { ...item, Targets: uniqueTargets };
+    });
+
+    return {
+      adaptedIndicators: deduped,
+      canonicalIdByRawId: idMap,
+      validCanonicalIds: validSet,
+    };
   }, [rawTemplates]);
+
+  // Normalize any pre-selected template IDs to their canonical (deduplicated) IDs
+  useEffect(() => {
+    if (validCanonicalIds.size === 0) return;
+    setSelectedTemplateIds((prev) => {
+      const keys = Object.keys(prev);
+      if (keys.length === 0) return prev;
+      let changed = false;
+      const next = {};
+      for (const rawKey of keys) {
+        if (!prev[rawKey]) continue;
+        const mapped = canonicalIdByRawId[rawKey] || rawKey;
+        if (!validCanonicalIds.has(mapped)) {
+          changed = true;
+          continue;
+        }
+        if (mapped !== rawKey || next[mapped]) {
+          changed = true;
+        }
+        next[mapped] = true;
+      }
+      if (!changed && Object.keys(next).length === keys.length) return prev;
+      return next;
+    });
+  }, [canonicalIdByRawId, validCanonicalIds]);
 
   // Filter adapted indicators by search query
   const filteredIndicators = useMemo(() => {
@@ -294,7 +355,14 @@ export default function MataProgramV2FormPage() {
       return;
     }
 
-    const selectedIds = Object.keys(selectedTemplateIds);
+    const selectedIds = Array.from(
+      new Set(
+        Object.keys(selectedTemplateIds)
+          .filter((k) => Boolean(selectedTemplateIds[k]))
+          .map((k) => canonicalIdByRawId[k] || k)
+          .filter((k) => validCanonicalIds.size === 0 || validCanonicalIds.has(k))
+      )
+    );
     if (selectedIds.length === 0) {
       addToast("warning", "Pilih minimal satu Template IKU sasaran");
       return;
@@ -310,7 +378,7 @@ export default function MataProgramV2FormPage() {
 
       let res;
       if (isEdit) {
-        res = await apiClient.put(`/mataprogramv2/${uuid}?scope=group`, payload);
+        res = await apiClient.put(`/mataprogramv2/${uuid}`, payload);
       } else {
         res = await apiClient.post("/mataprogramv2", payload);
       }

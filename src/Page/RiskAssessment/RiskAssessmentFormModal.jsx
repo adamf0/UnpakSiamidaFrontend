@@ -337,7 +337,13 @@ export default function RiskAssessmentFormModal({
       });
     }
 
-    return list;
+    const seen = new Set();
+    return list.filter((p) => {
+      const key = String(p.id ?? p.rawId ?? p.UUID ?? p.mata_program);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [allPrograms, selectedFakultas, selectedTahun]);
 
   // Reset form when modal opens or edit data changes

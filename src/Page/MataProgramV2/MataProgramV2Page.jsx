@@ -6,12 +6,10 @@ import { useToast } from "@/Providers/ToastProvider";
 import { useContent } from "@/Providers/ContentProvider";
 import Navbar from "@/Components/Navbar";
 import ChangeLevelModal from "@/Components/ChangeLevelModal";
-import { Plus, Pencil, Trash2, Layers, X, RotateCcw, Archive } from "lucide-react";
+import { Plus, Pencil, Trash2, Layers, RotateCcw, Archive } from "lucide-react";
 import { useAuth } from "@/Providers/AuthProvider";
-import { renderLabelFakultasUnit } from "@/Common/Utils";
 import { apiClient } from "@/Common/api";
 import PageHeader from "@/Components/PageHeader";
-import MataProgramV2EditModal from "./MataProgramV2EditModal";
 
 export default function MataProgramV2Page() {
   const navigate = useNavigate();
@@ -28,9 +26,6 @@ export default function MataProgramV2Page() {
   } = useContent();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [confirmDeleteUnit, setConfirmDeleteUnit] = useState(false);
-  const [unitToDelete, setUnitToDelete] = useState(null);
-  const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
   const [showDeleted, setShowDeleted] = useState(false);
 
@@ -96,79 +91,36 @@ export default function MataProgramV2Page() {
     return `/mataprogramv2s${qs ? `?${qs}` : ""}`;
   }, [positionYear, isUnrestrictedData, activeUnit, showDeleted]);
 
-  // Soft delete all unit assignments in this group
+  // Soft delete mata program
   const handleDelete = async () => {
-    if (!selectedRow?.UUID && !selectedRow?.uuid) return;
+    const targetUuid = selectedRow?.UUID || selectedRow?.uuid;
+    if (!targetUuid) return;
     try {
-      await apiClient.delete(
-        `/mataprogramv2/${selectedRow.UUID || selectedRow.uuid}?scope=group`
-      );
-      addToast("success", "Berhasil menghapus mata program v2 (soft delete)");
+      await apiClient.delete(`/mataprogramv2/${targetUuid}`);
+      addToast("success", "Berhasil menghapus mata program (soft delete)");
     } catch (err) {
       console.error("Hapus gagal:", err);
-      addToast("error", err?.message || "Gagal menghapus data");
+      addToast("error", err?.response?.data?.message || err?.message || "Gagal menghapus data");
     } finally {
       setConfirmDelete(false);
       tableRef.current?.reload?.({ resetPage: true });
     }
   };
 
-  // Soft delete a single unit from the badge
-  const handleRemoveSingleUnit = (unit, row) => {
-    setUnitToDelete({ unit, row });
-    setConfirmDeleteUnit(true);
-  };
-
-  const handleConfirmRemoveUnit = async () => {
-    if (!unitToDelete?.unit?.UUID) return;
-    try {
-      await apiClient.delete(
-        `/mataprogramv2/${unitToDelete.unit.UUID}?scope=single`
-      );
-      addToast(
-        "success",
-        `Berhasil menghapus unit ${unitToDelete.unit.FakultasUnit || ""} dari program kerja`
-      );
-    } catch (err) {
-      console.error("Hapus unit gagal:", err);
-      addToast("error", err?.message || "Gagal menghapus unit");
-    } finally {
-      setConfirmDeleteUnit(false);
-      setUnitToDelete(null);
-      tableRef.current?.reload?.();
-    }
-  };
-
-  // Restore a single unit badge (softdelete = null)
-  const handleRestoreSingleUnit = async (unit, row) => {
-    if (!unit?.UUID) return;
-    try {
-      await apiClient.post(`/mataprogramv2/${unit.UUID}/restore?scope=single`);
-      addToast(
-        "success",
-        `Berhasil memulihkan unit ${unit.FakultasUnit || ""} ke daftar aktif`
-      );
-      tableRef.current?.reload?.();
-    } catch (err) {
-      console.error("Restore unit gagal:", err);
-      addToast("error", err?.message || "Gagal memulihkan unit");
-    }
-  };
-
-  // Restore all units in a group
-  const handleRestoreGroup = async (row) => {
+  // Restore mata program
+  const handleRestore = async (row) => {
     const targetUuid = row?.UUID || row?.uuid;
     if (!targetUuid) return;
     try {
-      await apiClient.post(`/mataprogramv2/${targetUuid}/restore?scope=group`);
+      await apiClient.post(`/mataprogramv2/${targetUuid}/restore`);
       addToast(
         "success",
-        `Berhasil memulihkan semua unit pada program "${row.MataProgram || ""}"`
+        `Berhasil memulihkan program "${row.MataProgram || ""}"`
       );
       tableRef.current?.reload?.({ resetPage: true });
     } catch (err) {
-      console.error("Restore group gagal:", err);
-      addToast("error", err?.message || "Gagal memulihkan mata program");
+      console.error("Restore gagal:", err);
+      addToast("error", err?.response?.data?.message || err?.message || "Gagal memulihkan mata program");
     }
   };
 
@@ -281,10 +233,20 @@ export default function MataProgramV2Page() {
                         groupedIndikators[key] = {
                           name: key,
                           standar: t.StandarRenstra,
+                          targetsByUnit: new Map(),
                           targets: [],
                         };
                       }
-                      groupedIndikators[key].targets.push(t);
+                      const unitKey = t.FakultasUnitID
+                        ? `fu:${t.FakultasUnitID}`
+                        : `name:${String(t.FakultasUnit || "").trim().toLowerCase()}`;
+                      const prev = groupedIndikators[key].targetsByUnit.get(unitKey);
+                      if (!prev || Number(t.ID) > Number(prev.ID)) {
+                        groupedIndikators[key].targetsByUnit.set(unitKey, t);
+                      }
+                    });
+                    Object.values(groupedIndikators).forEach((g) => {
+                      g.targets = Array.from(g.targetsByUnit.values());
                     });
 
                     const formatTargetUnitWithJenjang = (t) => {
@@ -435,7 +397,7 @@ export default function MataProgramV2Page() {
                     type="button"
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-xl transition-all cursor-pointer text-left group"
                     onClick={() => {
-                      handleRestoreGroup(row);
+                      handleRestore(row);
                       close();
                     }}
                   >
@@ -477,26 +439,10 @@ export default function MataProgramV2Page() {
           />
         </div>
 
-        <MataProgramV2EditModal
-          open={editModalOpen}
-          data={selectedRow}
-          onClose={() => setEditModalOpen(false)}
-          onSuccess={() => tableRef.current?.reload?.({ resetPage: true })}
-        />
-
         <ConfirmDeleteDialog
           open={confirmDelete}
           onClose={() => setConfirmDelete(false)}
           onConfirm={handleDelete}
-        />
-
-        <ConfirmDeleteDialog
-          open={confirmDeleteUnit}
-          onClose={() => {
-            setConfirmDeleteUnit(false);
-            setUnitToDelete(null);
-          }}
-          onConfirm={handleConfirmRemoveUnit}
         />
       </div>
     </>

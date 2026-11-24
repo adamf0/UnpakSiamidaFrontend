@@ -107,6 +107,109 @@ const collectDeletePayloads = (initialTemplateMap, activeRowKeys) => {
   return result;
 };
 
+const toSnapshotString = (val) =>
+  val === undefined || val === null ? "" : String(val);
+
+const buildRowSnapshot = ({
+  tahun,
+  indikator,
+  fakultasUnit,
+  kategori,
+  klasifikasi,
+  satuan,
+  target,
+  targetMin,
+  targetMax,
+  tugas,
+}) => ({
+  tahun: toSnapshotString(tahun).trim(),
+  indikator: toSnapshotString(indikator).trim(),
+  fakultasUnit: toSnapshotString(fakultasUnit).trim(),
+  kategori: toSnapshotString(kategori).trim().toLowerCase(),
+  klasifikasi: toSnapshotString(klasifikasi).trim(),
+  satuan: toSnapshotString(satuan),
+  target: toSnapshotString(target),
+  targetMin: toSnapshotString(targetMin),
+  targetMax: toSnapshotString(targetMax),
+  tugas: toSnapshotString(tugas).trim(),
+});
+
+const isRowSnapshotEqual = (a, b) => {
+  if (!a || !b) return false;
+  return (
+    a.tahun === b.tahun &&
+    a.indikator === b.indikator &&
+    a.fakultasUnit === b.fakultasUnit &&
+    a.kategori === b.kategori &&
+    a.klasifikasi === b.klasifikasi &&
+    a.satuan === b.satuan &&
+    a.target === b.target &&
+    a.targetMin === b.targetMin &&
+    a.targetMax === b.targetMax &&
+    a.tugas === b.tugas
+  );
+};
+
+const buildLoadedTemplateState = (
+  list,
+  groupDatas,
+  fallbackTahun,
+  fallbackIndikatorUuid
+) => {
+  const loadedMap = {};
+  const latestByRowKey = {};
+
+  list.forEach((item) => {
+    const { foundGd, foundTarget } = matchTemplateItemToTarget(item, groupDatas);
+    if (!foundGd || !foundTarget) {
+      console.warn("Target not found for template item:", item);
+      return;
+    }
+
+    const rowKey = buildRowLabel(foundGd, foundTarget);
+    const tplUuid = item.UUID || item.Uuid || item.uuid;
+    const itemId = Number(item.ID ?? item.Id ?? item.id ?? 0);
+
+    if (tplUuid) {
+      if (!loadedMap[rowKey]) loadedMap[rowKey] = [];
+      if (!loadedMap[rowKey].includes(tplUuid)) {
+        loadedMap[rowKey].push(tplUuid);
+      }
+    }
+
+    // Backend returns newest rows first (id DESC); keep highest ID as canonical.
+    const prev = latestByRowKey[rowKey];
+    if (!prev || itemId >= prev.itemId) {
+      latestByRowKey[rowKey] = { item, itemId, foundGd, foundTarget, tplUuid };
+    }
+  });
+
+  const loadedSnapshots = {};
+  Object.entries(latestByRowKey).forEach(([rowKey, entry]) => {
+    const { item, foundTarget, tplUuid } = entry;
+    if (tplUuid && loadedMap[rowKey]) {
+      loadedMap[rowKey] = [
+        tplUuid,
+        ...loadedMap[rowKey].filter((u) => u !== tplUuid),
+      ];
+    }
+    loadedSnapshots[rowKey] = buildRowSnapshot({
+      tahun: item.Tahun ?? fallbackTahun,
+      indikator: item.IndikatorRenstraUuid || fallbackIndikatorUuid,
+      fakultasUnit: foundTarget.UUID,
+      kategori: item.Kategori,
+      klasifikasi: item.Klasifikasi,
+      satuan: item.Satuan ?? "",
+      target: item.Target ?? "",
+      targetMin: item.TargetMin ?? "",
+      targetMax: item.TargetMax ?? "",
+      tugas: item.Tugas,
+    });
+  });
+
+  return { loadedMap, loadedSnapshots, latestByRowKey };
+};
+
 const scrollToErrorField = (rowKey, fieldPath) => {
   let targetEl = null;
 
@@ -179,6 +282,7 @@ const TemplateRenstraFormPage = () => {
   const [groupDatas, setGroupDatas] = useState([]);
   const [fakultasUnits, setFakultasUnits] = useState([]);
   const [initialTemplateMap, setInitialTemplateMap] = useState({});
+  const [initialRowSnapshots, setInitialRowSnapshots] = useState({});
   const prevIndikatorRef = useRef(null);
   const [loading, setLoading] = useState({
     indikator: false,
@@ -373,7 +477,7 @@ const TemplateRenstraFormPage = () => {
     }
   };
 
-  const syncInitialTemplateMap = async (indikatorUuid) => {
+  const syncInitialTemplateMap = async (indikatorUuid, targetTahun = tahun) => {
     const token = getValidToken();
     if (!token || !indikatorUuid) return;
     try {
@@ -381,21 +485,17 @@ const TemplateRenstraFormPage = () => {
         `/templaterenstras?mode=all&filters=indikatorrenstrauuid:eq:${indikatorUuid}`
       );
       const rawList = Array.isArray(data) ? data : (data?.data || []);
-      const list = tahun
-        ? rawList.filter((item) => !item.Tahun || String(item.Tahun) === String(tahun))
+      const list = targetTahun
+        ? rawList.filter((item) => !item.Tahun || String(item.Tahun) === String(targetTahun))
         : rawList;
-      const nextMap = {};
-      list.forEach((item) => {
-        const { foundGd, foundTarget } = matchTemplateItemToTarget(item, groupDatas);
-        if (!foundGd || !foundTarget) return;
-        const rowKey = buildRowLabel(foundGd, foundTarget);
-        const tplUuid = item.UUID || item.Uuid || item.uuid;
-        if (tplUuid) {
-          if (!nextMap[rowKey]) nextMap[rowKey] = [];
-          if (!nextMap[rowKey].includes(tplUuid)) nextMap[rowKey].push(tplUuid);
-        }
-      });
-      setInitialTemplateMap(nextMap);
+      const { loadedMap, loadedSnapshots } = buildLoadedTemplateState(
+        list,
+        groupDatas,
+        targetTahun,
+        indikatorUuid
+      );
+      setInitialTemplateMap(loadedMap);
+      setInitialRowSnapshots(loadedSnapshots);
     } catch (err) {
       console.error("Sync initial template map gagal:", err);
     }
@@ -433,25 +533,14 @@ const TemplateRenstraFormPage = () => {
         );
       }
 
-      const loadedMap = {};
+      const { loadedMap, loadedSnapshots, latestByRowKey } = buildLoadedTemplateState(
+        list,
+        groupDatas,
+        tahun,
+        indikatorUuid
+      );
 
-      list.forEach((item) => {
-        const { foundGd, foundTarget } = matchTemplateItemToTarget(item, groupDatas);
-
-        if (!foundGd || !foundTarget) {
-          console.warn("Target not found for template item:", item);
-          return;
-        }
-
-        const rowKey = buildRowLabel(foundGd, foundTarget);
-        const tplUuid = item.UUID || item.Uuid || item.uuid;
-        if (tplUuid) {
-          if (!loadedMap[rowKey]) loadedMap[rowKey] = [];
-          if (!loadedMap[rowKey].includes(tplUuid)) {
-            loadedMap[rowKey].push(tplUuid);
-          }
-        }
-
+      Object.entries(latestByRowKey).forEach(([rowKey, { item, foundGd, foundTarget }]) => {
         setValue(
           `rows.${rowKey}`,
           {
@@ -462,17 +551,18 @@ const TemplateRenstraFormPage = () => {
             targetJenjang: foundGd.Jenjang,
             targetNama: foundTarget.Nama,
             klasifikasi: item.Klasifikasi,
-            satuan: item.Satuan || "",
+            satuan: item.Satuan ?? "",
             pembagian_tugas: item.Tugas,
-            target: item.Target || "",
-            target_min: item.TargetMin || "",
-            target_max: item.TargetMax || "",
+            target: item.Target ?? "",
+            target_min: item.TargetMin ?? "",
+            target_max: item.TargetMax ?? "",
           },
           { shouldDirty: false, shouldValidate: false }
         );
       });
 
       setInitialTemplateMap(loadedMap);
+      setInitialRowSnapshots(loadedSnapshots);
     } catch (err) {
       console.error(err);
       setErr("template", err.message || "Gagal memuat template");
@@ -642,6 +732,9 @@ const TemplateRenstraFormPage = () => {
       return;
     }
 
+    const submittedIndikatorUuid =
+      data.indikator_renstra?.Uuid || data.indikator_renstra?.uuid || "";
+
     const payloads = activeEntries.map(([key, row]) => {
       let targetAudit = null;
       if (row.targetUuid) {
@@ -692,32 +785,50 @@ const TemplateRenstraFormPage = () => {
       }
 
       const fakultasUnit = targetAudit?.UUID || row.targetUuid || "";
+      const targetVal = tipeTarget === "range" ? "" : (row?.target ?? "");
+      const targetMinVal = tipeTarget === "range" ? (row?.target_min ?? "") : "";
+      const targetMaxVal = tipeTarget === "range" ? (row?.target_max ?? "") : "";
 
       const fd = new FormData();
       fd.append("tahun", data.tahun);
-      fd.append(
-        "indikator",
-        data.indikator_renstra?.Uuid || data.indikator_renstra?.uuid || ""
-      );
+      fd.append("indikator", submittedIndikatorUuid);
       fd.append("isPertanyaan", "1");
       fd.append("fakultasUnit", fakultasUnit);
       fd.append("kategori", kategori);
       fd.append("klasifikasi", row.klasifikasi || "");
       fd.append("satuan", row.satuan ?? "");
-
-      if (tipeTarget === "range") {
-        fd.append("target", "");
-        fd.append("targetMin", row?.target_min ?? "");
-        fd.append("targetMax", row?.target_max ?? "");
-      } else {
-        fd.append("target", row?.target ?? "");
-        fd.append("targetMin", "");
-        fd.append("targetMax", "");
-      }
-
+      fd.append("target", targetVal);
+      fd.append("targetMin", targetMinVal);
+      fd.append("targetMax", targetMaxVal);
       fd.append("tugas", row.pembagian_tugas || "");
 
-      return { key, fd, fakultasUnit };
+      const existingUuids = initialTemplateMap[key] || [];
+      const primaryUuid = existingUuids[0] || null;
+      const extraDuplicateUuids = existingUuids.slice(1);
+      const nextSnapshot = buildRowSnapshot({
+        tahun: data.tahun,
+        indikator: submittedIndikatorUuid,
+        fakultasUnit,
+        kategori,
+        klasifikasi: row.klasifikasi || "",
+        satuan: row.satuan ?? "",
+        target: targetVal,
+        targetMin: targetMinVal,
+        targetMax: targetMaxVal,
+        tugas: row.pembagian_tugas || "",
+      });
+      const isUnchanged =
+        Boolean(primaryUuid) &&
+        isRowSnapshotEqual(initialRowSnapshots[key], nextSnapshot);
+
+      return {
+        key,
+        fd,
+        fakultasUnit,
+        primaryUuid,
+        extraDuplicateUuids,
+        isUnchanged,
+      };
     });
 
     const invalidRow = payloads.find((p) => !p.fakultasUnit);
@@ -729,25 +840,42 @@ const TemplateRenstraFormPage = () => {
       return;
     }
 
-    console.log("SUBMIT:", data, payloads, deletePayloads);
+    const upsertPayloads = payloads.filter((p) => !p.isUnchanged);
+    const allDeletePayloads = [
+      ...deletePayloads,
+      ...payloads.flatMap((p) =>
+        p.extraDuplicateUuids.map((dupUuid) => ({ key: p.key, uuid: dupUuid }))
+      ),
+    ];
 
-    let successCount = 0;
+    if (upsertPayloads.length === 0 && allDeletePayloads.length === 0) {
+      addToast("info", "Tidak ada perubahan data untuk disimpan");
+      return;
+    }
+
+    let createdCount = 0;
+    let updatedCount = 0;
     const deletedUuids = new Set();
     const errorsList = [];
 
     await Promise.all([
-      ...payloads.map(async ({ key, fd }) => {
+      ...upsertPayloads.map(async ({ key, fd, primaryUuid }) => {
         try {
           setValue(`rows.${key}.status`, "loading");
 
           await delay(100);
 
           try {
-            await apiClient.post("/templaterenstra", fd);
+            if (primaryUuid) {
+              await apiClient.put(`/templaterenstra/${primaryUuid}`, fd);
+              updatedCount++;
+            } else {
+              await apiClient.post("/templaterenstra", fd);
+              createdCount++;
+            }
 
             setValue(`rows.${key}.status`, "success");
             setValue(`rows.${key}.errormessage`, null);
-            successCount++;
           } catch (err) {
             setValue(`rows.${key}.status`, "error");
 
@@ -764,13 +892,17 @@ const TemplateRenstraFormPage = () => {
           errorsList.push({ key, msg: "Server tidak dapat dihubungi" });
         }
       }),
-      ...deletePayloads.map(async ({ key, uuid: tplUuid }) => {
+      ...allDeletePayloads.map(async ({ key, uuid: tplUuid }) => {
         try {
-          setValue(`rows.${key}.status`, "loading");
+          if (!activeRowKeys.has(key)) {
+            setValue(`rows.${key}.status`, "loading");
+          }
           await apiClient.delete(`/templaterenstra/${tplUuid}`);
           deletedUuids.add(tplUuid);
-          setValue(`rows.${key}.status`, null);
-          setValue(`rows.${key}.errormessage`, null);
+          if (!activeRowKeys.has(key)) {
+            setValue(`rows.${key}.status`, null);
+            setValue(`rows.${key}.errormessage`, null);
+          }
         } catch (err) {
           setValue(`rows.${key}.status`, "error");
           const msg = isValidationError(err?.code)
@@ -793,22 +925,31 @@ const TemplateRenstraFormPage = () => {
       });
     }
 
+    if (
+      mode === "edit" &&
+      (createdCount > 0 || updatedCount > 0 || deletedUuids.size > 0)
+    ) {
+      await syncInitialTemplateMap(
+        submittedIndikatorUuid || uuidIndikator,
+        data.tahun || tahun
+      );
+    }
+
     if (errorsList.length === 0) {
-      if (deletedUuids.size > 0 && successCount > 0) {
-        addToast(
-          "success",
-          `Data berhasil diperbarui (${successCount} disimpan, ${deletedUuids.size} dihapus)`
-        );
-      } else if (deletedUuids.size > 0) {
-        addToast("success", `${deletedUuids.size} pemetaan target berhasil dihapus`);
-      } else {
-        addToast("success", "Data berhasil disimpan");
-      }
+      const summaryParts = [];
+      if (createdCount > 0) summaryParts.push(`${createdCount} ditambah`);
+      if (updatedCount > 0) summaryParts.push(`${updatedCount} diperbarui`);
+      if (deletedUuids.size > 0) summaryParts.push(`${deletedUuids.size} dihapus`);
+
+      addToast(
+        "success",
+        summaryParts.length > 0
+          ? `Data berhasil disimpan (${summaryParts.join(", ")})`
+          : "Data berhasil disimpan"
+      );
 
       if (mode === "add") {
         navigate(`/template_renstra`);
-      } else if (uuidIndikator) {
-        await syncInitialTemplateMap(uuidIndikator);
       }
     } else {
       const firstErr = errorsList[0];

@@ -2117,6 +2117,80 @@ export default function ProkerV3AktivitasPage() {
     };
   }, []);
 
+  const getUpmVerificationGate = useCallback(
+    (act, targetRole) => {
+      if (!act) {
+        return { canAct: false, reason: "Aktivitas tidak ditemukan" };
+      }
+      const sEval = String(act.StatusEvaluator || act.status_evaluator || "")
+        .toLowerCase()
+        .trim();
+      const isEvalApproved =
+        sEval === "disetujui" ||
+        sEval === "diterima" ||
+        sEval === "terima_verifikator";
+      if (!isEvalApproved) {
+        return {
+          canAct: false,
+          reason: "Menunggu verifikasi Evaluator",
+        };
+      }
+
+      const isAnggaranApproved = Boolean(
+        act.TerimaAnggaranAt || act.terima_anggaran_at,
+      );
+      if (!isAnggaranApproved) {
+        return {
+          canAct: false,
+          reason: "Menunggu verifikasi Anggaran",
+        };
+      }
+
+      const roleKey = String(targetRole || "").toLowerCase().trim();
+      const stUpms = String(act.StatusUpms || act.status_upms || "")
+        .toLowerCase()
+        .trim();
+      const stUpmf = String(act.StatusUpmf || act.status_upmf || "")
+        .toLowerCase()
+        .trim();
+      const stUpml = String(act.StatusUpml || act.status_upml || "")
+        .toLowerCase()
+        .trim();
+
+      if (roleKey === "upmf" || roleKey === "fakultas") {
+        if (stUpms !== "disetujui") {
+          return {
+            canAct: false,
+            reason: "Menunggu persetujuan UPMS",
+          };
+        }
+      } else if (roleKey === "lpm" || roleKey === "admin") {
+        if (isProdi) {
+          if (stUpms !== "disetujui") {
+            return {
+              canAct: false,
+              reason: "Menunggu persetujuan UPMS",
+            };
+          }
+          if (stUpmf !== "disetujui") {
+            return {
+              canAct: false,
+              reason: "Menunggu persetujuan UPMF",
+            };
+          }
+        } else if (stUpml !== "disetujui") {
+          return {
+            canAct: false,
+            reason: "Menunggu persetujuan UPML",
+          };
+        }
+      }
+
+      return { canAct: true, reason: "" };
+    },
+    [isProdi],
+  );
+
   const isActSelectableForBatch = useCallback(
     (act) => {
       if (!act) return false;
@@ -2127,14 +2201,11 @@ export default function ProkerV3AktivitasPage() {
         !isAdmin &&
         ["upml", "upmf", "fakultas", "upms", "lpm"].includes(curRole)
       ) {
-        const sMain = String(act.Status || act.status || "draft")
-          .toLowerCase()
-          .trim();
-        return sMain !== "draft";
+        return getUpmVerificationGate(act, curRole).canAct;
       }
       return true;
     },
-    [isAdmin, curRole, getEvaluatorActionState],
+    [isAdmin, curRole, getEvaluatorActionState, getUpmVerificationGate],
   );
 
   const selectableActivities = useMemo(
@@ -2387,6 +2458,13 @@ export default function ProkerV3AktivitasPage() {
   const handleVerifySingleRow = async (act, targetRole) => {
     if (!canVerify || !act?.UUID) return;
     const roleToUse = targetRole || (isAdmin ? "lpm" : curRole);
+    if (["upml", "upms", "upmf", "fakultas", "lpm", "admin"].includes(roleToUse)) {
+      const gate = getUpmVerificationGate(act, roleToUse);
+      if (!gate.canAct) {
+        addToast("error", gate.reason);
+        return;
+      }
+    }
     setVerifyingRowUuid(act.UUID);
     setRowErrors((prev) => {
       const next = { ...prev };
@@ -2420,8 +2498,16 @@ export default function ProkerV3AktivitasPage() {
   // Single Row Reject
   const handleOpenSingleRejectModal = (act, targetRole) => {
     if (!canVerify) return;
+    const roleToUse = targetRole || (isAdmin ? "lpm" : curRole);
+    if (["upml", "upms", "upmf", "fakultas", "lpm", "admin"].includes(roleToUse)) {
+      const gate = getUpmVerificationGate(act, roleToUse);
+      if (!gate.canAct) {
+        addToast("error", gate.reason);
+        return;
+      }
+    }
     setActToReject(act);
-    setRejectRole(targetRole || (isAdmin ? "lpm" : curRole));
+    setRejectRole(roleToUse);
     setSingleRejectReason("");
     setSingleRejectModalOpen(true);
   };
@@ -3894,50 +3980,68 @@ export default function ProkerV3AktivitasPage() {
                                 {!isAdmin && curRole === "upml" && (
                                   <>
                                     {isProdi ? (
-                                      <span className="text-[11px] text-gray-400 italic">
+                                      <span className="text-[11px] text-gray-600 italic">
                                         Khusus Non-Prodi
                                       </span>
                                     ) : (
-                                      <>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleVerifySingleRow(act, "upml")
-                                          }
-                                          disabled={
-                                            verifyingRowUuid === act.UUID ||
-                                            isBatchProcessing
-                                          }
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                          title="Setujui verifikasi UPML"
-                                        >
-                                          {verifyingRowUuid === act.UUID ? (
-                                            <RefreshCw className="w-3 h-3 animate-spin" />
-                                          ) : (
-                                            <Check className="w-3 h-3" />
-                                          )}
-                                          <span>Verifikasi</span>
-                                        </button>
+                                      (() => {
+                                        const gate = getUpmVerificationGate(
+                                          act,
+                                          "upml",
+                                        );
+                                        if (!gate.canAct) {
+                                          return (
+                                            <span className="text-[11px] text-gray-600 italic">
+                                              {gate.reason}
+                                            </span>
+                                          );
+                                        }
+                                        return (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleVerifySingleRow(
+                                                  act,
+                                                  "upml",
+                                                )
+                                              }
+                                              disabled={
+                                                verifyingRowUuid === act.UUID ||
+                                                isBatchProcessing
+                                              }
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                              title="Setujui verifikasi UPML"
+                                            >
+                                              {verifyingRowUuid === act.UUID ? (
+                                                <RefreshCw className="w-3 h-3 animate-spin" />
+                                              ) : (
+                                                <Check className="w-3 h-3" />
+                                              )}
+                                              <span>Verifikasi</span>
+                                            </button>
 
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleOpenSingleRejectModal(
-                                              act,
-                                              "upml",
-                                            )
-                                          }
-                                          disabled={
-                                            verifyingRowUuid === act.UUID ||
-                                            isBatchProcessing
-                                          }
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                          title="Tolak verifikasi UPML"
-                                        >
-                                          <X className="w-3 h-3" />
-                                          <span>Tolak</span>
-                                        </button>
-                                      </>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleOpenSingleRejectModal(
+                                                  act,
+                                                  "upml",
+                                                )
+                                              }
+                                              disabled={
+                                                verifyingRowUuid === act.UUID ||
+                                                isBatchProcessing
+                                              }
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                              title="Tolak verifikasi UPML"
+                                            >
+                                              <X className="w-3 h-3" />
+                                              <span>Tolak</span>
+                                            </button>
+                                          </>
+                                        );
+                                      })()
                                     )}
                                   </>
                                 )}
@@ -3948,15 +4052,22 @@ export default function ProkerV3AktivitasPage() {
                                     curRole === "fakultas") && (
                                     <>
                                       {!isProdi ? (
-                                        <span className="text-[11px] text-gray-400 italic">
+                                        <span className="text-[11px] text-gray-600 italic">
                                           Non-Prodi
                                         </span>
                                       ) : (
                                         (() => {
-                                          const isUpmsApproved =
-                                            (act.StatusUpms || "")
-                                              .toLowerCase()
-                                              .trim() === "disetujui";
+                                          const gate = getUpmVerificationGate(
+                                            act,
+                                            "upmf",
+                                          );
+                                          if (!gate.canAct) {
+                                            return (
+                                              <span className="text-[11px] text-gray-600 italic">
+                                                {gate.reason}
+                                              </span>
+                                            );
+                                          }
                                           return (
                                             <>
                                               <button
@@ -3968,18 +4079,15 @@ export default function ProkerV3AktivitasPage() {
                                                   )
                                                 }
                                                 disabled={
-                                                  !isUpmsApproved ||
-                                                  verifyingRowUuid === act.UUID ||
+                                                  verifyingRowUuid ===
+                                                    act.UUID ||
                                                   isBatchProcessing
                                                 }
                                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                                title={
-                                                  !isUpmsApproved
-                                                    ? "Menunggu persetujuan UPMS terlebih dahulu"
-                                                    : "Setujui verifikasi Fakultas (UPMF)"
-                                                }
+                                                title="Setujui verifikasi Fakultas (UPMF)"
                                               >
-                                                {verifyingRowUuid === act.UUID ? (
+                                                {verifyingRowUuid ===
+                                                act.UUID ? (
                                                   <RefreshCw className="w-3 h-3 animate-spin" />
                                                 ) : (
                                                   <Check className="w-3 h-3" />
@@ -3996,16 +4104,12 @@ export default function ProkerV3AktivitasPage() {
                                                   )
                                                 }
                                                 disabled={
-                                                  !isUpmsApproved ||
-                                                  verifyingRowUuid === act.UUID ||
+                                                  verifyingRowUuid ===
+                                                    act.UUID ||
                                                   isBatchProcessing
                                                 }
                                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                                title={
-                                                  !isUpmsApproved
-                                                    ? "Menunggu persetujuan UPMS terlebih dahulu"
-                                                    : "Tolak verifikasi Fakultas (UPMF)"
-                                                }
+                                                title="Tolak verifikasi Fakultas (UPMF)"
                                               >
                                                 <X className="w-3 h-3" />
                                                 <span>Tolak</span>
@@ -4021,50 +4125,68 @@ export default function ProkerV3AktivitasPage() {
                                 {!isAdmin && curRole === "upms" && (
                                   <>
                                     {!isProdi ? (
-                                      <span className="text-[11px] text-gray-400 italic">
+                                      <span className="text-[11px] text-gray-600 italic">
                                         Khusus Prodi
                                       </span>
                                     ) : (
-                                      <>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleVerifySingleRow(act, "upms")
-                                          }
-                                          disabled={
-                                            verifyingRowUuid === act.UUID ||
-                                            isBatchProcessing
-                                          }
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                          title="Setujui verifikasi UPMS"
-                                        >
-                                          {verifyingRowUuid === act.UUID ? (
-                                            <RefreshCw className="w-3 h-3 animate-spin" />
-                                          ) : (
-                                            <Check className="w-3 h-3" />
-                                          )}
-                                          <span>Verifikasi</span>
-                                        </button>
+                                      (() => {
+                                        const gate = getUpmVerificationGate(
+                                          act,
+                                          "upms",
+                                        );
+                                        if (!gate.canAct) {
+                                          return (
+                                            <span className="text-[11px] text-gray-600 italic">
+                                              {gate.reason}
+                                            </span>
+                                          );
+                                        }
+                                        return (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleVerifySingleRow(
+                                                  act,
+                                                  "upms",
+                                                )
+                                              }
+                                              disabled={
+                                                verifyingRowUuid === act.UUID ||
+                                                isBatchProcessing
+                                              }
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                              title="Setujui verifikasi UPMS"
+                                            >
+                                              {verifyingRowUuid === act.UUID ? (
+                                                <RefreshCw className="w-3 h-3 animate-spin" />
+                                              ) : (
+                                                <Check className="w-3 h-3" />
+                                              )}
+                                              <span>Verifikasi</span>
+                                            </button>
 
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleOpenSingleRejectModal(
-                                              act,
-                                              "upms",
-                                            )
-                                          }
-                                          disabled={
-                                            verifyingRowUuid === act.UUID ||
-                                            isBatchProcessing
-                                          }
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
-                                          title="Tolak verifikasi UPMS"
-                                        >
-                                          <X className="w-3 h-3" />
-                                          <span>Tolak</span>
-                                        </button>
-                                      </>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleOpenSingleRejectModal(
+                                                  act,
+                                                  "upms",
+                                                )
+                                              }
+                                              disabled={
+                                                verifyingRowUuid === act.UUID ||
+                                                isBatchProcessing
+                                              }
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                              title="Tolak verifikasi UPMS"
+                                            >
+                                              <X className="w-3 h-3" />
+                                              <span>Tolak</span>
+                                            </button>
+                                          </>
+                                        );
+                                      })()
                                     )}
                                   </>
                                 )}
@@ -4139,36 +4261,17 @@ export default function ProkerV3AktivitasPage() {
                                 {/* 5. LPM / ADMIN VERIFY / REJECT ACTION */}
                                 {(isAdmin || curRole === "lpm") &&
                                   (() => {
-                                    const stUpms = (
-                                      act.StatusUpms ||
-                                      act.status_upms ||
-                                      ""
-                                    )
-                                      .toLowerCase()
-                                      .trim();
-                                    const stUpmf = (
-                                      act.StatusUpmf ||
-                                      act.status_upmf ||
-                                      ""
-                                    )
-                                      .toLowerCase()
-                                      .trim();
-                                    const stUpml = (
-                                      act.StatusUpml ||
-                                      act.status_upml ||
-                                      ""
-                                    )
-                                      .toLowerCase()
-                                      .trim();
-                                    const canLpmAct = isProdi
-                                      ? stUpms === "disetujui" &&
-                                        stUpmf === "disetujui"
-                                      : stUpml === "disetujui";
-                                    const disabledReason = isProdi
-                                      ? stUpms !== "disetujui"
-                                        ? "Menunggu persetujuan UPMS terlebih dahulu"
-                                        : "Menunggu persetujuan UPMF terlebih dahulu"
-                                      : "Menunggu persetujuan UPML terlebih dahulu";
+                                    const gate = getUpmVerificationGate(
+                                      act,
+                                      "lpm",
+                                    );
+                                    if (!gate.canAct) {
+                                      return (
+                                        <span className="text-[11px] text-gray-600 italic">
+                                          {gate.reason}
+                                        </span>
+                                      );
+                                    }
 
                                     return (
                                       <>
@@ -4178,16 +4281,11 @@ export default function ProkerV3AktivitasPage() {
                                             handleVerifySingleRow(act, "lpm")
                                           }
                                           disabled={
-                                            !canLpmAct ||
                                             verifyingRowUuid === act.UUID ||
                                             isBatchProcessing
                                           }
                                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                          title={
-                                            !canLpmAct
-                                              ? disabledReason
-                                              : "Setujui verifikasi LPM"
-                                          }
+                                          title="Setujui verifikasi LPM"
                                         >
                                           {verifyingRowUuid === act.UUID ? (
                                             <RefreshCw className="w-3 h-3 animate-spin" />
@@ -4206,16 +4304,11 @@ export default function ProkerV3AktivitasPage() {
                                             )
                                           }
                                           disabled={
-                                            !canLpmAct ||
                                             verifyingRowUuid === act.UUID ||
                                             isBatchProcessing
                                           }
                                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs hover:shadow transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                          title={
-                                            !canLpmAct
-                                              ? disabledReason
-                                              : "Tolak verifikasi LPM"
-                                          }
+                                          title="Tolak verifikasi LPM"
                                         >
                                           <X className="w-3 h-3" />
                                           <span>Tolak</span>
