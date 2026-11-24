@@ -161,21 +161,16 @@ export default function MataProgramV2EditModal({
 
     setSubmitting(true);
     try {
-      const fd = new FormData();
-      fd.append("mata_program", form.mataprogram?.trim() || "");
-      if (form.tahun) {
-        fd.append("tahun", form.tahun.Tahun || form.tahun.nama || form.tahun.id || "");
-      }
+      const payload = {
+        mata_program: form.mataprogram?.trim() || "",
+        tahun: form.tahun ? (form.tahun.Tahun || form.tahun.nama || form.tahun.id || "") : "",
+        targets: selectedUnits
+          .map((u) => u.FakultasUnitId || u.rawId || u.id_numeric || u.id || u.Id)
+          .filter(Boolean)
+          .map(String),
+      };
 
-      // Append all units
-      selectedUnits.forEach((u) => {
-        const uId = u.FakultasUnitId || u.rawId || u.id_numeric || u.id || u.Id;
-        if (uId) {
-          fd.append("targets[]", String(uId));
-        }
-      });
-
-      await apiClient.put(`/mataprogramv2/${data.UUID || data.uuid}?scope=group`, fd);
+      await apiClient.put(`/mataprogramv2/${data.UUID || data.uuid}?scope=group`, payload);
       addToast("success", "Berhasil memperbarui data Mata Program (soft delete tersinkronisasi)");
       onSuccess?.();
       onClose();

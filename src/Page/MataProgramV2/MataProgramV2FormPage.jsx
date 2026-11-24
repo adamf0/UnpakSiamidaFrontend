@@ -302,19 +302,17 @@ export default function MataProgramV2FormPage() {
 
     setSubmitting(true);
     try {
-      const fd = new FormData();
-      fd.append("mata_program", namaProgram.trim());
-      fd.append("tahun", String(resolvedTahun));
-
-      selectedIds.forEach((tId) => {
-        fd.append("template_renstras[]", String(tId));
-      });
+      const payload = {
+        mata_program: namaProgram.trim(),
+        tahun: String(resolvedTahun),
+        template_renstras: selectedIds.map(Number),
+      };
 
       let res;
       if (isEdit) {
-        res = await apiClient.put(`/mataprogramv2/${uuid}?scope=group`, fd);
+        res = await apiClient.put(`/mataprogramv2/${uuid}?scope=group`, payload);
       } else {
-        res = await apiClient.post("/mataprogramv2", fd);
+        res = await apiClient.post("/mataprogramv2", payload);
       }
 
       addToast(
