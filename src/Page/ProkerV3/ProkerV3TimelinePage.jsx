@@ -410,14 +410,7 @@ export default function ProkerV3TimelinePage() {
   const fetchJadwalStatus = useCallback(
     async (pData, aData) => {
       const targetYear = pData?.Tahun || aData?.Tahun || positionYear || "2027";
-      const targetUnitId =
-        pData?.UuidFakultasUnit ||
-        pData?.uuid_fakultas_unit ||
-        aData?.UuidFakultasUnit ||
-        aData?.uuid_fakultas_unit ||
-        pData?.IdFakultasUnit ||
-        aData?.IdFakultasUnit ||
-        "";
+      const targetUnitId = pData?.IdFakultasUnit ?? aData?.IdFakultasUnit ?? "";
       const targetUnitName =
         pData?.NamaFakultasUnit ?? aData?.NamaFakultasUnit ?? "";
       let params = `tahun=${encodeURIComponent(targetYear)}`;

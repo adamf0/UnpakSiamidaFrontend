@@ -273,19 +273,6 @@ export default function ProkerV3Page() {
   const [indikatorOptions, setIndikatorOptions] = useState([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
 
-  // Helper to resolve unit UUID from unit id / name
-  const resolveUnitUuid = useCallback(
-    (val) => {
-      if (!val || val === "all" || val === "none" || val === "-1") return val;
-      if (isValidUuid(val)) return val;
-      const found = unitOptions.find(
-        (u) => String(u.id) === String(val) || String(u.uuid) === String(val),
-      );
-      return found?.uuid || val;
-    },
-    [unitOptions],
-  );
-
   // User's matched unit info (mendukung penugasan role ABAC)
   const userUnitData = useMemo(() => {
     let userFU =
@@ -393,11 +380,11 @@ export default function ProkerV3Page() {
       }
       setLoadingJadwalStatus(true);
       try {
-        const targetUnitUuid =
+        const targetUnitId =
           selectedUnit && selectedUnit !== "all"
-            ? resolveUnitUuid(selectedUnit)
-            : (userUnitData?.uuid || resolveUnitUuid(userUnitData?.id) || "");
-        const unitParam = targetUnitUuid ? `&id_fakultas_unit=${targetUnitUuid}` : "";
+            ? selectedUnit
+            : userUnitData?.id || "";
+        const unitParam = targetUnitId ? `&id_fakultas_unit=${targetUnitId}` : "";
         const res = await apiClient.get(
           `/proker_v3/jadwal_status?tahun=${targetYear}${unitParam}`,
         );
@@ -410,7 +397,7 @@ export default function ProkerV3Page() {
     };
 
     fetchJadwalStatus();
-  }, [selectedTahun, positionYear, selectedUnit, userUnitData, resolveUnitUuid]);
+  }, [selectedTahun, positionYear, selectedUnit, userUnitData]);
 
   // Fetch pengaturan tanggal aktif Proker Batal
   useEffect(() => {
@@ -811,7 +798,7 @@ export default function ProkerV3Page() {
         );
         if (!exists || selectedUnit === "none") {
           const first = userAssignedUnits[0];
-          setSelectedUnit(String(first.uuid || first.id));
+          setSelectedUnit(String(first.id || first.uuid));
           setSelectedUnitObj(first);
         }
       } else {
@@ -843,7 +830,7 @@ export default function ProkerV3Page() {
       );
       if (!exists || selectedUnit === "all" || selectedUnit === "none") {
         const first = available[0];
-        setSelectedUnit(String(first.uuid || first.id));
+        setSelectedUnit(String(first.id || first.uuid));
         setSelectedUnitObj(first);
       }
     } else {
@@ -857,14 +844,14 @@ export default function ProkerV3Page() {
   // Handlers select filter
   const handleSelectUnit = (val) => {
     setSelectedUnitObj(val);
-    setSelectedUnit(val ? String(val.uuid || val.id) : "all");
+    setSelectedUnit(val ? String(val.id || val.uuid) : "all");
     setSelectedProdi("all");
     setSelectedProdiObj(null);
   };
 
   const handleSelectProdi = (val) => {
     setSelectedProdiObj(val);
-    setSelectedProdi(val ? String(val.uuid || val.id) : "all");
+    setSelectedProdi(val ? String(val.id || val.uuid) : "all");
   };
 
   // Fetch Master Options
@@ -1014,15 +1001,9 @@ export default function ProkerV3Page() {
       setUnitPaguSummary(null);
       return;
     }
-    const unitUuid =
-      userUnitData?.uuid ||
-      user?.uuid_fakultas_unit ||
-      user?.UuidFakultasUnit ||
-      resolveUnitUuid(userUnitData?.id) ||
-      resolveUnitUuid(user?.fakultas_unit) ||
-      userUnitData?.id ||
-      user?.fakultas_unit;
-    if (!unitUuid) return;
+    const unitId =
+      userUnitData?.id || userUnitData?.uuid || user?.fakultas_unit;
+    if (!unitId) return;
 
     const targetYear =
       selectedTahun && selectedTahun !== "all"
@@ -1032,7 +1013,7 @@ export default function ProkerV3Page() {
     setLoadingUnitPaguSummary(true);
     try {
       const res = await apiClient.get(
-        `/proker_v3/unit_pagu_summary?id_fakultas_unit=${unitUuid}&tahun=${targetYear}`,
+        `/proker_v3/unit_pagu_summary?id_fakultas_unit=${unitId}&tahun=${targetYear}`,
       );
       if (res?.data) {
         setUnitPaguSummary(res.data);
@@ -1044,14 +1025,11 @@ export default function ProkerV3Page() {
     }
   }, [
     isUnitLevelUser,
-    userUnitData?.uuid,
     userUnitData?.id,
-    user?.uuid_fakultas_unit,
-    user?.UuidFakultasUnit,
+    userUnitData?.uuid,
     user?.fakultas_unit,
     selectedTahun,
     positionYear,
-    resolveUnitUuid,
   ]);
 
   useEffect(() => {
@@ -1215,25 +1193,15 @@ export default function ProkerV3Page() {
       params.append("filter_tahun", effTahun);
     }
 
-    // Helper to resolve unit UUID instead of ID
-    const resolveUnitUuid = (val) => {
-      if (!val || val === "all" || val === "none" || val === "-1") return val;
-      if (isValidUuid(val)) return val;
-      const found = unitOptions.find(
-        (u) => String(u.id) === String(val) || String(u.uuid) === String(val),
-      );
-      return found?.uuid || val;
-    };
-
     const isUnrestricted = isAnggaran || curRole === "evaluator" || isAdmin;
     const isScopedVerifier = ["upml", "upmf"].includes(curRole);
 
     if (isUnrestricted) {
       if (selectedUnit && selectedUnit !== "all" && selectedUnit !== "none") {
-        params.append("filter_fakultas_unit", resolveUnitUuid(selectedUnit));
+        params.append("filter_fakultas_unit", selectedUnit);
       }
       if (isFakultasSelected && selectedProdi && selectedProdi !== "all") {
-        params.append("filter_prodi", resolveUnitUuid(selectedProdi));
+        params.append("filter_prodi", selectedProdi);
       }
       if (
         (isVerifier || isAnggaran || isAdmin) &&
@@ -1253,24 +1221,24 @@ export default function ProkerV3Page() {
         if (selectedUnit === "none") {
           params.append("filter_fakultas_unit", "-1");
         } else if (selectedUnit && selectedUnit !== "all") {
-          params.append("filter_fakultas_unit", resolveUnitUuid(selectedUnit));
+          params.append("filter_fakultas_unit", selectedUnit);
         } else {
-          const allUuids = userAssignedUnits
-            .map((u) => u.uuid || resolveUnitUuid(u.id))
+          const allIds = userAssignedUnits
+            .map((u) => u.id)
             .filter(Boolean)
             .join(",");
-          params.append("filter_fakultas_unit", allUuids || "-1");
+          params.append("filter_fakultas_unit", allIds || "-1");
         }
       } else {
         // Universal UPMS (Tingkat Universitas / Sekolah):
         // Jika filter memilih unit/fakultas tertentu, kirimkan filter tersebut; jika "all", tampilkan semua tanpa dibatasi
         if (selectedUnit && selectedUnit !== "all" && selectedUnit !== "none") {
-          params.append("filter_fakultas_unit", resolveUnitUuid(selectedUnit));
+          params.append("filter_fakultas_unit", selectedUnit);
         }
       }
 
       if (isFakultasSelected && selectedProdi && selectedProdi !== "all") {
-        params.append("filter_prodi", resolveUnitUuid(selectedProdi));
+        params.append("filter_prodi", selectedProdi);
       }
       if (activeTab) {
         params.append("filter_tab", activeTab);
@@ -1288,44 +1256,39 @@ export default function ProkerV3Page() {
       if (validAssigned.length === 0 || selectedUnit === "none") {
         params.append("filter_fakultas_unit", "-1");
       } else if (selectedUnit && selectedUnit !== "all") {
-        params.append("filter_fakultas_unit", resolveUnitUuid(selectedUnit));
+        params.append("filter_fakultas_unit", selectedUnit);
       } else {
-        const allUuids = validAssigned
-          .map((u) => u.uuid || resolveUnitUuid(u.id))
+        const allIds = validAssigned
+          .map((u) => u.id)
           .filter(Boolean)
           .join(",");
-        params.append("filter_fakultas_unit", allUuids || "-1");
+        params.append("filter_fakultas_unit", allIds || "-1");
       }
 
       if (isFakultasSelected && selectedProdi && selectedProdi !== "all") {
-        params.append("filter_prodi", resolveUnitUuid(selectedProdi));
+        params.append("filter_prodi", selectedProdi);
       }
       if (activeTab) {
         params.append("filter_tab", activeTab);
       }
     } else {
-      const targetUnitUuid =
+      const targetUnitId =
         (selectedUnit && selectedUnit !== "all" && selectedUnit !== "none"
-          ? (selectedUnitObj?.uuid || resolveUnitUuid(selectedUnit))
+          ? selectedUnit
           : null) ||
+        userUnitData?.id ||
         userUnitData?.uuid ||
-        user?.uuid_fakultas_unit ||
-        user?.UuidFakultasUnit ||
+        user?.fakultas_unit ||
+        user?.id_fakultas_unit ||
+        user?.FakultasUnit ||
         (Array.isArray(user?.extra_role) &&
-          (user.extra_role.find((r) => r.uuid_fakultas_unit || r.UuidFakultasUnit)?.uuid_fakultas_unit ||
-           user.extra_role.find((r) => r.uuid_fakultas_unit || r.UuidFakultasUnit)?.UuidFakultasUnit)) ||
-        resolveUnitUuid(userUnitData?.id) ||
-        resolveUnitUuid(user?.fakultas_unit) ||
-        resolveUnitUuid(user?.id_fakultas_unit) ||
-        resolveUnitUuid(user?.FakultasUnit) ||
-        (Array.isArray(user?.extra_role) &&
-          resolveUnitUuid(user.extra_role.find((r) => r.id_fakultas_unit || r.IdFakultasUnit)?.id_fakultas_unit));
-
-      if (targetUnitUuid) {
-        params.append("filter_fakultas_unit", String(targetUnitUuid));
+          user.extra_role.find((r) => r.id_fakultas_unit || r.IdFakultasUnit)
+            ?.id_fakultas_unit);
+      if (targetUnitId) {
+        params.append("filter_fakultas_unit", String(targetUnitId));
       }
       if (isFakultasSelected && selectedProdi && selectedProdi !== "all") {
-        params.append("filter_prodi", resolveUnitUuid(selectedProdi));
+        params.append("filter_prodi", selectedProdi);
       }
       if (activeTab && activeTab !== "semua" && activeTab !== "all") {
         params.append("filter_tab", activeTab);
@@ -1337,9 +1300,7 @@ export default function ProkerV3Page() {
   }, [
     selectedTahun,
     selectedUnit,
-    selectedUnitObj,
     selectedProdi,
-    selectedProdiObj,
     isFakultasSelected,
     isAdmin,
     isVerifier,
@@ -1348,7 +1309,6 @@ export default function ProkerV3Page() {
     user,
     userUnitData,
     userAssignedUnits,
-    unitOptions,
     hasActiveRoleAssignment,
     positionYear,
     activeTab,
@@ -1395,7 +1355,6 @@ export default function ProkerV3Page() {
       const fuUuid =
         row?.UuidFakultasUnit ||
         row?.uuid_fakultas_unit ||
-        resolveUnitUuid(row?.IdFakultasUnit) ||
         row?.FakultasUnit;
       const fuQuery = fuUuid
         ? `?fakultas_unit=${fuUuid}`
