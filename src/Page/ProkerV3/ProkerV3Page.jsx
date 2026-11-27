@@ -534,8 +534,132 @@ export default function ProkerV3Page() {
     };
   };
 
+  // Ruang lingkup fakultas milik user (hanya fakultas dirinya & prodi 1 naungan)
+  const fakultasOwnScope = useMemo(() => {
+    if (curRole !== "fakultas" || unitOptions.length === 0) {
+      return { fakultas: [], prodis: [], all: [] };
+    }
+
+    const ownFakultasMap = new Map();
+    const resolveFromOptions = (raw) => {
+      if (!raw) return null;
+      if (typeof raw === "object") {
+        const rid = String(raw.id ?? raw.Id ?? "").trim();
+        const ruuid = String(raw.uuid ?? raw.UUID ?? "").trim().toLowerCase();
+        const rname = String(raw.raw_nama ?? raw.nama ?? raw.Nama ?? "").trim().toLowerCase();
+        return (
+          unitOptions.find(
+            (opt) =>
+              (rid !== "" && String(opt.id) === rid) ||
+              (ruuid !== "" && String(opt.uuid || "").toLowerCase() === ruuid) ||
+              (rname !== "" &&
+                (String(opt.raw_nama || "").toLowerCase().trim() === rname ||
+                  String(opt.nama || "").toLowerCase().trim() === rname)),
+          ) || raw
+        );
+      }
+      const keyStr = String(raw).trim();
+      if (!keyStr || keyStr === "0" || keyStr === "null" || keyStr === "undefined") {
+        return null;
+      }
+      const keyLower = keyStr.toLowerCase();
+      return (
+        unitOptions.find(
+          (opt) =>
+            String(opt.id) === keyStr ||
+            String(opt.uuid || "").toLowerCase() === keyLower ||
+            String(opt.raw_nama || "").toLowerCase().trim() === keyLower ||
+            String(opt.nama || "").toLowerCase().trim() === keyLower,
+        ) || null
+      );
+    };
+
+    const addFakultasFromUnit = (candidate) => {
+      const resolved = resolveFromOptions(candidate);
+      if (!resolved) return;
+      const t = (resolved.type || "").toLowerCase();
+      if (t === "fakultas" || t === "sekolah") {
+        const key = String(resolved.id || resolved.uuid || resolved.raw_nama || "");
+        if (key) ownFakultasMap.set(key, resolved);
+        return;
+      }
+      // Jika unit user mengarah ke prodi/unit di dalam fakultas, tarik induk fakultasnya
+      const kode = String(resolved.kode_fakultas || "").trim();
+      const fakName = String(resolved.fakultas || "").toLowerCase().trim();
+      const parentFak = unitOptions.find((opt) => {
+        const ot = (opt.type || "").toLowerCase();
+        if (ot !== "fakultas" && ot !== "sekolah") return false;
+        if (kode && String(opt.kode_fakultas || "").trim() === kode) return true;
+        const optName = String(opt.raw_nama || opt.nama || opt.fakultas || "")
+          .toLowerCase()
+          .trim();
+        return Boolean(fakName && optName && optName === fakName);
+      });
+      if (parentFak) {
+        const key = String(parentFak.id || parentFak.uuid || parentFak.raw_nama || "");
+        if (key) ownFakultasMap.set(key, parentFak);
+      }
+    };
+
+    userAssignedUnits.forEach(addFakultasFromUnit);
+    if (ownFakultasMap.size === 0) {
+      const directFU =
+        user?.fakultas_unit || user?.id_fakultas_unit || user?.FakultasUnit;
+      addFakultasFromUnit(directFU);
+    }
+    if (ownFakultasMap.size === 0 && userUnitData) {
+      addFakultasFromUnit(userUnitData);
+    }
+
+    const ownFakultasList = Array.from(ownFakultasMap.values()).sort((a, b) =>
+      (a.raw_nama || a.nama || "").localeCompare(b.raw_nama || b.nama || ""),
+    );
+    if (ownFakultasList.length === 0) {
+      return { fakultas: [], prodis: [], all: [] };
+    }
+
+    const sameFakultasProdis = unitOptions
+      .filter((u) => {
+        if ((u.type || "").toLowerCase() !== "prodi") return false;
+        return ownFakultasList.some((fak) => {
+          const fKode = String(fak.kode_fakultas || "").trim();
+          const pKode = String(u.kode_fakultas || "").trim();
+          if (fKode && pKode) return fKode === pKode;
+          const fName = String(fak.raw_nama || fak.nama || fak.fakultas || "")
+            .toLowerCase()
+            .trim();
+          const pFak = String(u.fakultas || "").toLowerCase().trim();
+          return Boolean(fName && pFak && pFak === fName);
+        });
+      })
+      .sort((a, b) =>
+        (a.nama || a.raw_nama || "").localeCompare(b.nama || b.raw_nama || ""),
+      );
+
+    return {
+      fakultas: ownFakultasList,
+      prodis: sameFakultasProdis,
+      all: [...ownFakultasList, ...sameFakultasProdis],
+    };
+  }, [curRole, unitOptions, userAssignedUnits, user, userUnitData]);
+
   // Options unit untuk dropdown filter
   const unitFilterOptions = useMemo(() => {
+    if (curRole === "fakultas") {
+      if (fakultasOwnScope.fakultas.length === 0) return [];
+      return [
+        {
+          id: "all",
+          uuid: "all",
+          label: "Semua Fakultas & Prodi",
+          nama: "Semua Fakultas & Prodi",
+          display_name: "Semua Fakultas & Prodi",
+        },
+        ...fakultasOwnScope.fakultas.map(formatUnitOption),
+        ...fakultasOwnScope.prodis.map(formatUnitOption),
+      ];
+    }
+
     if (curRole === "upml") {
       if (userAssignedUnits.length > 0) {
         const formattedAssigned = userAssignedUnits.map(formatUnitOption);
@@ -600,8 +724,9 @@ export default function ProkerV3Page() {
     }
 
     // admin, verifikator umum, evaluator, anggaran, upms (universal)
-    // Untuk evaluator & anggaran: tampilkan fakultas, unit, dan prodi
+    // Untuk admin, evaluator & anggaran: tampilkan fakultas, unit, dan prodi
     // DATA FAKULTAS HARUS PALING ATAS
+    const includeProdi = isEvaluatorOrAnggaran || isAdmin || curRole === "admin";
     const fakultasUnits = [];
     const regularUnits = [];
     const prodiUnits = [];
@@ -612,7 +737,7 @@ export default function ProkerV3Page() {
         fakultasUnits.push(u);
       } else if (t === "unit") {
         regularUnits.push(u);
-      } else if (t === "prodi" && isEvaluatorOrAnggaran) {
+      } else if (t === "prodi" && includeProdi) {
         prodiUnits.push(u);
       }
     });
@@ -634,12 +759,12 @@ export default function ProkerV3Page() {
       (a.raw_nama || a.nama || "").localeCompare(b.raw_nama || b.nama || ""),
     );
 
-    // Urutkan prodi secara alfabetis
+    // Urutkan prodi secara alfabetis (sertakan jenjang agar deterministik)
     prodiUnits.sort((a, b) =>
-      (a.raw_nama || a.nama || "").localeCompare(b.raw_nama || b.nama || ""),
+      (a.nama || a.raw_nama || "").localeCompare(b.nama || b.raw_nama || ""),
     );
 
-    const sortedUnits = isEvaluatorOrAnggaran
+    const sortedUnits = includeProdi
       ? [...fakultasUnits, ...regularUnits, ...prodiUnits]
       : [...fakultasUnits, ...regularUnits];
 
@@ -647,19 +772,27 @@ export default function ProkerV3Page() {
       {
         id: "all",
         uuid: "all",
-        label: isEvaluatorOrAnggaran
+        label: includeProdi
           ? "Semua Unit / Fakultas / Prodi"
           : "Semua Unit / Fakultas",
-        nama: isEvaluatorOrAnggaran
+        nama: includeProdi
           ? "Semua Unit / Fakultas / Prodi"
           : "Semua Unit / Fakultas",
-        display_name: isEvaluatorOrAnggaran
+        display_name: includeProdi
           ? "Semua Unit / Fakultas / Prodi"
           : "Semua Unit / Fakultas",
       },
       ...sortedUnits.map(formatUnitOption),
     ];
-  }, [curRole, userAssignedUnits, unitOptions, hasActiveRoleAssignment, isEvaluatorOrAnggaran]);
+  }, [
+    curRole,
+    fakultasOwnScope,
+    userAssignedUnits,
+    unitOptions,
+    hasActiveRoleAssignment,
+    isEvaluatorOrAnggaran,
+    isAdmin,
+  ]);
 
   // Cek apakah dropdown unit/fakultas memilih item bertipe fakultas
   const isFakultasSelected = useMemo(() => {
@@ -779,8 +912,23 @@ export default function ProkerV3Page() {
     selectedUnitObj,
   ]);
 
-  // Auto-select unit untuk upml, upmf, dan upms
+  // Auto-select / jaga lingkup unit untuk fakultas, upml, upmf, dan upms
   useEffect(() => {
+    if (curRole === "fakultas") {
+      if (fakultasOwnScope.all.length > 0 && selectedUnit && selectedUnit !== "all") {
+        const inScope = fakultasOwnScope.all.some(
+          (u) =>
+            String(u.id) === String(selectedUnit) ||
+            String(u.uuid) === String(selectedUnit),
+        );
+        if (!inScope) {
+          setSelectedUnit("all");
+          setSelectedUnitObj(null);
+        }
+      }
+      return;
+    }
+
     if (curRole === "upms") {
       if (!hasActiveRoleAssignment) {
         if (selectedUnit !== "none") {
@@ -839,7 +987,7 @@ export default function ProkerV3Page() {
         setSelectedUnitObj(null);
       }
     }
-  }, [curRole, userAssignedUnits, hasActiveRoleAssignment, selectedUnit]);
+  }, [curRole, fakultasOwnScope, userAssignedUnits, hasActiveRoleAssignment, selectedUnit]);
 
   // Handlers select filter
   const handleSelectUnit = (val) => {
@@ -1196,7 +1344,54 @@ export default function ProkerV3Page() {
     const isUnrestricted = isAnggaran || curRole === "evaluator" || isAdmin;
     const isScopedVerifier = ["upml", "upmf"].includes(curRole);
 
-    if (isUnrestricted) {
+    if (curRole === "fakultas") {
+      const selectedOwnFak =
+        selectedUnit && selectedUnit !== "all" && selectedUnit !== "none"
+          ? fakultasOwnScope.fakultas.find(
+              (u) =>
+                String(u.id) === String(selectedUnit) ||
+                String(u.uuid) === String(selectedUnit),
+            )
+          : null;
+      const selectedOwnProdi =
+        selectedUnit && selectedUnit !== "all" && selectedUnit !== "none"
+          ? fakultasOwnScope.prodis.find(
+              (u) =>
+                String(u.id) === String(selectedUnit) ||
+                String(u.uuid) === String(selectedUnit),
+            )
+          : null;
+
+      if (selectedOwnFak) {
+        const fakId = String(selectedOwnFak.id || selectedOwnFak.uuid);
+        params.append("filter_fakultas_unit", fakId);
+        // Batasi hanya ke baris fakultas dirinya sendiri saat user eksplisit memilih item fakultas
+        params.append("filter_prodi", fakId);
+      } else if (selectedOwnProdi) {
+        params.append(
+          "filter_fakultas_unit",
+          String(selectedOwnProdi.id || selectedOwnProdi.uuid),
+        );
+      } else {
+        const allOwnFakIds = fakultasOwnScope.fakultas
+          .map((u) => u.id || u.uuid)
+          .filter(Boolean)
+          .join(",");
+        const fallbackFakId =
+          allOwnFakIds ||
+          userUnitData?.id ||
+          userUnitData?.uuid ||
+          user?.fakultas_unit ||
+          user?.id_fakultas_unit ||
+          user?.FakultasUnit ||
+          "-1";
+        params.append("filter_fakultas_unit", String(fallbackFakId));
+      }
+
+      if (activeTab && activeTab !== "semua" && activeTab !== "all") {
+        params.append("filter_tab", activeTab);
+      }
+    } else if (isUnrestricted) {
       if (selectedUnit && selectedUnit !== "all" && selectedUnit !== "none") {
         params.append("filter_fakultas_unit", selectedUnit);
       }
@@ -1306,6 +1501,7 @@ export default function ProkerV3Page() {
     isVerifier,
     isAnggaran,
     curRole,
+    fakultasOwnScope,
     user,
     userUnitData,
     userAssignedUnits,
@@ -3968,9 +4164,11 @@ export default function ProkerV3Page() {
                         ? "Pilih Unit Penugasan"
                         : curRole === "upmf"
                           ? "Pilih Fakultas"
-                          : isEvaluatorOrAnggaran
-                            ? "Semua Unit / Fakultas / Prodi"
-                            : "Semua Unit / Fakultas"
+                          : curRole === "fakultas"
+                            ? "Semua Fakultas & Prodi"
+                            : isEvaluatorOrAnggaran || isAdmin || curRole === "admin"
+                              ? "Semua Unit / Fakultas / Prodi"
+                              : "Semua Unit / Fakultas"
                     }
                     icon={Building2}
                   />
@@ -3980,6 +4178,7 @@ export default function ProkerV3Page() {
             {/* Filter Prodi (Hanya ditampilkan jika dropdown unit/fakultas memilih item bertipe fakultas) */}
             {(isVerifier || isAdmin || isAnggaran || isUpm) &&
               curRole !== "upml" &&
+              curRole !== "fakultas" &&
               isFakultasSelected && (
                 <div className="w-56 min-w-[170px]">
                   <SearchSelect
